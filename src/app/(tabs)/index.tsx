@@ -12,26 +12,35 @@ import { BodyPresetLabels, BodyPresetId } from '@/config/body-presets';
 import { StanleyTrainer } from '@/config/trainers';
 import { Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
-import { getTodayRecords } from '@/data/workout-repository';
+import { getThisWeekRecords, getTodayRecords } from '@/data/workout-repository';
 import { getGreetingLine } from '@/utils/trainer-dialogue';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { profile, workoutRecords, streak, bodyHistory, openEventPass, claimStreakReward } =
+  const { profile, workoutRecords, streak, openEventPass, activeSession, claimStreakReward, startWorkoutSession } =
     useAppData();
 
-  const todayRecords = getTodayRecords(workoutRecords);
-  const hasRecordedToday = todayRecords.length > 0;
+  const hasRecordedToday = getTodayRecords(workoutRecords).length > 0;
+  const weeklyCount = getThisWeekRecords(workoutRecords).length;
   // workoutRecords.length를 키에 포함해 기록을 남길 때마다 트레이너 반응이 새로 뽑히게 한다.
   const greeting = useMemo(
     () => getGreetingLine(StanleyTrainer.dialogueSet, { hasRecordedToday, currentStreakDays: streak.currentStreakDays }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [hasRecordedToday, streak.currentStreakDays, workoutRecords.length]
   );
-  const latestBodyEntry = bodyHistory[0];
-  const previousBodyEntry = bodyHistory[1];
   const canClaimReward =
     streak.currentStreakDays >= AppConfig.streakRewardDays && !streak.rewardClaimed;
+  const sessionInProgress = activeSession && activeSession.status !== 'completed';
+
+  const handleStartPress = async () => {
+    if (sessionInProgress) {
+      router.push('/session');
+      return;
+    }
+    const defaultCategory = workoutRecords[0]?.category ?? 'strength';
+    await startWorkoutSession(defaultCategory);
+    router.push('/session');
+  };
 
   return (
     <ScreenScroll>
@@ -49,7 +58,7 @@ export default function HomeScreen() {
         </SectionCard>
       )}
 
-      <View style={styles.avatarSection}>
+      <View style={styles.characterSection}>
         {profile && (
           <BodyAvatarPreview
             genderExpression={profile.genderExpression}
@@ -60,30 +69,20 @@ export default function HomeScreen() {
         <ThemedText type="smallBold">
           {profile ? BodyPresetLabels[profile.bodyPresetId as BodyPresetId] : ''}
         </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          연속 {streak.currentStreakDays}일째
+        <ThemedText type="small" themeColor="textSecondary" style={styles.trainerLine}>
+          {StanleyTrainer.portraitPlaceholder} {greeting.text}
         </ThemedText>
       </View>
 
-      <SectionCard title={hasRecordedToday ? '오늘 기록 완료' : '오늘 기록 없음'}>
-        <ThemedText type="small" themeColor="textSecondary">
-          {hasRecordedToday
-            ? `오늘 ${todayRecords.length}개 기록했어요.`
-            : '오늘 뭐라도 하고 기록을 남겨보세요.'}
-        </ThemedText>
-        <PrimaryButton label="운동 기록하기" onPress={() => router.push('/workout')} />
-      </SectionCard>
+      <PrimaryButton
+        label={sessionInProgress ? '운동으로 돌아가기' : '운동 시작'}
+        size="large"
+        onPress={handleStartPress}
+      />
 
-      <SectionCard title={`${StanleyTrainer.displayName} ${StanleyTrainer.portraitPlaceholder}`}>
-        <ThemedText type="small" themeColor="textSecondary">
-          {greeting.text}
-        </ThemedText>
-        <PrimaryButton
-          label="트레이너 만나기"
-          variant="secondary"
-          onPress={() => router.push('/trainer')}
-        />
-      </SectionCard>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.statsLine}>
+        이번 주 {weeklyCount}회 · 연속 {streak.currentStreakDays}일째
+      </ThemedText>
 
       {canClaimReward && (
         <SectionCard title="꾸준함 보상 도착">
@@ -93,30 +92,21 @@ export default function HomeScreen() {
           <PrimaryButton label="보상 받기" onPress={claimStreakReward} />
         </SectionCard>
       )}
-
-      {latestBodyEntry && (
-        <SectionCard title="최근 변화">
-          <ThemedText type="small" themeColor="textSecondary">
-            최근 체중 {latestBodyEntry.weightKg}kg
-            {previousBodyEntry
-              ? ` (지난 기록 대비 ${(latestBodyEntry.weightKg - previousBodyEntry.weightKg).toFixed(1)}kg)`
-              : ''}
-          </ThemedText>
-          <PrimaryButton
-            label="히스토리 보기"
-            variant="secondary"
-            onPress={() => router.push('/history')}
-          />
-        </SectionCard>
-      )}
     </ScreenScroll>
   );
 }
 
 const styles = StyleSheet.create({
-  avatarSection: {
+  characterSection: {
     alignItems: 'center',
     gap: Spacing.one,
     marginTop: Spacing.three,
+  },
+  trainerLine: {
+    textAlign: 'center',
+    paddingHorizontal: Spacing.four,
+  },
+  statsLine: {
+    textAlign: 'center',
   },
 });

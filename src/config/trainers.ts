@@ -46,6 +46,44 @@ export const StanleyTrainer: TrainerProfile = {
       '무료는 없어. 광고는 있지.',
       '세상에 공짜 PT가 어딨어. 광고라도 봐야지.',
     ]),
+    sessionStart: lines('stanley-session-start', [
+      '오늘은 움직이긴 하네.',
+      '시작했다. 끝까지 가보자고.',
+      '타이머 켰다. 이제 발 못 빼.',
+    ]),
+    sessionSecondToday: lines('stanley-session-second', [
+      '또 시작했냐? 이 정도면 진심인데.',
+      '오늘 두 번째네. 욕심내는 거야?',
+      '하루에 두 번? 나쁘지 않은데.',
+    ]),
+    sessionMidway: lines('stanley-session-midway', [
+      '10분 됐다.',
+      '슬슬 몸 풀렸냐?',
+      '10분 채웠네. 계속 가.',
+    ]),
+    sessionExtended: lines('stanley-session-extended', [
+      '오늘은 인정.',
+      '20분 넘었다. 페이스 괜찮은데.',
+      '이 정도면 진짜 하는 거네.',
+    ]),
+    sessionLong: lines('stanley-session-long', [
+      '아직도 하고 있네. 무리하진 말고.',
+      '장시간 근무 중이시네. 물 좀 마셔.',
+      '이쯤 되면 나보다 열심히 하는 듯.',
+    ]),
+    sessionPaused: lines('stanley-session-paused', [
+      '잠깐 쉬어. 어디 도망가진 말고.',
+      '숨 좀 돌려. 대신 진짜 잠깐만.',
+    ]),
+    sessionResumed: lines('stanley-session-resumed', [
+      '다시 왔네. 그럼 그렇지.',
+      '재개. 좋아, 계속 가자.',
+    ]),
+    sessionEnd: lines('stanley-session-end', [
+      '수고했다. 오늘 몫은 했네.',
+      '끝! 이 정도면 용돈 값 했다.',
+      '오늘 치 운동 완료. 내일 또 보자.',
+    ]),
   },
   capabilities: ['npc_dialogue', 'ad_unlockable_ai_pt'],
   aiProfile: {
@@ -69,6 +107,14 @@ export const StreakRewardTrainer: TrainerProfile = {
     encouragement: lines('reward-encourage', ['여기까지 온 것만으로도 대단한 거야.']),
     tease: lines('reward-tease', ['설마 여기서 멈추려고?']),
     adPitch: lines('reward-ad', ['나는 광고 없이도 만날 수 있어. 꾸준함으로 얻은 거니까.']),
+    sessionStart: lines('reward-session-start', ['오늘도 시작이네.']),
+    sessionSecondToday: lines('reward-session-second', ['오늘 벌써 두 번째. 대단한데.']),
+    sessionMidway: lines('reward-session-midway', ['10분째. 좋은 페이스야.']),
+    sessionExtended: lines('reward-session-extended', ['꾸준히 하고 있네.']),
+    sessionLong: lines('reward-session-long', ['오래 하네. 무리하지는 마.']),
+    sessionPaused: lines('reward-session-paused', ['잠깐 쉬어가도 괜찮아.']),
+    sessionResumed: lines('reward-session-resumed', ['다시 시작하는구나.']),
+    sessionEnd: lines('reward-session-end', ['오늘도 수고했어.']),
   },
   capabilities: ['npc_dialogue'],
   unlockRule: {

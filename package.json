@@ -42,7 +42,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "verify:streak": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-streak.ts"
+    "verify:streak": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-streak.ts",
+    "verify:session": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-workout-session.ts"
   },
   "private": true
 }

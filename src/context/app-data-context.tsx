@@ -17,7 +17,16 @@ import { getReferralState } from '@/data/referral-repository';
 import { claimStreakReward as claimStreakRewardRepo, getStreakState, registerTodayRecord } from '@/data/streak-repository';
 import { getSubscriptionState } from '@/data/subscription-repository';
 import { grantRewardedPtUses, getTrainerUsageState, consumeRewardedPtUse } from '@/data/trainer-usage-repository';
-import { addWorkoutRecord as addWorkoutRecordRepo, getWorkoutRecords } from '@/data/workout-repository';
+import {
+  addWorkoutRecord as addWorkoutRecordRepo,
+  getThisWeekRecords,
+  getWorkoutRecords,
+} from '@/data/workout-repository';
+import {
+  clearActiveSession,
+  getActiveSession,
+  saveActiveSession,
+} from '@/data/workout-session-repository';
 import { clearAllKeys } from '@/services/storage/local-storage';
 import { StorageKeys } from '@/services/storage/keys';
 import { rewardedAdService } from '@/services/ads/mock-rewarded-ad-service';
@@ -32,8 +41,20 @@ import { StreakState } from '@/types/streak';
 import { SubscriptionState } from '@/types/subscription';
 import { TrainerUsageState } from '@/types/ads';
 import { UserProfile } from '@/types/user';
-import { WorkoutRecord } from '@/types/workout';
+import { WorkoutCategory, WorkoutExercise, WorkoutRecord } from '@/types/workout';
+import { WorkoutSession } from '@/types/workout-session';
 import { todayDateString, tomorrowDateString } from '@/utils/date';
+import {
+  addSessionActivity as addSessionActivityPure,
+  changeSessionCategory as changeSessionCategoryPure,
+  completeSession,
+  createSession,
+  pauseSession,
+  resumeSession,
+  sessionToWorkoutRecordInput,
+} from '@/utils/workout-session';
+import { WorkoutCategoryLabels } from '@/config/workout-labels';
+import { createId } from '@/utils/id';
 
 interface AppDataState {
   loading: boolean;
@@ -46,6 +67,7 @@ interface AppDataState {
   trainerUsage: TrainerUsageState;
   referral: ReferralState;
   openEventPass: OpenEventPassState;
+  activeSession: WorkoutSession | null;
 }
 
 interface AppDataContextValue extends AppDataState {
@@ -59,10 +81,23 @@ interface AppDataContextValue extends AppDataState {
     profile: Omit<UserProfile, 'id' | 'createdAt'>;
     photoUri?: string;
   }) => Promise<void>;
-  addWorkoutRecord: (input: Parameters<typeof addWorkoutRecordRepo>[0]) => Promise<void>;
+  addWorkoutRecord: (
+    input: Parameters<typeof addWorkoutRecordRepo>[0]
+  ) => Promise<{ workoutRecords: WorkoutRecord[]; streak: StreakState }>;
   addBodyHistoryEntry: (input: Parameters<typeof addBodyHistoryEntryRepo>[0]) => Promise<void>;
   claimStreakReward: () => Promise<void>;
   watchRewardedAd: () => Promise<void>;
+  startWorkoutSession: (category: WorkoutCategory) => Promise<void>;
+  pauseWorkoutSession: () => Promise<void>;
+  resumeWorkoutSession: () => Promise<void>;
+  changeSessionCategory: (category: WorkoutCategory) => Promise<void>;
+  addSessionActivity: (activity: WorkoutExercise) => Promise<void>;
+  endWorkoutSession: () => Promise<{
+    durationMinutes: number;
+    category: WorkoutCategory;
+    weeklyCount: number;
+    streak: number;
+  } | null>;
   sendAiQuickAction: (actionId: AiQuickActionId) => Promise<AiTrainerMessage | null>;
   sendAiMessage: (text: string) => Promise<AiTrainerMessage | null>;
   subscribeMock: (tierId: string) => Promise<void>;
@@ -85,6 +120,7 @@ const initialState: AppDataState = {
   trainerUsage: { rewardedPtUsesRemaining: 0 },
   referral: { bonusDaysGranted: 0 },
   openEventPass: { active: false },
+  activeSession: null,
 };
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
@@ -104,6 +140,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         trainerUsage,
         referral,
         openEventPass,
+        activeSession,
       ] = await Promise.all([
         getOnboardingComplete(),
         getUserProfile(),
@@ -114,6 +151,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         getTrainerUsageState(),
         getReferralState(),
         getOpenEventPassState(),
+        getActiveSession(),
       ]);
 
       if (cancelled) return;
@@ -129,6 +167,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         trainerUsage,
         referral,
         openEventPass,
+        activeSession,
       });
     })();
 
@@ -170,6 +209,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const workoutRecords = await addWorkoutRecordRepo(input);
     const streak = await registerTodayRecord();
     setState((prev) => ({ ...prev, workoutRecords, streak }));
+    return { workoutRecords, streak };
   }, []);
 
   const addBodyHistoryEntry = useCallback<AppDataContextValue['addBodyHistoryEntry']>(
@@ -184,6 +224,69 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const streak = await claimStreakRewardRepo();
     setState((prev) => ({ ...prev, streak }));
   }, []);
+
+  const startWorkoutSession = useCallback<AppDataContextValue['startWorkoutSession']>(
+    async (category) => {
+      if (state.activeSession && state.activeSession.status !== 'completed') return;
+      const session = createSession(category, createId('session'), new Date().toISOString());
+      await saveActiveSession(session);
+      setState((prev) => ({ ...prev, activeSession: session }));
+    },
+    [state.activeSession]
+  );
+
+  const pauseWorkoutSession = useCallback(async () => {
+    if (!state.activeSession) return;
+    const updated = pauseSession(state.activeSession, Date.now());
+    await saveActiveSession(updated);
+    setState((prev) => ({ ...prev, activeSession: updated }));
+  }, [state.activeSession]);
+
+  const resumeWorkoutSession = useCallback(async () => {
+    if (!state.activeSession) return;
+    const updated = resumeSession(state.activeSession, new Date().toISOString());
+    await saveActiveSession(updated);
+    setState((prev) => ({ ...prev, activeSession: updated }));
+  }, [state.activeSession]);
+
+  const changeSessionCategory = useCallback<AppDataContextValue['changeSessionCategory']>(
+    async (category) => {
+      if (!state.activeSession) return;
+      const updated = changeSessionCategoryPure(state.activeSession, category);
+      await saveActiveSession(updated);
+      setState((prev) => ({ ...prev, activeSession: updated }));
+    },
+    [state.activeSession]
+  );
+
+  const addSessionActivity = useCallback<AppDataContextValue['addSessionActivity']>(
+    async (activity) => {
+      if (!state.activeSession) return;
+      const updated = addSessionActivityPure(state.activeSession, activity);
+      await saveActiveSession(updated);
+      setState((prev) => ({ ...prev, activeSession: updated }));
+    },
+    [state.activeSession]
+  );
+
+  const endWorkoutSession = useCallback<AppDataContextValue['endWorkoutSession']>(async () => {
+    if (!state.activeSession) return null;
+    const nowIso = new Date().toISOString();
+    const completed = completeSession(state.activeSession, nowIso, Date.now());
+    const categoryLabel = WorkoutCategoryLabels[completed.primaryCategory];
+    const recordInput = sessionToWorkoutRecordInput(completed, categoryLabel);
+
+    const { workoutRecords, streak } = await addWorkoutRecord(recordInput);
+    await clearActiveSession();
+    setState((prev) => ({ ...prev, activeSession: null }));
+
+    return {
+      durationMinutes: recordInput.durationMinutes ?? 0,
+      category: completed.primaryCategory,
+      weeklyCount: getThisWeekRecords(workoutRecords).length,
+      streak: streak.currentStreakDays,
+    };
+  }, [state.activeSession, addWorkoutRecord]);
 
   const watchRewardedAd = useCallback(async () => {
     const result = await rewardedAdService.showRewardedAd();
@@ -290,6 +393,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     addBodyHistoryEntry,
     claimStreakReward,
     watchRewardedAd,
+    startWorkoutSession,
+    pauseWorkoutSession,
+    resumeWorkoutSession,
+    changeSessionCategory,
+    addSessionActivity,
+    endWorkoutSession,
     sendAiQuickAction,
     sendAiMessage,
     subscribeMock,

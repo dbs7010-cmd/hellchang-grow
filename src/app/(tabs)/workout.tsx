@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -22,7 +23,8 @@ import { todayDateString } from '@/utils/date';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 
 export default function WorkoutScreen() {
-  const { workoutRecords, addWorkoutRecord } = useAppData();
+  const router = useRouter();
+  const { workoutRecords, activeSession, addWorkoutRecord } = useAppData();
   const [category, setCategory] = useState<WorkoutCategory>('strength');
   const [title, setTitle] = useState('');
   const [duration, setDuration] = useState('');
@@ -32,6 +34,7 @@ export default function WorkoutScreen() {
   const [trainerReaction, setTrainerReaction] = useState<string | null>(null);
 
   const todayRecords = getTodayRecords(workoutRecords);
+  const sessionInProgress = activeSession && activeSession.status !== 'completed';
 
   const handleSubmit = async () => {
     if (!title.trim()) {
@@ -61,7 +64,50 @@ export default function WorkoutScreen() {
     <ScreenScroll>
       <ThemedText type="subtitle">운동 기록</ThemedText>
 
-      <SectionCard title="오늘 뭐 했어요?">
+      {sessionInProgress && (
+        <SectionCard title="진행 중인 세션이 있어요">
+          <ThemedText type="small" themeColor="textSecondary">
+            지금 실시간 운동 세션이 진행 중이에요. 여기서 처음부터 다시 입력할 필요 없어요.
+          </ThemedText>
+          <PrimaryButton label="세션으로 돌아가기" onPress={() => router.push('/session')} />
+        </SectionCard>
+      )}
+
+      <SectionCard title="오늘 기록">
+        {todayRecords.length === 0 ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            아직 오늘 기록이 없어요. 홈에서 [운동 시작]을 누르면 자동으로 여기 쌓여요.
+          </ThemedText>
+        ) : (
+          todayRecords.map((record) => (
+            <View key={record.id} style={styles.recordRow}>
+              <ThemedText type="smallBold">{record.title}</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {WorkoutCategoryLabels[record.category]}
+                {record.durationMinutes ? ` · ${record.durationMinutes}분` : ''}
+                {record.intensity ? ` · ${WorkoutIntensityLabels[record.intensity]}` : ''}
+              </ThemedText>
+              {record.exercises && record.exercises.length > 0 && (
+                <View style={styles.exerciseList}>
+                  {record.exercises.map((exercise) => (
+                    <ThemedText key={exercise.id} type="small" themeColor="textSecondary">
+                      · {exercise.name}
+                      {exercise.weightKg ? ` ${exercise.weightKg}kg` : ''}
+                      {exercise.reps ? ` x${exercise.reps}` : ''}
+                      {exercise.sets ? ` (${exercise.sets}세트)` : ''}
+                    </ThemedText>
+                  ))}
+                </View>
+              )}
+            </View>
+          ))
+        )}
+      </SectionCard>
+
+      <SectionCard title="놓친 기록 수동으로 추가">
+        <ThemedText type="small" themeColor="textSecondary">
+          실시간 세션 없이 이미 끝난 운동을 나중에 기록할 때만 사용해요.
+        </ThemedText>
         <View style={styles.chipRow}>
           {WorkoutCategories.map((item) => (
             <Chip
@@ -112,7 +158,7 @@ export default function WorkoutScreen() {
           </ThemedText>
         )}
 
-        <PrimaryButton label="기록 추가" onPress={handleSubmit} />
+        <PrimaryButton label="기록 추가" variant="secondary" onPress={handleSubmit} />
 
         {trainerReaction && (
           <View style={styles.trainerReaction}>
@@ -120,25 +166,6 @@ export default function WorkoutScreen() {
               {StanleyTrainer.portraitPlaceholder} {trainerReaction}
             </ThemedText>
           </View>
-        )}
-      </SectionCard>
-
-      <SectionCard title="오늘 기록">
-        {todayRecords.length === 0 ? (
-          <ThemedText type="small" themeColor="textSecondary">
-            아직 오늘 기록이 없어요.
-          </ThemedText>
-        ) : (
-          todayRecords.map((record) => (
-            <View key={record.id} style={styles.recordRow}>
-              <ThemedText type="smallBold">{record.title}</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {WorkoutCategoryLabels[record.category]}
-                {record.durationMinutes ? ` · ${record.durationMinutes}분` : ''}
-                {record.intensity ? ` · ${WorkoutIntensityLabels[record.intensity]}` : ''}
-              </ThemedText>
-            </View>
-          ))
         )}
       </SectionCard>
     </ScreenScroll>
@@ -156,6 +183,10 @@ const styles = StyleSheet.create({
   },
   recordRow: {
     gap: Spacing.half,
+  },
+  exerciseList: {
+    gap: Spacing.half,
+    paddingTop: Spacing.half,
   },
   trainerReaction: {
     paddingTop: Spacing.one,

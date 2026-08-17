@@ -33,6 +33,7 @@ function RootNavigator() {
       </Stack.Protected>
       <Stack.Protected guard={onboardingComplete}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="session" />
       </Stack.Protected>
     </Stack>
   );
