@@ -1,12 +1,15 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 import { AppConfig } from '@/config/app-config';
+import { MuscleGroupLabels } from '@/config/muscle-groups';
+import { WorkoutCategoryLabels } from '@/config/workout-labels';
 import {
   addBodyHistoryEntry as addBodyHistoryEntryRepo,
   getBodyHistory,
   hasReachedDailyPhotoLimit,
 } from '@/data/body-history-repository';
 import { getOpenEventPassState, saveOpenEventPassState } from '@/data/event-repository';
+import { getPassState, savePassState } from '@/data/pass-repository';
 import {
   getOnboardingComplete,
   getUserProfile,
@@ -14,6 +17,7 @@ import {
   setOnboardingComplete as setOnboardingCompleteRepo,
 } from '@/data/profile-repository';
 import { getReferralState } from '@/data/referral-repository';
+import { deleteRoutine as deleteRoutineRepo, getRoutines, saveRoutine as saveRoutineRepo } from '@/data/routine-repository';
 import { claimStreakReward as claimStreakRewardRepo, getStreakState, registerTodayRecord } from '@/data/streak-repository';
 import { getSubscriptionState } from '@/data/subscription-repository';
 import { grantRewardedPtUses, getTrainerUsageState, consumeRewardedPtUse } from '@/data/trainer-usage-repository';
@@ -36,25 +40,37 @@ import { aiTrainerService } from '@/services/trainer/mock-ai-trainer-service';
 import { AiQuickActionId, AiTrainerMessage } from '@/services/trainer/ai-trainer-service';
 import { BodyHistoryEntry } from '@/types/body';
 import { OpenEventPassState } from '@/types/event';
+import { MuscleGroup } from '@/types/exercise';
+import { PassState } from '@/types/pass';
 import { ReferralState, ReferralRedemptionResult } from '@/types/referral';
+import { Routine } from '@/types/routine';
 import { StreakState } from '@/types/streak';
 import { SubscriptionState } from '@/types/subscription';
 import { TrainerUsageState } from '@/types/ads';
 import { UserProfile } from '@/types/user';
-import { WorkoutCategory, WorkoutExercise, WorkoutRecord } from '@/types/workout';
+import { WorkoutCategory, WorkoutRecord } from '@/types/workout';
 import { WorkoutSession } from '@/types/workout-session';
 import { todayDateString, tomorrowDateString } from '@/utils/date';
+import { PrEvent, detectPRs } from '@/utils/exercise-history';
+import { createId } from '@/utils/id';
+import { addXp, computePassLevelProgress } from '@/utils/pass';
 import {
-  addSessionActivity as addSessionActivityPure,
+  addExerciseToSession as addExerciseToSessionPure,
+  addSetToExercise as addSetToExercisePure,
   changeSessionCategory as changeSessionCategoryPure,
+  clearRest as clearRestPure,
   completeSession,
+  completeSet as completeSetPure,
+  computeCompletedSetsCount,
+  computeTotalVolumeKg,
   createSession,
   pauseSession,
   resumeSession,
   sessionToWorkoutRecordInput,
+  setCurrentExercise as setCurrentExercisePure,
+  startRest as startRestPure,
+  updateSet as updateSetPure,
 } from '@/utils/workout-session';
-import { WorkoutCategoryLabels } from '@/config/workout-labels';
-import { createId } from '@/utils/id';
 
 interface AppDataState {
   loading: boolean;
@@ -68,6 +84,22 @@ interface AppDataState {
   referral: ReferralState;
   openEventPass: OpenEventPassState;
   activeSession: WorkoutSession | null;
+  routines: Routine[];
+  pass: PassState;
+}
+
+export interface EndSessionSummary {
+  durationMinutes: number;
+  category: WorkoutCategory;
+  weeklyCount: number;
+  streak: number;
+  exerciseCount: number;
+  completedSets: number;
+  totalVolumeKg: number;
+  prs: PrEvent[];
+  xpAwarded: number;
+  passLevel: number;
+  routineCompleted: boolean;
 }
 
 interface AppDataContextValue extends AppDataState {
@@ -77,6 +109,7 @@ interface AppDataContextValue extends AppDataState {
   canAddPhotoToday: boolean;
   /** canAddPhotoToday가 false일 때, 다음으로 가능한 날짜 (YYYY-MM-DD) */
   nextPhotoAvailableDate: string;
+  passProgress: ReturnType<typeof computePassLevelProgress>;
   completeOnboarding: (input: {
     profile: Omit<UserProfile, 'id' | 'createdAt'>;
     photoUri?: string;
@@ -87,17 +120,34 @@ interface AppDataContextValue extends AppDataState {
   addBodyHistoryEntry: (input: Parameters<typeof addBodyHistoryEntryRepo>[0]) => Promise<void>;
   claimStreakReward: () => Promise<void>;
   watchRewardedAd: () => Promise<void>;
-  startWorkoutSession: (category: WorkoutCategory) => Promise<void>;
+  startWorkoutSession: (
+    category: WorkoutCategory,
+    options?: {
+      primaryMuscleGroup?: MuscleGroup;
+      routineId?: string;
+      initialExercises?: { exerciseId: string; exerciseName: string }[];
+    }
+  ) => Promise<void>;
   pauseWorkoutSession: () => Promise<void>;
   resumeWorkoutSession: () => Promise<void>;
   changeSessionCategory: (category: WorkoutCategory) => Promise<void>;
-  addSessionActivity: (activity: WorkoutExercise) => Promise<void>;
-  endWorkoutSession: () => Promise<{
-    durationMinutes: number;
-    category: WorkoutCategory;
-    weeklyCount: number;
-    streak: number;
-  } | null>;
+  addExerciseToSession: (exercise: { exerciseId: string; exerciseName: string }) => Promise<void>;
+  setCurrentSessionExercise: (exerciseEntryId: string) => Promise<void>;
+  addSetToExercise: (
+    exerciseEntryId: string,
+    initial?: { weightKg?: number; reps?: number }
+  ) => Promise<void>;
+  updateSessionSet: (
+    exerciseEntryId: string,
+    setId: string,
+    patch: { weightKg?: number; reps?: number }
+  ) => Promise<void>;
+  completeSessionSet: (exerciseEntryId: string, setId: string) => Promise<void>;
+  startSessionRest: (seconds: number) => Promise<void>;
+  skipSessionRest: () => Promise<void>;
+  endWorkoutSession: () => Promise<EndSessionSummary | null>;
+  saveRoutine: (input: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  removeRoutine: (routineId: string) => Promise<void>;
   sendAiQuickAction: (actionId: AiQuickActionId) => Promise<AiTrainerMessage | null>;
   sendAiMessage: (text: string) => Promise<AiTrainerMessage | null>;
   subscribeMock: (tierId: string) => Promise<void>;
@@ -121,6 +171,8 @@ const initialState: AppDataState = {
   referral: { bonusDaysGranted: 0 },
   openEventPass: { active: false },
   activeSession: null,
+  routines: [],
+  pass: { xp: 0 },
 };
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
@@ -141,6 +193,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         referral,
         openEventPass,
         activeSession,
+        routines,
+        pass,
       ] = await Promise.all([
         getOnboardingComplete(),
         getUserProfile(),
@@ -152,6 +206,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         getReferralState(),
         getOpenEventPassState(),
         getActiveSession(),
+        getRoutines(),
+        getPassState(),
       ]);
 
       if (cancelled) return;
@@ -168,6 +224,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         referral,
         openEventPass,
         activeSession,
+        routines,
+        pass,
       });
     })();
 
@@ -226,9 +284,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const startWorkoutSession = useCallback<AppDataContextValue['startWorkoutSession']>(
-    async (category) => {
+    async (category, options) => {
       if (state.activeSession && state.activeSession.status !== 'completed') return;
-      const session = createSession(category, createId('session'), new Date().toISOString());
+      const session = createSession(category, createId('session'), new Date().toISOString(), options);
       await saveActiveSession(session);
       setState((prev) => ({ ...prev, activeSession: session }));
     },
@@ -259,34 +317,136 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [state.activeSession]
   );
 
-  const addSessionActivity = useCallback<AppDataContextValue['addSessionActivity']>(
-    async (activity) => {
+  const addExerciseToSession = useCallback<AppDataContextValue['addExerciseToSession']>(
+    async (exercise) => {
       if (!state.activeSession) return;
-      const updated = addSessionActivityPure(state.activeSession, activity);
+      const updated = addExerciseToSessionPure(state.activeSession, {
+        id: createId('session-ex'),
+        ...exercise,
+      });
       await saveActiveSession(updated);
       setState((prev) => ({ ...prev, activeSession: updated }));
     },
     [state.activeSession]
   );
 
+  const setCurrentSessionExercise = useCallback<AppDataContextValue['setCurrentSessionExercise']>(
+    async (exerciseEntryId) => {
+      if (!state.activeSession) return;
+      const updated = setCurrentExercisePure(state.activeSession, exerciseEntryId);
+      await saveActiveSession(updated);
+      setState((prev) => ({ ...prev, activeSession: updated }));
+    },
+    [state.activeSession]
+  );
+
+  const addSetToExercise = useCallback<AppDataContextValue['addSetToExercise']>(
+    async (exerciseEntryId, initial) => {
+      if (!state.activeSession) return;
+      const updated = addSetToExercisePure(state.activeSession, exerciseEntryId, createId('set'), initial);
+      await saveActiveSession(updated);
+      setState((prev) => ({ ...prev, activeSession: updated }));
+    },
+    [state.activeSession]
+  );
+
+  const updateSessionSet = useCallback<AppDataContextValue['updateSessionSet']>(
+    async (exerciseEntryId, setId, patch) => {
+      if (!state.activeSession) return;
+      const updated = updateSetPure(state.activeSession, exerciseEntryId, setId, patch);
+      await saveActiveSession(updated);
+      setState((prev) => ({ ...prev, activeSession: updated }));
+    },
+    [state.activeSession]
+  );
+
+  const completeSessionSet = useCallback<AppDataContextValue['completeSessionSet']>(
+    async (exerciseEntryId, setId) => {
+      if (!state.activeSession) return;
+      const updated = completeSetPure(state.activeSession, exerciseEntryId, setId);
+      await saveActiveSession(updated);
+      setState((prev) => ({ ...prev, activeSession: updated }));
+    },
+    [state.activeSession]
+  );
+
+  const startSessionRest = useCallback<AppDataContextValue['startSessionRest']>(
+    async (seconds) => {
+      if (!state.activeSession) return;
+      const updated = startRestPure(state.activeSession, seconds, Date.now());
+      await saveActiveSession(updated);
+      setState((prev) => ({ ...prev, activeSession: updated }));
+    },
+    [state.activeSession]
+  );
+
+  const skipSessionRest = useCallback(async () => {
+    if (!state.activeSession) return;
+    const updated = clearRestPure(state.activeSession);
+    await saveActiveSession(updated);
+    setState((prev) => ({ ...prev, activeSession: updated }));
+  }, [state.activeSession]);
+
   const endWorkoutSession = useCallback<AppDataContextValue['endWorkoutSession']>(async () => {
     if (!state.activeSession) return null;
     const nowIso = new Date().toISOString();
     const completed = completeSession(state.activeSession, nowIso, Date.now());
-    const categoryLabel = WorkoutCategoryLabels[completed.primaryCategory];
-    const recordInput = sessionToWorkoutRecordInput(completed, categoryLabel);
+
+    const prs = detectPRs(completed, state.workoutRecords);
+
+    const titleLabel = completed.primaryMuscleGroup
+      ? MuscleGroupLabels[completed.primaryMuscleGroup]
+      : WorkoutCategoryLabels[completed.primaryCategory];
+    const recordInput = sessionToWorkoutRecordInput(completed, titleLabel);
 
     const { workoutRecords, streak } = await addWorkoutRecord(recordInput);
+
+    let routineCompleted = false;
+    if (completed.routineId) {
+      const routine = state.routines.find((r) => r.id === completed.routineId);
+      if (routine) {
+        const doneExerciseIds = new Set(
+          completed.exercises.filter((e) => e.sets.some((s) => s.completed)).map((e) => e.exerciseId)
+        );
+        routineCompleted =
+          routine.exerciseIds.length > 0 && routine.exerciseIds.every((id) => doneExerciseIds.has(id));
+      }
+    }
+
+    const xpAwarded =
+      AppConfig.passXpPerSession +
+      prs.length * AppConfig.passXpPerPr +
+      (routineCompleted ? AppConfig.passXpPerRoutineCompletion : 0);
+    const newXp = addXp(state.pass.xp, xpAwarded);
+    await savePassState({ xp: newXp });
+
     await clearActiveSession();
-    setState((prev) => ({ ...prev, activeSession: null }));
+    setState((prev) => ({ ...prev, activeSession: null, pass: { xp: newXp } }));
 
     return {
       durationMinutes: recordInput.durationMinutes ?? 0,
       category: completed.primaryCategory,
       weeklyCount: getThisWeekRecords(workoutRecords).length,
       streak: streak.currentStreakDays,
+      exerciseCount: completed.exercises.length,
+      completedSets: computeCompletedSetsCount(completed),
+      totalVolumeKg: computeTotalVolumeKg(completed),
+      prs,
+      xpAwarded,
+      passLevel: computePassLevelProgress(newXp).level,
+      routineCompleted,
     };
-  }, [state.activeSession, addWorkoutRecord]);
+  }, [state.activeSession, state.workoutRecords, state.routines, state.pass, addWorkoutRecord]);
+
+  const saveRoutine = useCallback<AppDataContextValue['saveRoutine']>(async (input) => {
+    const routines = await saveRoutineRepo(input);
+    setState((prev) => ({ ...prev, routines }));
+  }, []);
+
+  const removeRoutine = useCallback<AppDataContextValue['removeRoutine']>(async (routineId) => {
+    const routines = await deleteRoutineRepo(routineId);
+    setState((prev) => ({ ...prev, routines }));
+  }, []);
 
   const watchRewardedAd = useCallback(async () => {
     const result = await rewardedAdService.showRewardedAd();
@@ -388,6 +548,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     hasAiPtAccess,
     canAddPhotoToday,
     nextPhotoAvailableDate: tomorrowDateString(today),
+    passProgress: computePassLevelProgress(state.pass.xp),
     completeOnboarding,
     addWorkoutRecord,
     addBodyHistoryEntry,
@@ -397,8 +558,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     pauseWorkoutSession,
     resumeWorkoutSession,
     changeSessionCategory,
-    addSessionActivity,
+    addExerciseToSession,
+    setCurrentSessionExercise,
+    addSetToExercise,
+    updateSessionSet,
+    completeSessionSet,
+    startSessionRest,
+    skipSessionRest,
     endWorkoutSession,
+    saveRoutine,
+    removeRoutine,
     sendAiQuickAction,
     sendAiMessage,
     subscribeMock,

@@ -9,20 +9,43 @@ import { PrimaryButton } from '@/components/ui/primary-button';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { SectionCard } from '@/components/ui/section-card';
 import { TextField } from '@/components/ui/text-field';
-import { WorkoutCategoryLabels } from '@/config/workout-labels';
+import { StanleyTrainer } from '@/config/trainers';
+import {
+  WorkoutCategories,
+  WorkoutCategoryLabels,
+  WorkoutIntensities,
+  WorkoutIntensityLabels,
+} from '@/config/workout-labels';
 import { Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
+import { WorkoutCategory, WorkoutIntensity } from '@/types/workout';
 import { todayDateString } from '@/utils/date';
 import { buildHistoryDays } from '@/utils/history';
+import { pickTrainerLine } from '@/utils/trainer-dialogue';
 
 export default function HistoryScreen() {
-  const { bodyHistory, workoutRecords, addBodyHistoryEntry, canAddPhotoToday, nextPhotoAvailableDate } =
-    useAppData();
+  const {
+    bodyHistory,
+    workoutRecords,
+    addBodyHistoryEntry,
+    addWorkoutRecord,
+    canAddPhotoToday,
+    nextPhotoAvailableDate,
+  } = useAppData();
   const [weightKg, setWeightKg] = useState('');
   const [photoUri, setPhotoUri] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [compareDateA, setCompareDateA] = useState<string | null>(null);
   const [compareDateB, setCompareDateB] = useState<string | null>(null);
+
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualCategory, setManualCategory] = useState<WorkoutCategory>('strength');
+  const [manualTitle, setManualTitle] = useState('');
+  const [manualDuration, setManualDuration] = useState('');
+  const [manualIntensity, setManualIntensity] = useState<WorkoutIntensity | null>(null);
+  const [manualMemo, setManualMemo] = useState('');
+  const [manualError, setManualError] = useState<string | null>(null);
+  const [manualReaction, setManualReaction] = useState<string | null>(null);
 
   const historyDays = useMemo(
     () => buildHistoryDays(bodyHistory, workoutRecords),
@@ -62,6 +85,28 @@ export default function HistoryScreen() {
     setPhotoUri(undefined);
   };
 
+  const handleAddManualRecord = async () => {
+    if (!manualTitle.trim()) {
+      setManualError('운동 이름을 입력해주세요.');
+      return;
+    }
+    setManualError(null);
+    await addWorkoutRecord({
+      date: todayDateString(),
+      category: manualCategory,
+      title: manualTitle.trim(),
+      durationMinutes: manualDuration ? Number(manualDuration) : undefined,
+      intensity: manualIntensity ?? undefined,
+      memo: manualMemo.trim() || undefined,
+      completed: true,
+    });
+    setManualTitle('');
+    setManualDuration('');
+    setManualIntensity(null);
+    setManualMemo('');
+    setManualReaction(pickTrainerLine(StanleyTrainer.dialogueSet.greetingRecordedToday).text);
+  };
+
   const dayA = historyDays.find((day) => day.date === compareDateA);
   const dayB = historyDays.find((day) => day.date === compareDateB);
   const weightDiff =
@@ -99,6 +144,77 @@ export default function HistoryScreen() {
           </ThemedText>
         )}
         <PrimaryButton label="기록 추가" onPress={handleAddEntry} />
+      </SectionCard>
+
+      <SectionCard title="놓친 운동 기록 수동으로 추가">
+        <ThemedText type="small" themeColor="textSecondary">
+          실시간 세션 없이 이미 끝난 운동을 나중에 기록할 때만 사용해요. 홈의 [운동 시작]을 쓰면
+          이 입력 없이 자동으로 기록돼요.
+        </ThemedText>
+
+        {manualOpen ? (
+          <>
+            <View style={styles.chipRow}>
+              {WorkoutCategories.map((item) => (
+                <Chip
+                  key={item}
+                  label={WorkoutCategoryLabels[item]}
+                  selected={manualCategory === item}
+                  onPress={() => setManualCategory(item)}
+                />
+              ))}
+            </View>
+
+            <TextField
+              label="운동 이름"
+              value={manualTitle}
+              onChangeText={setManualTitle}
+              placeholder="예: 하체 웨이트, 5km 러닝"
+            />
+            <TextField
+              label="시간 (분, 선택)"
+              keyboardType="numeric"
+              value={manualDuration}
+              onChangeText={setManualDuration}
+              placeholder="예: 40"
+            />
+
+            <View style={styles.chipRow}>
+              {WorkoutIntensities.map((item) => (
+                <Chip
+                  key={item}
+                  label={WorkoutIntensityLabels[item]}
+                  selected={manualIntensity === item}
+                  onPress={() => setManualIntensity(manualIntensity === item ? null : item)}
+                />
+              ))}
+            </View>
+
+            <TextField
+              label="메모 (선택)"
+              value={manualMemo}
+              onChangeText={setManualMemo}
+              placeholder="컨디션이나 특이사항"
+              multiline
+            />
+
+            {manualError && (
+              <ThemedText type="small" style={styles.error}>
+                {manualError}
+              </ThemedText>
+            )}
+
+            <PrimaryButton label="기록 추가" variant="secondary" onPress={handleAddManualRecord} />
+
+            {manualReaction && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {StanleyTrainer.portraitPlaceholder} {manualReaction}
+              </ThemedText>
+            )}
+          </>
+        ) : (
+          <PrimaryButton label="놓친 기록 추가하기" variant="secondary" onPress={() => setManualOpen(true)} />
+        )}
       </SectionCard>
 
       <SectionCard title="전후 비교">
@@ -171,11 +287,19 @@ export default function HistoryScreen() {
                   </ThemedText>
                 )}
               </View>
-              {day.workouts.map((record) => (
-                <ThemedText key={record.id} type="small" themeColor="textSecondary">
-                  · {record.title} ({WorkoutCategoryLabels[record.category]})
-                </ThemedText>
-              ))}
+              {day.workouts.map((record) => {
+                const setCount =
+                  record.exercises?.reduce((sum, exercise) => sum + (exercise.sets ?? 0), 0) ?? 0;
+                return (
+                  <ThemedText key={record.id} type="small" themeColor="textSecondary">
+                    · {record.title} ({WorkoutCategoryLabels[record.category]})
+                    {record.durationMinutes ? ` · ${record.durationMinutes}분` : ''}
+                    {record.exercises && record.exercises.length > 0
+                      ? ` · 운동 ${record.exercises.length}개 · ${setCount}세트`
+                      : ''}
+                  </ThemedText>
+                );
+              })}
             </View>
           ))
         )}

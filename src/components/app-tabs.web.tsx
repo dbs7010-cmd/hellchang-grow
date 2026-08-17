@@ -23,7 +23,7 @@ export default function AppTabs() {
             <TabButton>홈</TabButton>
           </TabTrigger>
           <TabTrigger name="workout" href="/workout" asChild>
-            <TabButton>운동 기록</TabButton>
+            <TabButton>운동</TabButton>
           </TabTrigger>
           <TabTrigger name="trainer" href="/trainer" asChild>
             <TabButton>트레이너</TabButton>

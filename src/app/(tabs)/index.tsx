@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { BodyAvatarPreview } from '@/components/body-avatar-preview';
 import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/ui/primary-button';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { SectionCard } from '@/components/ui/section-card';
 import { AppConfig } from '@/config/app-config';
@@ -14,11 +15,20 @@ import { Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { getThisWeekRecords, getTodayRecords } from '@/data/workout-repository';
 import { getGreetingLine } from '@/utils/trainer-dialogue';
+import { getTodaysScheduledRoutine } from '@/utils/routine';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { profile, workoutRecords, streak, openEventPass, activeSession, claimStreakReward, startWorkoutSession } =
-    useAppData();
+  const {
+    profile,
+    workoutRecords,
+    streak,
+    openEventPass,
+    activeSession,
+    routines,
+    passProgress,
+    claimStreakReward,
+  } = useAppData();
 
   const hasRecordedToday = getTodayRecords(workoutRecords).length > 0;
   const weeklyCount = getThisWeekRecords(workoutRecords).length;
@@ -31,19 +41,24 @@ export default function HomeScreen() {
   const canClaimReward =
     streak.currentStreakDays >= AppConfig.streakRewardDays && !streak.rewardClaimed;
   const sessionInProgress = activeSession && activeSession.status !== 'completed';
+  const scheduledRoutine = useMemo(
+    () => getTodaysScheduledRoutine(routines, new Date().getDay()),
+    [routines]
+  );
 
-  const handleStartPress = async () => {
-    if (sessionInProgress) {
-      router.push('/session');
-      return;
-    }
-    const defaultCategory = workoutRecords[0]?.category ?? 'strength';
-    await startWorkoutSession(defaultCategory);
-    router.push('/session');
+  const handleStartPress = () => {
+    router.push(sessionInProgress ? '/session' : '/workout-start');
   };
 
   return (
     <ScreenScroll>
+      <View style={styles.passRow}>
+        <ThemedText type="small" themeColor="textSecondary">
+          HELL PASS Lv.{passProgress.level}
+        </ThemedText>
+        <ProgressBar progress={passProgress.progress} />
+      </View>
+
       {!openEventPass.active && (
         <SectionCard>
           <ThemedText type="small" themeColor="textSecondary">
@@ -74,6 +89,12 @@ export default function HomeScreen() {
         </ThemedText>
       </View>
 
+      {!sessionInProgress && (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.suggestionLine}>
+          {scheduledRoutine ? `오늘 · ${scheduledRoutine.name}` : '오늘은 뭐 조질까?'}
+        </ThemedText>
+      )}
+
       <PrimaryButton
         label={sessionInProgress ? '운동으로 돌아가기' : '운동 시작'}
         size="large"
@@ -97,14 +118,20 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  passRow: {
+    gap: Spacing.one,
+    marginTop: Spacing.three,
+  },
   characterSection: {
     alignItems: 'center',
     gap: Spacing.one,
-    marginTop: Spacing.three,
   },
   trainerLine: {
     textAlign: 'center',
     paddingHorizontal: Spacing.four,
+  },
+  suggestionLine: {
+    textAlign: 'center',
   },
   statsLine: {
     textAlign: 'center',

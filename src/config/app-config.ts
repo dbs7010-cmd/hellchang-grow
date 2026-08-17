@@ -17,4 +17,16 @@ export const AppConfig = {
   rewardedPtUses: 1,
   /** 오픈 이벤트 무료 패스 기간(일) */
   openEventPassDays: 14,
+  /** PASS: 운동 세션 1회 완료 시 지급되는 XP */
+  passXpPerSession: 10,
+  /** PASS: PR(자기 최고 기록 갱신) 1건당 추가 XP */
+  passXpPerPr: 15,
+  /** PASS: [이 루틴으로 시작]한 루틴의 모든 운동을 완료하면 추가 XP */
+  passXpPerRoutineCompletion: 20,
+  /** PASS: 한 레벨을 채우는 데 필요한 XP */
+  passXpPerLevel: 100,
+  /** 휴식 타이머 빠른 선택지(초) */
+  restTimerPresetsSeconds: [60, 90, 120],
+  /** 휴식 타이머 기본값(초) */
+  defaultRestSeconds: 90,
 } as const;

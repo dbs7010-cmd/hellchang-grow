@@ -64,13 +64,40 @@ M2까지는 운동을 마친 뒤 사용자가 직접 입력하는 방식이 메�
 
 Realtime Core에서도 실제 LLM API, 광고 SDK, 인앱결제, 추천 서버는 연결하지 않는다. 최종 아트도 만들지 않는다 — 캐릭터는 여전히 `BodyAvatarPreview` 도형 preview, 세션 중 상태는 이모지 배지("🟢 운동 중" / "⏸ 일시정지")로만 표현한다.
 
+## WEIGHT CORE — V1 운동 CORE 최종 확정 (잠금)
+
+**이 마일스톤은 V1의 운동 CORE 구조를 최종 확정(lock)한다.** 이후 게임성/아트/AI/수익화/출시 품질은 이 구조 위에 추가하며, 사용자의 명시적 요청 없이는 운동 CORE 구조를 다시 설계하지 않는다([[product-spec]] 0-A장, `CLAUDE.md`의 NON-NEGOTIABLE PRODUCT RULES). Realtime Core에서 만든 `WorkoutSession`(activeSince 기반 타이머, pause/resume, 세션 복구), streak, 히스토리, AsyncStorage/repository 구조, `AppDataProvider`, Trainer/Stanley, `AITrainerService`, 광고/구독/추천인/오픈이벤트 mock, 온보딩, 체형/사진 시스템은 전부 그대로 재사용했다 — 세션 엔진을 새로 만들지 않고 그 위에 웨이트 중심 기능을 얹었다.
+
+- [x] 웨이트를 제품 중심축으로 재배치: 부위(가슴/등/하체/어깨/팔/전신) 진입이 주 경로, 러닝/걷기/자전거/스포츠/기타는 "[+ 유산소 추가]" 보조 경로로 이동. 기존 카테고리/데이터는 그대로 유지
+- [x] Exercise DB 추가(`config/exercises.ts`, `types/exercise.ts`) — 44개 정적 운동, `getExerciseById`/`getExercisesByMuscleGroup`/`searchExercises` 헬퍼, [직접 운동 추가]로 DB 밖 운동도 지원
+- [x] `workout-start.tsx` 신설 — [운동 시작] 직후 계획형(오늘 예정 루틴)/즉흥형(부위 선택)/추천형(오늘 뭐 하지?) 세 경로를 모두 같은 `startWorkoutSession()`으로 수렴시킴. 루틴 생성 강제 없음
+- [x] Routine 도메인 추가(`types/routine.ts`, `data/routine-repository.ts`) — 완전히 선택 사항, `scheduledDays`가 있으면 그 요일 홈에서 자동 제안, 없어도 언제든 선택 가능
+- [x] `WorkoutSession`/`WorkoutExercise`를 세트 단위로 확장(`SessionExerciseEntry`, `WorkoutSetEntry`) — 기존 필드는 전부 optional 추가라 과거 저장 데이터와 호환. `activities`를 `exercises`로 대체
+- [x] 실시간 세트 기록 UX(`session.tsx`) — 지난 세트 값을 기본값으로 제안, 중량/횟수 입력 + 체크로 완료, "세트 완료 = 게임 입력" 원칙에 따라 짧은 즉시 피드백(Stanley 한마디, PR이면 NEW PR 콜아웃)
+- [x] 이전 기록 조회(`utils/exercise-history.ts` `findPreviousPerformance`) — Exercise ID 기준 마지막 세션/무게/횟수/세트 구성, legacy 기록도 fallback으로 조회 가능
+- [x] PR 판정(`detectPRs`) — "이전보다 높은 중량 성공"만 단순 판정, 완료된 세트만 대상, 세션 종료 요약에 "NEW PR" 카드로 노출
+- [x] 휴식 타이머(60/90/120초 + 커스텀, `restUntilMs` 절대시각 패턴 재사용) — 완전히 선택/스킵 가능, 세션 타이머는 휴식 중에도 계속 흐름
+- [x] 다음 운동 이동 + 세션 중 [+ 운동 추가] — 루틴 순서 또는 사용자가 고른 다음 운동으로 전환, 언제든 운동 추가 가능
+- [x] 운동 종료 자동 집계 확장 — 실제 소요 시간/운동 수/총 세트/총 볼륨(중량×횟수, 완료된 세트만)/PR/주간 횟수/streak를 재입력 없이 자동 계산
+- [x] PASS 진행도 도메인 추가(`types/pass.ts`, `utils/pass.ts`, `data/pass-repository.ts`) — 세션 완료/PR/루틴 완료 시 XP 적립, 레벨은 항상 XP로부터 계산(저장 안 함), 실제 몸 파라미터는 절대 변경하지 않음
+- [x] 홈에 PASS 진행 바 노출("HELL PASS Lv.N") — 보조 요소로만, 캐릭터/오늘의 운동/[운동 시작]이 여전히 주인공
+- [x] 홈 정보 우선순위 재배치: PASS 진행도 → 캐릭터 → Stanley 한마디 → 오늘 제안(루틴 또는 "오늘은 뭐 조질까?", 죄책감 유발 문구 금지) → [운동 시작] → 주간 횟수/streak
+- [x] 운동 탭 역할 전환 — 수동 기록 입력 화면에서 "내 루틴/루틴 만들기/운동 DB 탐색/부위별 탐색/운동 검색/운동 정보"로 전환, 탭 라벨도 "운동 기록" → "운동"으로 변경(더 이상 기록 입력이 아님을 반영)
+- [x] 과거 `WorkoutRecord` 조회 + 놓친 기록 수동 입력 폼을 히스토리 탭으로 이동(운동 탭에서 제거)
+- [x] Stanley 게임 반응 확장 — 세션 상태 조건에 첫 세트/여러 세트 완료/긴 휴식/운동 종목 변경/PR/루틴 절반/루틴 완료 대사 추가, 여전히 결정론적 대사 풀(LLM 호출 없음)이며 AI PT와 명확히 분리
+- [x] 순수 함수 검증 스크립트 추가(`scripts/verify-weight-core.ts`, `npm run verify:weight-core`) — 이전 기록 조회/PR 판정/부위 추천/루틴 요일 매칭/PASS 레벨 계산 27개 시나리오 검증, 기존 `verify:streak`/`verify:session`도 계속 통과
+- [x] Playwright로 온보딩→홈→[운동 시작]→즉흥형 부위 선택→운동 DB 후보→세트 기록→PR/볼륨 자동 집계→PASS XP 반영→같은 날 두 번째 세션(streak 미중복)→새로고침 후 세션 복구까지 브라우저에서 클릭 검증
+
+WEIGHT CORE에서도 실제 LLM API, 광고 SDK, 인앱결제, 추천 서버, 실제 1RM 계산은 연결/구현하지 않는다. 최종 아트도 여전히 없다 — 세트 완료 피드백은 텍스트/이모지 placeholder 수준이며, 구조만 최종 아트 교체가 쉽게 준비돼 있다.
+
 ## M3 — 다음 단계 (아직 착수하지 않음)
 
-- 실제 캐릭터/트레이너 아트 자산 반영 (이모지 → 실제 이미지, `TrainerProfile.portraitPlaceholder` 대체)
+- 실제 캐릭터/트레이너 아트 자산 반영 (이모지 → 실제 이미지, `TrainerProfile.portraitPlaceholder` 대체), 세트 완료/PR 연출에 실제 애니메이션 추가
+- AI PT가 최근 WorkoutRecord/Routine/Exercise DB/이전 기록을 컨텍스트로 활용하도록 연결, AI 추천 루틴에서 "[이 루틴으로 운동 시작]"으로 바로 세션 진입
 - AI PT 대화 로그를 세션 간 유지할지 여부 결정 (현재는 화면을 벗어나면 사라지는 로컬 state)
 - 히스토리 전후 비교에 실제 신체 변화 지표(체지방률 등) 추가 검토
 - 알림/리마인더 검토
-- 트레이너 대사에 더 다양한 조건(연속 기록 실패, 특정 카테고리 반복 등) 반영할지 검토
-- 운동 기록 탭과 히스토리 탭의 "과거 세션 목록" 역할 분담을 더 다듬을지 검토 (현재는 운동 기록 탭 = 오늘, 히스토리 탭 = 전체 기간)
+- PR 판정을 단순 "이전보다 높은 중량" 이상으로 확장할지 검토 (1RM 추정 등, 데이터 모델은 이미 확장 가능하게 설계됨)
 - 세션 중 앱이 완전히 종료(kill)됐다가 재실행됐을 때의 복구 경험 실기기 검증 (현재는 로컬 저장 기반 복구 로직만 구현, 실제 iOS/Android 백그라운드 kill 정책까지는 검증 못함)
 - 실제 서비스 연동 착수 여부는 별도 논의 후 결정 (LLM API, 광고 SDK, 결제 SDK, 실제 추천 서버 등)
+- 위 항목들은 모두 WEIGHT CORE로 잠긴 운동 CORE 구조 위에 추가하는 것을 전제로 한다 — 구조 자체를 다시 설계하지 않는다

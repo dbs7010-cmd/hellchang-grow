@@ -1,6 +1,15 @@
-import { WorkoutCategory, WorkoutExercise } from '@/types/workout';
+import { WorkoutCategory, WorkoutSetEntry } from '@/types/workout';
+import { MuscleGroup } from '@/types/exercise';
 
 export type WorkoutSessionStatus = 'active' | 'paused' | 'completed';
+
+export interface SessionExerciseEntry {
+  id: string;
+  /** Exercise DB ID, 또는 [직접 운동 추가]로 만든 즉석 ID */
+  exerciseId: string;
+  exerciseName: string;
+  sets: WorkoutSetEntry[];
+}
 
 export interface WorkoutSession {
   id: string;
@@ -12,8 +21,16 @@ export interface WorkoutSession {
   accumulatedSeconds: number;
   status: WorkoutSessionStatus;
   primaryCategory: WorkoutCategory;
-  /** 웨이트 등에서 선택적으로 추가하는 상세 운동 기록 (강제 아님) */
-  activities?: WorkoutExercise[];
+  /** 부위 선택으로 시작했다면 기록 (기록 제목/이전 기록 조회에 사용, 선택) */
+  primaryMuscleGroup?: MuscleGroup;
+  /** [이 루틴으로 시작]으로 시작했다면 해당 Routine ID (루틴 완료 감지에 사용) */
+  routineId?: string;
+  /** 세션에 추가된 운동들 (선택/강제 아님) */
+  exercises: SessionExerciseEntry[];
+  /** 현재 포커스된 운동 (session.exercises 중 하나의 id) */
+  currentExerciseId?: string;
+  /** 휴식 타이머 종료 시각(epoch ms). 없으면 휴식 중이 아님 */
+  restUntilMs?: number;
   notes?: string;
   endedAt?: string;
   createdAt: string;

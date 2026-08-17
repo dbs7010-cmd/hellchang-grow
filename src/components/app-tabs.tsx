@@ -18,7 +18,7 @@ export default function AppTabs() {
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="workout">
-        <NativeTabs.Trigger.Label>운동 기록</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>운동</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="dumbbell" md="fitness_center" />
       </NativeTabs.Trigger>
 
