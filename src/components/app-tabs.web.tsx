@@ -6,14 +6,12 @@ import {
   TabTriggerSlotProps,
   TabListProps,
 } from 'expo-router/ui';
-import { SymbolView } from 'expo-symbols';
-import { Pressable, useColorScheme, View, StyleSheet } from 'react-native';
+import { Pressable, ScrollView, View, StyleSheet } from 'react-native';
 
-import { ExternalLink } from './external-link';
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
-import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function AppTabs() {
   return (
@@ -22,10 +20,19 @@ export default function AppTabs() {
       <TabList asChild>
         <CustomTabList>
           <TabTrigger name="home" href="/" asChild>
-            <TabButton>Home</TabButton>
+            <TabButton>홈</TabButton>
           </TabTrigger>
-          <TabTrigger name="explore" href="/explore" asChild>
-            <TabButton>Explore</TabButton>
+          <TabTrigger name="workout" href="/workout" asChild>
+            <TabButton>운동 기록</TabButton>
+          </TabTrigger>
+          <TabTrigger name="trainer" href="/trainer" asChild>
+            <TabButton>트레이너</TabButton>
+          </TabTrigger>
+          <TabTrigger name="history" href="/history" asChild>
+            <TabButton>히스토리</TabButton>
+          </TabTrigger>
+          <TabTrigger name="settings" href="/settings" asChild>
+            <TabButton>설정</TabButton>
           </TabTrigger>
         </CustomTabList>
       </TabList>
@@ -48,29 +55,17 @@ export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps
 }
 
 export function CustomTabList(props: TabListProps) {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
-
   return (
     <View {...props} style={styles.tabListContainer}>
-      <ThemedView type="backgroundElement" style={styles.innerContainer}>
-        <ThemedText type="smallBold" style={styles.brandText}>
-          Expo Starter
-        </ThemedText>
-
-        {props.children}
-
-        <ExternalLink href="https://docs.expo.dev" asChild>
-          <Pressable style={styles.externalPressable}>
-            <ThemedText type="link">Docs</ThemedText>
-            <SymbolView
-              tintColor={colors.text}
-              name={{ ios: 'arrow.up.right.square', web: 'link' }}
-              size={12}
-            />
-          </Pressable>
-        </ExternalLink>
-      </ThemedView>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}>
+        <ThemedView type="backgroundElement" style={styles.innerContainer}>
+          {props.children}
+        </ThemedView>
+      </ScrollView>
     </View>
   );
 }
@@ -80,36 +75,31 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     padding: Spacing.three,
-    justifyContent: 'center',
     alignItems: 'center',
-    flexDirection: 'row',
+  },
+  scrollView: {
+    flexGrow: 0,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+  },
+  scrollContent: {
+    justifyContent: 'center',
+    flexGrow: 1,
   },
   innerContainer: {
     paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.five,
+    paddingHorizontal: Spacing.three,
     borderRadius: Spacing.five,
     flexDirection: 'row',
     alignItems: 'center',
-    flexGrow: 1,
-    gap: Spacing.two,
-    maxWidth: MaxContentWidth,
-  },
-  brandText: {
-    marginRight: 'auto',
+    gap: Spacing.one,
   },
   pressed: {
     opacity: 0.7,
   },
   tabButtonView: {
     paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.three,
+    paddingHorizontal: Spacing.two,
     borderRadius: Spacing.three,
-  },
-  externalPressable: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: Spacing.one,
-    marginLeft: Spacing.three,
   },
 });
