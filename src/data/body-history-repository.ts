@@ -20,11 +20,15 @@ export async function addBodyHistoryEntry(
   return updated;
 }
 
+/** 순수 함수: 이미 로드된 히스토리 배열만으로 오늘 사진 업데이트 한도를 확인한다 (IO 없음). */
+export function hasReachedDailyPhotoLimit(entries: BodyHistoryEntry[], date: string): boolean {
+  const todaysPhotoEntries = entries.filter(
+    (entry) => entry.date === date && entry.source === 'photo'
+  );
+  return todaysPhotoEntries.length >= AppConfig.dailyPhotoLimit;
+}
+
 export async function canAddPhotoEntryToday(): Promise<boolean> {
   const entries = await getBodyHistory();
-  const today = todayDateString();
-  const todaysPhotoEntries = entries.filter(
-    (entry) => entry.date === today && entry.source === 'photo'
-  );
-  return todaysPhotoEntries.length < AppConfig.dailyPhotoLimit;
+  return !hasReachedDailyPhotoLimit(entries, todayDateString());
 }

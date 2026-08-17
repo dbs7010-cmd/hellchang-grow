@@ -8,6 +8,7 @@ import { TextField } from '@/components/ui/text-field';
 import { AppConfig } from '@/config/app-config';
 import { BodyPresetId, BodyPresetLabels } from '@/config/body-presets';
 import { useAppData } from '@/context/app-data-context';
+import { toDateString } from '@/utils/date';
 
 export default function SettingsScreen() {
   const {
@@ -36,6 +37,8 @@ export default function SettingsScreen() {
       setReferralMessage('코드를 입력해주세요.');
     }
   };
+
+  const alreadyRedeemed = Boolean(referral.referredByCode);
 
   return (
     <ScreenScroll>
@@ -76,24 +79,32 @@ export default function SettingsScreen() {
         <ThemedText type="small" themeColor="textSecondary">
           누적 보너스: {referral.bonusDaysGranted}일
         </ThemedText>
-        <TextField
-          label="추천인 코드"
-          value={referralCode}
-          onChangeText={setReferralCode}
-          placeholder="코드 입력"
-        />
-        {referralMessage && (
+        {alreadyRedeemed ? (
           <ThemedText type="small" themeColor="textSecondary">
-            {referralMessage}
+            등록된 코드: {referral.referredByCode} (중복 등록은 보너스가 지급되지 않아요)
           </ThemedText>
+        ) : (
+          <>
+            <TextField
+              label="추천인 코드"
+              value={referralCode}
+              onChangeText={setReferralCode}
+              placeholder="코드 입력"
+            />
+            {referralMessage && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {referralMessage}
+              </ThemedText>
+            )}
+            <PrimaryButton label="등록" onPress={handleRedeemReferral} />
+          </>
         )}
-        <PrimaryButton label="등록" onPress={handleRedeemReferral} />
       </SectionCard>
 
       <SectionCard title="오픈 이벤트 패스">
         <ThemedText type="small" themeColor="textSecondary">
           {openEventPass.active
-            ? `이용 중 (만료: ${openEventPass.expiresAt?.slice(0, 10)})`
+            ? `이용 중 (만료: ${openEventPass.expiresAt ? toDateString(new Date(openEventPass.expiresAt)) : ''})`
             : '아직 활성화되지 않았어요.'}
         </ThemedText>
         {!openEventPass.active && (

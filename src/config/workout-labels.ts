@@ -6,6 +6,7 @@ export const WorkoutCategories: WorkoutCategory[] = [
   'running',
   'walking',
   'cycling',
+  'sports',
   'other',
 ];
 
@@ -15,6 +16,7 @@ export const WorkoutCategoryLabels: Record<WorkoutCategory, string> = {
   running: '러닝',
   walking: '걷기',
   cycling: '자전거',
+  sports: '스포츠',
   other: '기타',
 };
 

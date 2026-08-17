@@ -15,6 +15,8 @@ export interface OnboardingDraft {
   weightKg: string;
   heightCm: string;
   setupMethod: SetupMethod;
+  /** '내 사진으로 시작' 경로에서 고른 로컬 이미지 URI (source: 'photo' 온보딩 히스토리에 사용) */
+  photoUri?: string;
 }
 
 interface OnboardingDraftContextValue {
@@ -24,6 +26,7 @@ interface OnboardingDraftContextValue {
   setBodyParameters: (value: BodyParameters) => void;
   setWeightKg: (value: string) => void;
   setHeightCm: (value: string) => void;
+  setPhotoUri: (value: string | undefined) => void;
 }
 
 const defaultDraft: OnboardingDraft = {
@@ -52,6 +55,12 @@ export function OnboardingDraftProvider({ children }: { children: ReactNode }) {
     setBodyParameters: (value) => setDraft((prev) => ({ ...prev, bodyParameters: value })),
     setWeightKg: (value) => setDraft((prev) => ({ ...prev, weightKg: value })),
     setHeightCm: (value) => setDraft((prev) => ({ ...prev, heightCm: value })),
+    setPhotoUri: (value) =>
+      setDraft((prev) => ({
+        ...prev,
+        photoUri: value,
+        setupMethod: value ? 'photo' : 'preset',
+      })),
   };
 
   return (

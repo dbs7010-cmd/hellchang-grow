@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 
+import { BodyAvatarPreview } from '@/components/body-avatar-preview';
 import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
@@ -35,6 +36,7 @@ export default function BodyAdjustScreen() {
           heightCm: draft.heightCm ? Number(draft.heightCm) : undefined,
           setupMethod: draft.setupMethod,
         },
+        photoUri: draft.photoUri,
       });
     } finally {
       setSubmitting(false);
@@ -49,6 +51,11 @@ export default function BodyAdjustScreen() {
       </ThemedText>
 
       <SectionCard>
+        <BodyAvatarPreview
+          genderExpression={draft.genderExpression}
+          size={draft.bodyParameters.size}
+          tone={draft.bodyParameters.tone}
+        />
         <Stepper
           label="체형 크기"
           value={draft.bodyParameters.size}

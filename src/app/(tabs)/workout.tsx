@@ -16,8 +16,10 @@ import {
   WorkoutIntensities,
   WorkoutIntensityLabels,
 } from '@/config/workout-labels';
+import { StanleyTrainer } from '@/config/trainers';
 import { WorkoutCategory, WorkoutIntensity } from '@/types/workout';
 import { todayDateString } from '@/utils/date';
+import { pickTrainerLine } from '@/utils/trainer-dialogue';
 
 export default function WorkoutScreen() {
   const { workoutRecords, addWorkoutRecord } = useAppData();
@@ -27,6 +29,7 @@ export default function WorkoutScreen() {
   const [intensity, setIntensity] = useState<WorkoutIntensity | null>(null);
   const [memo, setMemo] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [trainerReaction, setTrainerReaction] = useState<string | null>(null);
 
   const todayRecords = getTodayRecords(workoutRecords);
 
@@ -51,6 +54,7 @@ export default function WorkoutScreen() {
     setDuration('');
     setIntensity(null);
     setMemo('');
+    setTrainerReaction(pickTrainerLine(StanleyTrainer.dialogueSet.greetingRecordedToday).text);
   };
 
   return (
@@ -109,6 +113,14 @@ export default function WorkoutScreen() {
         )}
 
         <PrimaryButton label="기록 추가" onPress={handleSubmit} />
+
+        {trainerReaction && (
+          <View style={styles.trainerReaction}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {StanleyTrainer.portraitPlaceholder} {trainerReaction}
+            </ThemedText>
+          </View>
+        )}
       </SectionCard>
 
       <SectionCard title="오늘 기록">
@@ -144,5 +156,8 @@ const styles = StyleSheet.create({
   },
   recordRow: {
     gap: Spacing.half,
+  },
+  trainerReaction: {
+    paddingTop: Spacing.one,
   },
 });

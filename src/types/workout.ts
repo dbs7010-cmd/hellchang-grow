@@ -1,4 +1,11 @@
-export type WorkoutCategory = 'strength' | 'home' | 'running' | 'walking' | 'cycling' | 'other';
+export type WorkoutCategory =
+  | 'strength'
+  | 'home'
+  | 'running'
+  | 'walking'
+  | 'cycling'
+  | 'sports'
+  | 'other';
 
 export type WorkoutIntensity = 'low' | 'medium' | 'high';
 

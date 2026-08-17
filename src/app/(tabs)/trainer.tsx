@@ -6,40 +6,49 @@ import { Chip } from '@/components/ui/chip';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { SectionCard } from '@/components/ui/section-card';
-import { AiQuickActionIds, AiQuickActionLabels } from '@/config/ai-quick-actions';
+import { AiPtPanel } from '@/components/trainer/ai-pt-panel';
 import { StanleyTrainer } from '@/config/trainers';
 import { Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { getTodayRecords } from '@/data/workout-repository';
-import { TrainerDialogueLine } from '@/types/trainer';
-
-function pickLine(lines: TrainerDialogueLine[]): string {
-  return lines[Math.floor(Math.random() * lines.length)].text;
-}
+import { getGreetingLine, pickTrainerLine } from '@/utils/trainer-dialogue';
 
 export default function TrainerScreen() {
-  const { workoutRecords, hasSubscriptionAccess, trainerUsage, watchRewardedAd, subscribeMock, sendAiQuickAction } =
-    useAppData();
+  const {
+    workoutRecords,
+    streak,
+    hasSubscriptionAccess,
+    hasAiPtAccess,
+    trainerUsage,
+    watchRewardedAd,
+    subscribeMock,
+    sendAiQuickAction,
+    sendAiMessage,
+  } = useAppData();
   const hasRecordedToday = getTodayRecords(workoutRecords).length > 0;
 
   const [stanleyLine, setStanleyLine] = useState(
-    hasRecordedToday
-      ? StanleyTrainer.dialogueSet.greetingRecordedToday[0].text
-      : StanleyTrainer.dialogueSet.greetingNoRecordToday[0].text
+    () =>
+      getGreetingLine(StanleyTrainer.dialogueSet, {
+        hasRecordedToday,
+        currentStreakDays: streak.currentStreakDays,
+      }).text
   );
-  const [aiReply, setAiReply] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
 
-  const hasAiAccess = hasSubscriptionAccess || trainerUsage.rewardedPtUsesRemaining > 0;
+  // AI PT 대화 도중 마지막 이용권을 써버려도 패널이 갑자기 잠금 화면으로 바뀌며
+  // 대화가 사라지지 않도록, 한 번 열리면 이 화면을 벗어나기 전까지는 계속 열어둔다.
+  // hasAiPtAccess를 effect로 지켜보는 대신, 접근권을 얻는 두 액션(광고 시청/구독) 핸들러에서
+  // 직접 열어준다 — 초기 마운트 시 이미 접근권이 있으면 lazy initializer가 처리한다.
+  const [aiPanelOpened, setAiPanelOpened] = useState(hasAiPtAccess);
 
-  const handleQuickAction = async (actionId: (typeof AiQuickActionIds)[number]) => {
-    setAiLoading(true);
-    try {
-      const message = await sendAiQuickAction(actionId);
-      setAiReply(message?.text ?? null);
-    } finally {
-      setAiLoading(false);
-    }
+  const handleWatchAd = async () => {
+    await watchRewardedAd();
+    setAiPanelOpened(true);
+  };
+
+  const handleSubscribe = async () => {
+    await subscribeMock('pro');
+    setAiPanelOpened(true);
   };
 
   return (
@@ -54,9 +63,10 @@ export default function TrainerScreen() {
             label="오늘 기록 확인"
             onPress={() =>
               setStanleyLine(
-                hasRecordedToday
-                  ? pickLine(StanleyTrainer.dialogueSet.greetingRecordedToday)
-                  : pickLine(StanleyTrainer.dialogueSet.greetingNoRecordToday)
+                getGreetingLine(StanleyTrainer.dialogueSet, {
+                  hasRecordedToday,
+                  currentStreakDays: streak.currentStreakDays,
+                }).text
               )
             }
           />
@@ -66,50 +76,37 @@ export default function TrainerScreen() {
           />
           <Chip
             label="격려 받기"
-            onPress={() => setStanleyLine(pickLine(StanleyTrainer.dialogueSet.encouragement))}
+            onPress={() => setStanleyLine(pickTrainerLine(StanleyTrainer.dialogueSet.encouragement).text)}
           />
           <Chip
             label="놀림 받기"
-            onPress={() => setStanleyLine(pickLine(StanleyTrainer.dialogueSet.tease))}
+            onPress={() => setStanleyLine(pickTrainerLine(StanleyTrainer.dialogueSet.tease).text)}
           />
         </View>
       </SectionCard>
 
       <SectionCard title="AI PT">
-        {hasAiAccess ? (
-          <>
-            <ThemedText type="small" themeColor="textSecondary">
-              {hasSubscriptionAccess
+        {aiPanelOpened ? (
+          <AiPtPanel
+            accessLabel={
+              hasSubscriptionAccess
                 ? '구독 중이라 광고 없이 이용할 수 있어요.'
-                : `남은 이용 횟수: ${trainerUsage.rewardedPtUsesRemaining}회`}
-            </ThemedText>
-            <View style={styles.chipRow}>
-              {AiQuickActionIds.map((actionId) => (
-                <Chip
-                  key={actionId}
-                  label={AiQuickActionLabels[actionId]}
-                  onPress={() => handleQuickAction(actionId)}
-                />
-              ))}
-            </View>
-            {aiLoading && (
-              <ThemedText type="small" themeColor="textSecondary">
-                생각 중...
-              </ThemedText>
-            )}
-            {aiReply && !aiLoading && <ThemedText type="small">{aiReply}</ThemedText>}
-          </>
+                : `남은 이용 횟수: ${trainerUsage.rewardedPtUsesRemaining}회`
+            }
+            onQuickAction={sendAiQuickAction}
+            onSendMessage={sendAiMessage}
+          />
         ) : (
           <>
             <ThemedText type="small" themeColor="textSecondary">
-              {pickLine(StanleyTrainer.dialogueSet.adPitch)}
+              {pickTrainerLine(StanleyTrainer.dialogueSet.adPitch).text}
             </ThemedText>
-            <PrimaryButton label="광고 보고 이용하기" onPress={watchRewardedAd} />
-            <PrimaryButton
-              label="구독하기 (테스트)"
-              variant="secondary"
-              onPress={() => subscribeMock('pro')}
-            />
+            <ThemedText type="small" themeColor="textSecondary">
+              광고를 보거나 구독하면 AI PT를 이용할 수 있어요. 어느 쪽이든 AI 기능은 똑같아요 —
+              접근 방식만 다를 뿐이에요.
+            </ThemedText>
+            <PrimaryButton label="광고 보고 이용하기" onPress={handleWatchAd} />
+            <PrimaryButton label="구독하기 (테스트)" variant="secondary" onPress={handleSubscribe} />
           </>
         )}
       </SectionCard>

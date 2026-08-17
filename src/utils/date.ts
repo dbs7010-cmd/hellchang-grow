@@ -16,3 +16,10 @@ export function yesterdayDateString(from: string): string {
   date.setDate(date.getDate() - 1);
   return toDateString(date);
 }
+
+export function tomorrowDateString(from: string): string {
+  const [year, month, day] = from.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + 1);
+  return toDateString(date);
+}

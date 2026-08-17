@@ -8,6 +8,8 @@ export interface TrainerDialogueLine {
 export interface TrainerDialogueSet {
   greetingNoRecordToday: TrainerDialogueLine[];
   greetingRecordedToday: TrainerDialogueLine[];
+  /** streak가 streakRewardDays 이상일 때 greetingRecordedToday 대신 사용 */
+  streakPraise: TrainerDialogueLine[];
   encouragement: TrainerDialogueLine[];
   tease: TrainerDialogueLine[];
   adPitch: TrainerDialogueLine[];

@@ -11,6 +11,7 @@
     "expo-font": "~57.0.1",
     "expo-glass-effect": "~57.0.1",
     "expo-image": "~57.0.3",
+    "expo-image-picker": "~57.0.11",
     "expo-linking": "~57.0.6",
     "expo-router": "~57.0.14",
     "expo-splash-screen": "~57.0.7",
@@ -40,7 +41,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "verify:streak": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-streak.ts"
   },
   "private": true
 }

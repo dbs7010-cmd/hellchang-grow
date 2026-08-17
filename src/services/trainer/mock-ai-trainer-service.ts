@@ -15,7 +15,17 @@ const MOCK_RESPONSES: Record<AiQuickActionId, string> = {
 
 export class MockAITrainerService implements AITrainerService {
   async sendQuickAction(actionId: AiQuickActionId): Promise<AiTrainerMessage> {
-    return { actionId, text: MOCK_RESPONSES[actionId] };
+    return { text: MOCK_RESPONSES[actionId] };
+  }
+
+  async sendMessage(text: string): Promise<AiTrainerMessage> {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return { text: '뭐라도 적어야 대답을 하지.' };
+    }
+    return {
+      text: `"${trimmed}"에 대한 진짜 답은 아직 준비 중이야. 지금은 위에 있는 빠른 질문 버튼으로 먼저 물어봐줘.`,
+    };
   }
 }
 

@@ -4,6 +4,7 @@ import { AppConfig } from '@/config/app-config';
 import {
   addBodyHistoryEntry as addBodyHistoryEntryRepo,
   getBodyHistory,
+  hasReachedDailyPhotoLimit,
 } from '@/data/body-history-repository';
 import { getOpenEventPassState, saveOpenEventPassState } from '@/data/event-repository';
 import {
@@ -32,7 +33,7 @@ import { SubscriptionState } from '@/types/subscription';
 import { TrainerUsageState } from '@/types/ads';
 import { UserProfile } from '@/types/user';
 import { WorkoutRecord } from '@/types/workout';
-import { todayDateString } from '@/utils/date';
+import { todayDateString, tomorrowDateString } from '@/utils/date';
 
 interface AppDataState {
   loading: boolean;
@@ -49,14 +50,21 @@ interface AppDataState {
 
 interface AppDataContextValue extends AppDataState {
   hasSubscriptionAccess: boolean;
+  hasAiPtAccess: boolean;
+  /** 오늘 사진 기반 신체 기록을 추가할 수 있는지 (DEV 빌드에서는 항상 true) */
+  canAddPhotoToday: boolean;
+  /** canAddPhotoToday가 false일 때, 다음으로 가능한 날짜 (YYYY-MM-DD) */
+  nextPhotoAvailableDate: string;
   completeOnboarding: (input: {
     profile: Omit<UserProfile, 'id' | 'createdAt'>;
+    photoUri?: string;
   }) => Promise<void>;
   addWorkoutRecord: (input: Parameters<typeof addWorkoutRecordRepo>[0]) => Promise<void>;
   addBodyHistoryEntry: (input: Parameters<typeof addBodyHistoryEntryRepo>[0]) => Promise<void>;
   claimStreakReward: () => Promise<void>;
   watchRewardedAd: () => Promise<void>;
   sendAiQuickAction: (actionId: AiQuickActionId) => Promise<AiTrainerMessage | null>;
+  sendAiMessage: (text: string) => Promise<AiTrainerMessage | null>;
   subscribeMock: (tierId: string) => Promise<void>;
   cancelSubscriptionMock: () => Promise<void>;
   redeemReferralCode: (code: string) => Promise<ReferralRedemptionResult>;
@@ -130,7 +138,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const completeOnboarding = useCallback<AppDataContextValue['completeOnboarding']>(
-    async ({ profile }) => {
+    async ({ profile, photoUri }) => {
       const newProfile: UserProfile = {
         ...profile,
         id: `profile-${Date.now().toString(36)}`,
@@ -144,7 +152,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         weightKg: newProfile.weightKg,
         bodyPresetId: newProfile.bodyPresetId,
         bodyParameters: newProfile.bodyParameters,
-        source: 'manual',
+        source: photoUri ? 'photo' : 'manual',
+        photoReference: photoUri,
       });
 
       setState((prev) => ({
@@ -184,22 +193,37 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const isSubscribed = state.subscription.status === 'active';
+  const hasAiPtAccess = isSubscribed || state.trainerUsage.rewardedPtUsesRemaining > 0;
+
+  /**
+   * 유료 구독과 광고 보상 AI PT는 접근 방식만 다르고 AI 기능 자체는 동일하다
+   * (제품 기획 6/7장) — 이 함수 하나로 접근 가능 여부 확인 + 이용권 차감을 공유한다.
+   */
+  const consumeAiAccess = useCallback(async (): Promise<boolean> => {
+    if (isSubscribed) return true;
+    if (state.trainerUsage.rewardedPtUsesRemaining <= 0) return false;
+    const trainerUsage = await consumeRewardedPtUse();
+    setState((prev) => ({ ...prev, trainerUsage }));
+    return true;
+  }, [isSubscribed, state.trainerUsage.rewardedPtUsesRemaining]);
+
   const sendAiQuickAction = useCallback<AppDataContextValue['sendAiQuickAction']>(
     async (actionId) => {
-      const isSubscribed = state.subscription.status === 'active';
-      const hasFreeUse = state.trainerUsage.rewardedPtUsesRemaining > 0;
-      if (!isSubscribed && !hasFreeUse) {
-        return null;
-      }
-
-      if (!isSubscribed) {
-        const trainerUsage = await consumeRewardedPtUse();
-        setState((prev) => ({ ...prev, trainerUsage }));
-      }
-
+      const allowed = await consumeAiAccess();
+      if (!allowed) return null;
       return aiTrainerService.sendQuickAction(actionId);
     },
-    [state.subscription.status, state.trainerUsage.rewardedPtUsesRemaining]
+    [consumeAiAccess]
+  );
+
+  const sendAiMessage = useCallback<AppDataContextValue['sendAiMessage']>(
+    async (text) => {
+      const allowed = await consumeAiAccess();
+      if (!allowed) return null;
+      return aiTrainerService.sendMessage(text);
+    },
+    [consumeAiAccess]
   );
 
   const subscribeMock = useCallback(async (tierId: string) => {
@@ -252,15 +276,22 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setState({ ...initialState, loading: false });
   }, []);
 
+  const today = todayDateString();
+  const canAddPhotoToday = __DEV__ || !hasReachedDailyPhotoLimit(state.bodyHistory, today);
+
   const value: AppDataContextValue = {
     ...state,
-    hasSubscriptionAccess: state.subscription.status === 'active',
+    hasSubscriptionAccess: isSubscribed,
+    hasAiPtAccess,
+    canAddPhotoToday,
+    nextPhotoAvailableDate: tomorrowDateString(today),
     completeOnboarding,
     addWorkoutRecord,
     addBodyHistoryEntry,
     claimStreakReward,
     watchRewardedAd,
     sendAiQuickAction,
+    sendAiMessage,
     subscribeMock,
     cancelSubscriptionMock,
     redeemReferralCode,

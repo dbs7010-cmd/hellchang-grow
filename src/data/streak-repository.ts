@@ -1,7 +1,8 @@
 import { StorageKeys } from '@/services/storage/keys';
 import { readJSON, writeJSON } from '@/services/storage/local-storage';
 import { StreakState } from '@/types/streak';
-import { todayDateString, yesterdayDateString } from '@/utils/date';
+import { todayDateString } from '@/utils/date';
+import { computeStreakUpdate } from '@/utils/streak';
 
 const defaultStreakState: StreakState = {
   currentStreakDays: 0,
@@ -16,21 +17,11 @@ export async function getStreakState(): Promise<StreakState> {
 
 export async function registerTodayRecord(): Promise<StreakState> {
   const state = await getStreakState();
-  const today = todayDateString();
+  const updated = computeStreakUpdate(state, todayDateString());
 
-  if (state.lastRecordDate === today) {
+  if (updated === state) {
     return state;
   }
-
-  const isConsecutive = state.lastRecordDate === yesterdayDateString(today);
-  const currentStreakDays = isConsecutive ? state.currentStreakDays + 1 : 1;
-
-  const updated: StreakState = {
-    currentStreakDays,
-    longestStreakDays: Math.max(state.longestStreakDays, currentStreakDays),
-    lastRecordDate: today,
-    rewardClaimed: state.rewardClaimed,
-  };
 
   await writeJSON(StorageKeys.streakState, updated);
   return updated;
