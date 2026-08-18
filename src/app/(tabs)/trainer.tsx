@@ -1,35 +1,32 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Chip } from '@/components/ui/chip';
-import { PrimaryButton } from '@/components/ui/primary-button';
+import { NavRow } from '@/components/ui/nav-row';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { SectionCard } from '@/components/ui/section-card';
-import { AiPtPanel } from '@/components/trainer/ai-pt-panel';
 import { StanleyTrainer } from '@/config/trainers';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { useTheme } from '@/hooks/use-theme';
 import { getTodayRecords } from '@/data/workout-repository';
-import { getGreetingLine, pickTrainerLine } from '@/utils/trainer-dialogue';
+import { getGreetingLine } from '@/utils/trainer-dialogue';
 
+/**
+ * 16 SCREEN 중 "09 PT". 골드썬-스탠리가 HERO다. 예전의 emoji를 "완성된 로고"처럼
+ * 크게 쓰던 방식을 버리고, 실제 반신 아트가 들어올 자리(portrait-ratio slot)를
+ * 옅은 색으로 확보만 해둔다. AI 상담/성장 리포트 등은 compact navigation row로 옮기고,
+ * 광고/구독 안내는 AI CHAT(paywall 단계)로 옮겨 이 화면을 차지하지 않게 했다.
+ */
 export default function TrainerScreen() {
-  const {
-    workoutRecords,
-    streak,
-    hasSubscriptionAccess,
-    hasAiPtAccess,
-    trainerUsage,
-    watchRewardedAd,
-    subscribeMock,
-    sendAiQuickAction,
-    sendAiMessage,
-  } = useAppData();
+  const router = useRouter();
+  const theme = useTheme();
+  const { workoutRecords, streak } = useAppData();
   const hasRecordedToday = getTodayRecords(workoutRecords).length > 0;
 
-  const [stanleyLine, setStanleyLine] = useState(
+  const [stanleyLine] = useState(
     () =>
       getGreetingLine(StanleyTrainer.dialogueSet, {
         hasRecordedToday,
@@ -37,30 +34,10 @@ export default function TrainerScreen() {
       }).text
   );
 
-  // AI PT 대화 도중 마지막 이용권을 써버려도 패널이 갑자기 잠금 화면으로 바뀌며
-  // 대화가 사라지지 않도록, 한 번 열리면 이 화면을 벗어나기 전까지는 계속 열어둔다.
-  // hasAiPtAccess를 effect로 지켜보는 대신, 접근권을 얻는 두 액션(광고 시청/구독) 핸들러에서
-  // 직접 열어준다 — 초기 마운트 시 이미 접근권이 있으면 lazy initializer가 처리한다.
-  const [aiPanelOpened, setAiPanelOpened] = useState(hasAiPtAccess);
-
-  const handleWatchAd = async () => {
-    await watchRewardedAd();
-    setAiPanelOpened(true);
-  };
-
-  const handleSubscribe = async () => {
-    await subscribeMock('pro');
-    setAiPanelOpened(true);
-  };
-
-  const theme = useTheme();
-
   return (
     <ScreenScroll>
       <View style={styles.header}>
-        {/* 실제 골드썬 반신 아트가 들어올 자리 — emoji 크기가 아니라 인물 사진 비율(세로가 긴 카드)로
-            미리 확보해둔다. 지금은 그 안에 emoji placeholder만 중앙에 띄운다. */}
-        <ThemedView type="backgroundSelected" style={[styles.portraitSlot, { borderColor: theme.gold }]}>
+        <ThemedView type="backgroundSelected" style={[styles.portraitSlot, { borderColor: theme.border }]}>
           <ThemedText style={styles.portraitEmoji}>{StanleyTrainer.portraitPlaceholder}</ThemedText>
         </ThemedView>
         <ThemedText type="heading" style={{ color: theme.gold }}>
@@ -72,59 +49,12 @@ export default function TrainerScreen() {
         <ThemedText type="small" themeColor="textSecondary">
           {stanleyLine}
         </ThemedText>
-
-        <View style={styles.chipRow}>
-          <Chip
-            label="오늘 기록 확인"
-            onPress={() =>
-              setStanleyLine(
-                getGreetingLine(StanleyTrainer.dialogueSet, {
-                  hasRecordedToday,
-                  currentStreakDays: streak.currentStreakDays,
-                }).text
-              )
-            }
-          />
-          <Chip
-            label="루틴 확인 (준비중)"
-            onPress={() => setStanleyLine('루틴 짜주는 기능은 곧 붙일게. 조금만 기다려.')}
-          />
-          <Chip
-            label="격려 받기"
-            onPress={() => setStanleyLine(pickTrainerLine(StanleyTrainer.dialogueSet.encouragement).text)}
-          />
-          <Chip
-            label="놀림 받기"
-            onPress={() => setStanleyLine(pickTrainerLine(StanleyTrainer.dialogueSet.tease).text)}
-          />
-        </View>
       </SectionCard>
 
-      <SectionCard title="AI PT">
-        {aiPanelOpened ? (
-          <AiPtPanel
-            accessLabel={
-              hasSubscriptionAccess
-                ? '구독 중이라 광고 없이 이용할 수 있어요.'
-                : `남은 이용 횟수: ${trainerUsage.rewardedPtUsesRemaining}회`
-            }
-            onQuickAction={sendAiQuickAction}
-            onSendMessage={sendAiMessage}
-          />
-        ) : (
-          <>
-            <ThemedText type="small" themeColor="textSecondary">
-              {pickTrainerLine(StanleyTrainer.dialogueSet.adPitch).text}
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              광고를 보거나 구독하면 AI PT를 이용할 수 있어요. 어느 쪽이든 AI 기능은 똑같아요 —
-              접근 방식만 다를 뿐이에요.
-            </ThemedText>
-            <PrimaryButton label="광고 보고 이용하기" onPress={handleWatchAd} />
-            <PrimaryButton label="구독하기 (테스트)" variant="secondary" onPress={handleSubscribe} />
-          </>
-        )}
-      </SectionCard>
+      <NavRow label="AI 상담" value="운동 추천 · 질문하기" onPress={() => router.push('/ai-chat')} />
+      <NavRow label="루틴 관리" value="내 루틴 보기" onPress={() => router.push('/(tabs)/workout')} />
+      <NavRow label="체형 분석" value="체중 · 사진 비교" onPress={() => router.push('/(tabs)/history')} />
+      <NavRow label="성장 리포트" value="HELL PASS 진행도" onPress={() => router.push('/pass')} />
     </ScreenScroll>
   );
 }
@@ -143,11 +73,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   portraitEmoji: {
-    fontSize: 48,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
+    fontSize: 40,
+    opacity: 0.45,
   },
 });

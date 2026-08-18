@@ -42,4 +42,10 @@ export const AppConfig = {
   staleActiveSessionThresholdMinutes: 3,
   /** 세션이 active인 동안 heartbeat를 저장하는 주기(초) — 강제 종료 대비용 */
   sessionHeartbeatIntervalSeconds: 20,
+  /**
+   * 기록의 운동 시간(분)이 이 값을 넘으면 정상 운동이 아니라 과거 stale-session
+   * 버그로 생성됐을 가능성이 높다고 보고 UI에서 눈에 띄게 경고 표시한다.
+   * (recoverStaleSession이 적용되기 전에 저장된 기록에만 나타날 수 있다.)
+   */
+  suspiciousDurationMinutes: 240,
 } as const;

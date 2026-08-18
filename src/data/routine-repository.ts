@@ -19,6 +19,19 @@ export async function saveRoutine(
   return updated;
 }
 
+export async function updateRoutine(
+  routineId: string,
+  input: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<Routine[]> {
+  const routines = await getRoutines();
+  const now = new Date().toISOString();
+  const updated = routines.map((routine) =>
+    routine.id === routineId ? { ...routine, ...input, updatedAt: now } : routine
+  );
+  await writeJSON(StorageKeys.routines, updated);
+  return updated;
+}
+
 export async function deleteRoutine(routineId: string): Promise<Routine[]> {
   const routines = await getRoutines();
   const updated = routines.filter((routine) => routine.id !== routineId);

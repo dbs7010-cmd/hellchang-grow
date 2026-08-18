@@ -113,7 +113,8 @@ function MessageBubble({ role, text }: { role: 'user' | 'trainer'; text: string 
   }));
 
   return (
-    <Animated.View style={animatedStyle}>
+    <Animated.View style={[styles.bubbleRow, role === 'user' && styles.bubbleRowUser, animatedStyle]}>
+      {role === 'trainer' && <ThemedText style={styles.bubblePortrait}>{StanleyTrainer.portraitPlaceholder}</ThemedText>}
       <ThemedView
         type={role === 'user' ? 'backgroundSelected' : 'backgroundElement'}
         style={[styles.bubble, role === 'user' && styles.bubbleUser]}>
@@ -147,10 +148,21 @@ const styles = StyleSheet.create({
   messages: {
     gap: Spacing.two,
   },
+  bubbleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.one,
+  },
+  bubbleRowUser: {
+    justifyContent: 'flex-end',
+  },
+  bubblePortrait: {
+    fontSize: 18,
+  },
   bubble: {
     borderRadius: Radius.medium,
     padding: Spacing.three,
-    maxWidth: '90%',
+    maxWidth: '80%',
   },
   bubbleUser: {
     alignSelf: 'flex-end',

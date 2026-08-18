@@ -18,12 +18,18 @@ import {
   setOnboardingComplete as setOnboardingCompleteRepo,
 } from '@/data/profile-repository';
 import { getReferralState } from '@/data/referral-repository';
-import { deleteRoutine as deleteRoutineRepo, getRoutines, saveRoutine as saveRoutineRepo } from '@/data/routine-repository';
+import {
+  deleteRoutine as deleteRoutineRepo,
+  getRoutines,
+  saveRoutine as saveRoutineRepo,
+  updateRoutine as updateRoutineRepo,
+} from '@/data/routine-repository';
 import { claimStreakReward as claimStreakRewardRepo, getStreakState, registerTodayRecord } from '@/data/streak-repository';
 import { getSubscriptionState } from '@/data/subscription-repository';
 import { grantRewardedPtUses, getTrainerUsageState, consumeRewardedPtUse } from '@/data/trainer-usage-repository';
 import {
   addWorkoutRecord as addWorkoutRecordRepo,
+  deleteWorkoutRecord as deleteWorkoutRecordRepo,
   getThisWeekRecords,
   getWorkoutRecords,
 } from '@/data/workout-repository';
@@ -122,6 +128,7 @@ interface AppDataContextValue extends AppDataState {
   addWorkoutRecord: (
     input: Parameters<typeof addWorkoutRecordRepo>[0]
   ) => Promise<{ workoutRecords: WorkoutRecord[]; streak: StreakState }>;
+  deleteWorkoutRecord: (recordId: string) => Promise<void>;
   addBodyHistoryEntry: (input: Parameters<typeof addBodyHistoryEntryRepo>[0]) => Promise<void>;
   claimStreakReward: () => Promise<void>;
   watchRewardedAd: () => Promise<void>;
@@ -152,6 +159,7 @@ interface AppDataContextValue extends AppDataState {
   skipSessionRest: () => Promise<void>;
   endWorkoutSession: () => Promise<EndSessionSummary | null>;
   saveRoutine: (input: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateRoutine: (routineId: string, input: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   removeRoutine: (routineId: string) => Promise<void>;
   sendAiQuickAction: (actionId: AiQuickActionId) => Promise<AiTrainerMessage | null>;
   sendAiMessage: (text: string) => Promise<AiTrainerMessage | null>;
@@ -346,6 +354,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     return { workoutRecords, streak };
   }, []);
 
+  const deleteWorkoutRecord = useCallback<AppDataContextValue['deleteWorkoutRecord']>(async (recordId) => {
+    const workoutRecords = await deleteWorkoutRecordRepo(recordId);
+    setState((prev) => ({ ...prev, workoutRecords }));
+  }, []);
+
   const addBodyHistoryEntry = useCallback<AppDataContextValue['addBodyHistoryEntry']>(
     async (input) => {
       const bodyHistory = await addBodyHistoryEntryRepo(input);
@@ -519,6 +532,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, routines }));
   }, []);
 
+  const updateRoutine = useCallback<AppDataContextValue['updateRoutine']>(async (routineId, input) => {
+    const routines = await updateRoutineRepo(routineId, input);
+    setState((prev) => ({ ...prev, routines }));
+  }, []);
+
   const removeRoutine = useCallback<AppDataContextValue['removeRoutine']>(async (routineId) => {
     const routines = await deleteRoutineRepo(routineId);
     setState((prev) => ({ ...prev, routines }));
@@ -627,6 +645,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     passProgress: computePassLevelProgress(state.pass.xp),
     completeOnboarding,
     addWorkoutRecord,
+    deleteWorkoutRecord,
     addBodyHistoryEntry,
     claimStreakReward,
     watchRewardedAd,
@@ -643,6 +662,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     skipSessionRest,
     endWorkoutSession,
     saveRoutine,
+    updateRoutine,
     removeRoutine,
     sendAiQuickAction,
     sendAiMessage,

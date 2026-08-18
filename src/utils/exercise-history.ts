@@ -41,6 +41,26 @@ export function findPreviousPerformance(
   return null;
 }
 
+/**
+ * 특정 Exercise ID의 전체 기록(최근 세션 하나가 아니라 지금까지 저장된 모든 WorkoutRecord)을
+ * 훑어 완료된 세트 중 가장 높았던 중량을 찾는다 — EXERCISE DETAIL의 "최고 기록"에 쓴다.
+ * 1RM 추정 같은 복잡한 계산은 하지 않는다.
+ */
+export function findAllTimeBestWeight(exerciseId: string, records: WorkoutRecord[]): number | undefined {
+  let best: number | undefined;
+  for (const record of records) {
+    const match = record.exercises?.find((exercise) => exercise.exerciseId === exerciseId);
+    if (!match) continue;
+    const sets = match.setDetails ?? (match.weightKg !== undefined ? [{ weightKg: match.weightKg }] : []);
+    for (const set of sets) {
+      if (set.weightKg !== undefined && (best === undefined || set.weightKg > best)) {
+        best = set.weightKg;
+      }
+    }
+  }
+  return best;
+}
+
 /** 사용자가 루틴을 저장하지 않았어도, 특정 부위를 마지막으로 했던 기록을 찾는다 ("지난번 가슴"). */
 export function findMostRecentRecordForMuscleGroup(
   muscleGroup: MuscleGroup,
@@ -55,6 +75,39 @@ export function findMostRecentRecordForMuscleGroup(
       )
     ) ?? null
   );
+}
+
+/**
+ * 특정 기간(periodRecords)에 실제로 새 최고 중량이 나온 횟수를 센다 — 전체 기록을
+ * 시간순으로 훑으며 그 시점까지의 최고 기록을 갱신한 경우만 센다. PR은 세션 종료
+ * 시점에 저장되지 않으므로, HISTORY 통계 화면에서 쓰기 위해 기존 기록에서 다시
+ * 계산한다(새 저장 필드를 만들지 않는다).
+ */
+export function countPeriodPRs(periodRecords: WorkoutRecord[], allRecords: WorkoutRecord[]): number {
+  const sorted = [...allRecords].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const bestSoFar = new Map<string, number>();
+  const periodIds = new Set(periodRecords.map((record) => record.id));
+  let count = 0;
+
+  for (const record of sorted) {
+    for (const exercise of record.exercises ?? []) {
+      if (!exercise.exerciseId) continue;
+      const sets =
+        exercise.setDetails ?? (exercise.weightKg !== undefined ? [{ weightKg: exercise.weightKg }] : []);
+      const maxInRecord = sets.reduce(
+        (max, set) => (set.weightKg !== undefined && set.weightKg > max ? set.weightKg : max),
+        0
+      );
+      if (maxInRecord <= 0) continue;
+
+      const prevBest = bestSoFar.get(exercise.exerciseId) ?? 0;
+      if (maxInRecord > prevBest) {
+        if (periodIds.has(record.id)) count++;
+        bestSoFar.set(exercise.exerciseId, maxInRecord);
+      }
+    }
+  }
+  return count;
 }
 
 export interface PrEvent {

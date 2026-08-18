@@ -23,6 +23,14 @@ export async function addWorkoutRecord(
   return updated;
 }
 
+/** 백그라운드 방치 등으로 잘못 생성된 기록을 사용자가 직접 정리할 수 있게 한다. */
+export async function deleteWorkoutRecord(recordId: string): Promise<WorkoutRecord[]> {
+  const records = await getWorkoutRecords();
+  const updated = records.filter((record) => record.id !== recordId);
+  await writeJSON(StorageKeys.workoutRecords, updated);
+  return updated;
+}
+
 export function getTodayRecords(records: WorkoutRecord[]): WorkoutRecord[] {
   const today = todayDateString();
   return records.filter((record) => record.date === today);
@@ -39,4 +47,22 @@ export function getThisWeekRecords(
   date.setDate(date.getDate() - daysSinceMonday);
   const mondayStr = toDateString(date);
   return records.filter((record) => record.date >= mondayStr && record.date <= today);
+}
+
+/** 이번 달(1일) ~ 오늘까지의 기록. */
+export function getThisMonthRecords(
+  records: WorkoutRecord[],
+  today: string = todayDateString()
+): WorkoutRecord[] {
+  const monthStart = `${today.slice(0, 7)}-01`;
+  return records.filter((record) => record.date >= monthStart && record.date <= today);
+}
+
+/** 올해(1/1) ~ 오늘까지의 기록. */
+export function getThisYearRecords(
+  records: WorkoutRecord[],
+  today: string = todayDateString()
+): WorkoutRecord[] {
+  const yearStart = `${today.slice(0, 4)}-01-01`;
+  return records.filter((record) => record.date >= yearStart && record.date <= today);
 }

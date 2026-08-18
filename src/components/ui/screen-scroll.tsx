@@ -4,13 +4,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 export function ScreenScroll({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
 
   return (
     <ScrollView
-      style={styles.scrollView}
+      style={[styles.scrollView, { backgroundColor: theme.background }]}
       contentContainerStyle={styles.contentContainer}
       contentInset={{ top: insets.top }}>
       <ThemedView
