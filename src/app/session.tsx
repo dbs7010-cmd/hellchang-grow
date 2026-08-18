@@ -8,9 +8,10 @@ import { GoldsunReaction } from '@/components/goldsun/goldsun-reaction';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Chip } from '@/components/ui/chip';
+import { CircularProgressRing } from '@/components/ui/circular-progress-ring';
+import { ExerciseArtSlot } from '@/components/ui/exercise-art-slot';
 import { PRBadge } from '@/components/ui/pr-badge';
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { ProgressBar } from '@/components/ui/progress-bar';
 import { ResultStat, ResultStatList } from '@/components/ui/result-stat';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { SectionCard } from '@/components/ui/section-card';
@@ -283,8 +284,15 @@ export default function SessionScreen() {
       )}
 
       {currentExercise && (
-        <SectionCard title={currentExercise.exerciseName}>
-          <PreviousPerformanceLine exerciseId={currentExercise.exerciseId} records={workoutRecords} />
+        <SectionCard>
+          <View style={styles.exerciseTitleRow}>
+            <ThemedText type="smallBold">{currentExercise.exerciseName}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              세트 {completedSets.length + 1}
+            </ThemedText>
+          </View>
+
+          <ExerciseArtSlot exerciseId={currentExercise.exerciseId} />
 
           {pendingSet ? (
             <SetHero
@@ -295,6 +303,8 @@ export default function SessionScreen() {
           ) : (
             <PrimaryButton label="+ 세트 시작" variant="secondary" onPress={handleAddSet} />
           )}
+
+          <PreviousPerformanceLine exerciseId={currentExercise.exerciseId} records={workoutRecords} />
 
           {completedSets.length > 0 && (
             <View style={styles.completedList}>
@@ -347,6 +357,8 @@ export default function SessionScreen() {
           <RestTimer
             secondsRemaining={restSecondsRemaining}
             onSkip={skipSessionRest}
+            nextExerciseName={currentExercise?.exerciseName}
+            nextSetPreview={currentExercise ? getLastSetValues(activeSession, currentExercise.id) : null}
           />
         ) : (
           <>
@@ -405,6 +417,12 @@ export default function SessionScreen() {
   );
 }
 
+function formatDurationMinutes(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
+}
+
 function getTodayRecordCount(records: WorkoutRecord[]): number {
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
@@ -413,33 +431,40 @@ function getTodayRecordCount(records: WorkoutRecord[]): number {
   return records.filter((r) => r.date === todayStr).length;
 }
 
+/**
+ * RESULT의 HERO는 "성과판"이다. CANON 순서(운동시간→총세트→총볼륨→PR→이번 주→HELL PASS)를
+ * 그대로 따른다. 종류/운동 수는 부가 정보라 작은 보조 줄로 내린다. 실제 데이터가 없는
+ * 항목(볼륨 0, PR 없음)은 만들어내지 않고 그냥 숨긴다.
+ */
 function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine; onConfirm: () => void }) {
   const theme = useTheme();
   return (
     <ScreenScroll>
       <SectionCard>
-        <ThemedText type="subtitle" style={{ color: theme.gold }}>
-          WORKOUT COMPLETE
+        <ThemedText type="subtitle" style={[styles.resultTitle, { color: theme.gold }]}>
+          🏆 WORKOUT COMPLETE
         </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
+        <ThemedText type="small" themeColor="textSecondary" style={styles.resultSubline}>
+          {WorkoutCategoryLabels[summary.category]} · 운동 {summary.exerciseCount}개
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.resultSubline}>
           {StanleyTrainer.portraitPlaceholder} {summary.trainerLine}
         </ThemedText>
 
         <ResultStatList>
-          <ResultStat index={0} label="운동 시간" value={`${summary.durationMinutes}분`} emphasize />
-          <ResultStat index={1} label="종류" value={WorkoutCategoryLabels[summary.category]} />
-          <ResultStat index={2} label="운동 수" value={`${summary.exerciseCount}개`} />
-          <ResultStat index={3} label="총 세트" value={`${summary.completedSets}세트`} />
+          <ResultStat index={0} label="운동 시간" value={formatDurationMinutes(summary.durationMinutes)} emphasize />
+          <ResultStat index={1} label="총 세트" value={`${summary.completedSets}세트`} emphasize />
           {summary.totalVolumeKg > 0 && (
-            <ResultStat index={4} label="총 볼륨" value={`${Math.round(summary.totalVolumeKg)}kg`} />
+            <ResultStat index={2} label="총 볼륨" value={`${Math.round(summary.totalVolumeKg)}KG`} emphasize />
           )}
           {summary.prs.length > 0 && (
-            <ResultStat index={5} label="PR" value={`${summary.prs.length}개`} emphasize />
+            <ResultStat index={3} label="PR" value={`${summary.prs.length}개 NEW`} emphasize />
           )}
+          <ResultStat index={4} label="이번 주 운동" value={`${summary.weeklyCount}회`} />
           <ResultStat
-            index={6}
+            index={5}
             label="HELL PASS"
-            value={`+${summary.xpAwarded} XP · Lv.${summary.passLevel}`}
+            value={`+${summary.xpAwarded} XP`}
             emphasize
           />
         </ResultStatList>
@@ -457,8 +482,7 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
         )}
 
         <ThemedText type="small" themeColor="textSecondary">
-          이번 주 {summary.weeklyCount}회 · 연속 {summary.streak}일째
-          {summary.routineCompleted ? ' · 루틴 완료!' : ''}
+          연속 {summary.streak}일째{summary.routineCompleted ? ' · 루틴 완료!' : ''} · HELL PASS Lv.{summary.passLevel}
         </ThemedText>
 
         <PrimaryButton label="확인" variant="gold" onPress={onConfirm} />
@@ -565,23 +589,52 @@ function StepperButton({ label, onPress }: { label: string; onPress: () => void 
   );
 }
 
-function RestTimer({ secondsRemaining, onSkip }: { secondsRemaining: number; onSkip: () => void }) {
+/** REST의 HERO는 TIMER다 — 큰 원형 progress ring 하나가 화면의 중심이다. */
+function RestTimer({
+  secondsRemaining,
+  onSkip,
+  nextExerciseName,
+  nextSetPreview,
+}: {
+  secondsRemaining: number;
+  onSkip: () => void;
+  nextExerciseName?: string;
+  nextSetPreview?: { weightKg?: number; reps?: number } | null;
+}) {
   const theme = useTheme();
   const urgent = secondsRemaining <= AppConfig.restUrgentThresholdSeconds;
   const preset = Math.max(secondsRemaining, AppConfig.defaultRestSeconds);
+  const ringColor = urgent ? theme.goldBright : theme.gold;
 
   return (
     <View style={styles.restBlock}>
-      <ThemedText type="title" style={[styles.restTimer, { color: urgent ? theme.goldBright : theme.gold }]}>
-        {secondsRemaining}초
-      </ThemedText>
-      <ProgressBar
+      <CircularProgressRing
         progress={secondsRemaining / preset}
-        height={8}
-        color={urgent ? theme.goldBright : theme.gold}
+        size={200}
+        thickness={14}
+        color={ringColor}
         trackColor={theme.backgroundSelected}
-      />
-      <PrimaryButton label="건너뛰기" variant="secondary" onPress={onSkip} />
+        holeColor={theme.backgroundElement}>
+        <ThemedText type="small" themeColor="textSecondary">
+          남은 시간
+        </ThemedText>
+        <ThemedText type="title" style={[styles.restTimer, { color: ringColor }]}>
+          {formatElapsedTime(secondsRemaining)}
+        </ThemedText>
+      </CircularProgressRing>
+
+      {nextExerciseName && nextSetPreview && (nextSetPreview.weightKg !== undefined || nextSetPreview.reps !== undefined) && (
+        <View style={styles.nextSetPreview}>
+          <ThemedText type="small" themeColor="textSecondary">
+            다음 세트
+          </ThemedText>
+          <ThemedText type="smallBold">
+            {nextExerciseName} · {nextSetPreview.weightKg ?? '-'}KG × {nextSetPreview.reps ?? '-'}회
+          </ThemedText>
+        </View>
+      )}
+
+      <PrimaryButton label="휴식 건너뛰기" variant="secondary" onPress={onSkip} />
     </View>
   );
 }
@@ -636,6 +689,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.two,
   },
+  exerciseTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
   navRow: {
     flexDirection: 'row',
     gap: Spacing.two,
@@ -683,11 +741,15 @@ const styles = StyleSheet.create({
   },
   restBlock: {
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: Spacing.three,
     width: '100%',
   },
   restTimer: {
     fontVariant: ['tabular-nums'],
+  },
+  nextSetPreview: {
+    alignItems: 'center',
+    gap: Spacing.half,
   },
   customRestRow: {
     flexDirection: 'row',
@@ -701,6 +763,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.large,
     padding: Spacing.three,
     gap: Spacing.one,
+  },
+  resultTitle: {
+    textAlign: 'center',
+  },
+  resultSubline: {
+    textAlign: 'center',
   },
   prOverlay: {
     borderRadius: Radius.large,

@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { ExerciseArtSlot } from '@/components/ui/exercise-art-slot';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -42,6 +43,7 @@ export function RecommendedStrip({ items, onPressItem, onPressMore }: Recommende
             key={item.id}
             onPress={onPressItem}
             style={[styles.item, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+            <ExerciseArtSlot exerciseId={item.id} style={styles.thumbnail} />
             <ThemedText type="small" style={styles.itemName} numberOfLines={1}>
               {item.name}
             </ThemedText>
@@ -69,12 +71,20 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   item: {
-    width: 92,
-    paddingVertical: Spacing.two,
+    width: 104,
+    paddingBottom: Spacing.two,
     paddingHorizontal: Spacing.two,
     borderRadius: Radius.medium,
     borderWidth: 1,
     gap: Spacing.half,
+    overflow: 'hidden',
+  },
+  thumbnail: {
+    marginHorizontal: -Spacing.two,
+    marginBottom: Spacing.one,
+    width: 104,
+    borderRadius: 0,
+    borderWidth: 0,
   },
   itemName: {
     fontWeight: '700',

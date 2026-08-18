@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Chip } from '@/components/ui/chip';
@@ -13,6 +13,7 @@ import { MuscleGroupLabels, MuscleGroups } from '@/config/muscle-groups';
 import { WorkoutCategories, WorkoutCategoryLabels } from '@/config/workout-labels';
 import { Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
+import { useTheme } from '@/hooks/use-theme';
 import { MuscleGroup } from '@/types/exercise';
 import { WorkoutCategory } from '@/types/workout';
 import { createId } from '@/utils/id';
@@ -24,6 +25,7 @@ const CARDIO_CATEGORIES: WorkoutCategory[] = WorkoutCategories.filter((c) => c !
 
 export default function WorkoutStartScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const { activeSession, workoutRecords, routines, startWorkoutSession } = useAppData();
 
   const [showBodyPartPicker, setShowBodyPartPicker] = useState(false);
@@ -31,6 +33,7 @@ export default function WorkoutStartScreen() {
   const [selectedExerciseIds, setSelectedExerciseIds] = useState<Set<string>>(new Set());
   const [customExercises, setCustomExercises] = useState<{ id: string; name: string }[]>([]);
   const [customExerciseName, setCustomExerciseName] = useState('');
+  const [showCustomExerciseField, setShowCustomExerciseField] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // 이미 진행 중인 세션이 있는 상태로 이 화면에 들어오면 (뒤로가기 등) 바로 세션으로 보낸다.
@@ -129,19 +132,24 @@ export default function WorkoutStartScreen() {
 
   return (
     <ScreenScroll>
-      <ThemedText type="heading">오늘 운동</ThemedText>
+      <ThemedText type="heading">오늘의 운동</ThemedText>
 
       {scheduledRoutine && !showBodyPartPicker && (
-        <SectionCard title={`오늘 · ${scheduledRoutine.name}`}>
-          <ThemedText type="small" themeColor="textSecondary">
-            운동 {scheduledRoutine.exerciseIds.length}개
-          </ThemedText>
-          {scheduledRoutine.exerciseIds.map((id) => (
-            <ThemedText key={id} type="small" themeColor="textSecondary">
-              · {getExerciseById(id)?.name ?? id}
+        <SectionCard>
+          <Pressable onPress={handleStartRoutine} style={styles.compactRow}>
+            <View style={styles.compactRowText}>
+              <ThemedText type="small" themeColor="textSecondary">
+                루틴 불러오기
+              </ThemedText>
+              <ThemedText type="smallBold">{scheduledRoutine.name}</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {scheduledRoutine.exerciseIds.length}개 운동
+              </ThemedText>
+            </View>
+            <ThemedText type="smallBold" style={{ color: theme.gold }}>
+              ›
             </ThemedText>
-          ))}
-          <PrimaryButton label="이 루틴으로 시작" onPress={handleStartRoutine} />
+          </Pressable>
           <PrimaryButton
             label="오늘은 다르게"
             variant="secondary"
@@ -151,7 +159,7 @@ export default function WorkoutStartScreen() {
       )}
 
       {(!scheduledRoutine || showBodyPartPicker) && (
-        <SectionCard title="오늘 어디 조질까?">
+        <SectionCard title="부위별 시작">
           <View style={styles.chipRow}>
             {MuscleGroups.map((group) => (
               <Chip
@@ -169,20 +177,27 @@ export default function WorkoutStartScreen() {
       {selectedMuscleGroup && (
         <>
           {previousExercises.length > 0 && (
-            <SectionCard title="지난번 그대로 갈까?">
-              <ThemedText type="small" themeColor="textSecondary">
-                {previousRecord?.date} · {MuscleGroupLabels[selectedMuscleGroup]}
-              </ThemedText>
-              {previousExercises.map((exercise) => (
-                <ThemedText key={exercise.id} type="small" themeColor="textSecondary">
-                  · {exercise.name}
+            <SectionCard>
+              <Pressable onPress={handleStartSameAsLastTime} style={styles.compactRow}>
+                <View style={styles.compactRowText}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    지난 운동 그대로
+                  </ThemedText>
+                  <ThemedText type="smallBold">
+                    {MuscleGroupLabels[selectedMuscleGroup]} · {previousExercises.length}개 운동
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {previousRecord?.date}
+                  </ThemedText>
+                </View>
+                <ThemedText type="smallBold" style={{ color: theme.gold }}>
+                  ›
                 </ThemedText>
-              ))}
-              <PrimaryButton label="그대로 시작" onPress={handleStartSameAsLastTime} />
+              </Pressable>
             </SectionCard>
           )}
 
-          <SectionCard title={`${MuscleGroupLabels[selectedMuscleGroup]} 운동`}>
+          <SectionCard title={`${MuscleGroupLabels[selectedMuscleGroup]} 운동 고르기`}>
             <TextField
               placeholder="운동 검색"
               value={searchQuery}
@@ -209,15 +224,25 @@ export default function WorkoutStartScreen() {
               ))}
             </View>
 
-            <TextField
-              label="직접 운동 추가"
-              value={customExerciseName}
-              onChangeText={setCustomExerciseName}
-              placeholder="DB에 없는 운동 이름"
-            />
-            <PrimaryButton label="추가" variant="secondary" onPress={handleAddCustomExercise} />
+            {showCustomExerciseField ? (
+              <View style={styles.customExerciseRow}>
+                <TextField
+                  value={customExerciseName}
+                  onChangeText={setCustomExerciseName}
+                  placeholder="DB에 없는 운동 이름"
+                  style={styles.customExerciseInput}
+                />
+                <PrimaryButton label="추가" variant="secondary" onPress={handleAddCustomExercise} />
+              </View>
+            ) : (
+              <Pressable onPress={() => setShowCustomExerciseField(true)} hitSlop={8}>
+                <ThemedText type="small" style={{ color: theme.gold }}>
+                  + 목록에 없는 운동 직접 추가
+                </ThemedText>
+              </Pressable>
+            )}
 
-            <PrimaryButton label="운동 시작" onPress={handleStartWithSelection} />
+            <PrimaryButton label="다음" variant="gold" onPress={handleStartWithSelection} />
           </SectionCard>
         </>
       )}
@@ -245,5 +270,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
+  },
+  compactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  compactRowText: {
+    gap: Spacing.half,
+  },
+  customExerciseRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    alignItems: 'center',
+  },
+  customExerciseInput: {
+    flex: 1,
   },
 });
