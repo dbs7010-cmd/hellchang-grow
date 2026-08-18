@@ -1,12 +1,10 @@
 import { Stack } from 'expo-router';
-import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { OnboardingDraftProvider } from '@/context/onboarding-draft-context';
 
 export default function OnboardingLayout() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
+  const colors = Colors.dark;
 
   return (
     <OnboardingDraftProvider>

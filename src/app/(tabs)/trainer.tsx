@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
 import { Chip } from '@/components/ui/chip';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
@@ -10,6 +11,7 @@ import { AiPtPanel } from '@/components/trainer/ai-pt-panel';
 import { StanleyTrainer } from '@/config/trainers';
 import { Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
+import { useTheme } from '@/hooks/use-theme';
 import { getTodayRecords } from '@/data/workout-repository';
 import { getGreetingLine, pickTrainerLine } from '@/utils/trainer-dialogue';
 
@@ -51,9 +53,20 @@ export default function TrainerScreen() {
     setAiPanelOpened(true);
   };
 
+  const theme = useTheme();
+
   return (
     <ScreenScroll>
-      <SectionCard title={`${StanleyTrainer.displayName} ${StanleyTrainer.portraitPlaceholder}`}>
+      <View style={styles.header}>
+        <ThemedView type="backgroundSelected" style={[styles.portrait, { borderColor: theme.gold }]}>
+          <ThemedText style={styles.portraitEmoji}>{StanleyTrainer.portraitPlaceholder}</ThemedText>
+        </ThemedView>
+        <ThemedText type="subtitle" style={{ color: theme.gold }}>
+          {StanleyTrainer.displayName}
+        </ThemedText>
+      </View>
+
+      <SectionCard>
         <ThemedText type="small" themeColor="textSecondary">
           {stanleyLine}
         </ThemedText>
@@ -115,6 +128,21 @@ export default function TrainerScreen() {
 }
 
 const styles = StyleSheet.create({
+  header: {
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  portrait: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  portraitEmoji: {
+    fontSize: 36,
+  },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

@@ -5,19 +5,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CharacterSilhouette } from '@/components/character/character-silhouette';
 import { CharacterViewer } from '@/components/character/character-viewer';
-import { GoldsunBubble } from '@/components/home/goldsun-bubble';
+import { GoldsunBubble } from '@/components/goldsun/goldsun-bubble';
 import { GrowthHud } from '@/components/home/growth-hud';
 import { RecommendedStrip } from '@/components/home/recommended-strip';
-import { StartWorkoutButton } from '@/components/home/start-workout-button';
-import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { AppConfig } from '@/config/app-config';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
 import { Exercises, getExerciseById, getExercisesByMuscleGroup } from '@/config/exercises';
 import { MuscleGroups } from '@/config/muscle-groups';
 import { StanleyTrainer } from '@/config/trainers';
-import { BottomTabInset, GymTheme, Spacing } from '@/constants/theme';
+import { AppConfig } from '@/config/app-config';
+import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { getThisWeekRecords } from '@/data/workout-repository';
+import { useTheme } from '@/hooks/use-theme';
 import { findPreviousPerformance } from '@/utils/exercise-history';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
@@ -25,6 +26,7 @@ import { recommendMuscleGroup } from '@/utils/workout-recommendation';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const {
     profile,
@@ -35,11 +37,9 @@ export default function HomeScreen() {
     activeSession,
     routines,
     passProgress,
-    claimStreakReward,
   } = useAppData();
 
   const [viewerOpen, setViewerOpen] = useState(false);
-  const [noticeOpen, setNoticeOpen] = useState(false);
 
   const weeklyCount = getThisWeekRecords(workoutRecords).length;
   const sessionInProgress = activeSession && activeSession.status !== 'completed';
@@ -87,20 +87,18 @@ export default function HomeScreen() {
   if (!profile) return null;
 
   return (
-    <View style={styles.root}>
+    <ThemedView style={styles.root}>
       <View style={[styles.topBar, { paddingTop: insets.top + Spacing.two }]}>
-        <ThemedText type="smallBold" style={styles.logo}>
-          🏋 헬창키우기
-        </ThemedText>
+        <ThemedText type="smallBold">🏋 헬창키우기</ThemedText>
         <View style={styles.topActions}>
           <Pressable onPress={() => router.push('/trainer')} hitSlop={8}>
-            <ThemedText type="small" style={styles.topActionText}>
+            <ThemedText type="small" style={{ color: theme.gold }}>
               골드썬 PT
             </ThemedText>
           </Pressable>
-          <Pressable onPress={() => setNoticeOpen(true)} hitSlop={8} style={styles.bellButton}>
+          <Pressable onPress={() => router.push('/notifications')} hitSlop={8} style={styles.bellButton}>
             <ThemedText style={styles.topActionIcon}>🔔</ThemedText>
-            {noticeAvailable && <View style={styles.badgeDot} />}
+            {noticeAvailable && <View style={[styles.badgeDot, { backgroundColor: theme.mutedRed }]} />}
           </Pressable>
           <Pressable onPress={() => router.push('/settings')} hitSlop={8}>
             <ThemedText style={styles.topActionIcon}>⚙️</ThemedText>
@@ -112,15 +110,17 @@ export default function HomeScreen() {
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: BottomTabInset + Spacing.five }]}>
         <View style={styles.heroRow}>
-          <GrowthHud
-            passLevel={passProgress.level}
-            passXpIntoLevel={passProgress.xpIntoLevel}
-            passXpForLevel={passProgress.xpForLevel}
-            passProgress={passProgress.progress}
-            weightKg={weightKg}
-            bodyFatPercent={bodyFatPercent}
-            workoutCount={workoutRecords.length}
-          />
+          <Pressable onPress={() => router.push('/pass')} hitSlop={8}>
+            <GrowthHud
+              passLevel={passProgress.level}
+              passXpIntoLevel={passProgress.xpIntoLevel}
+              passXpForLevel={passProgress.xpForLevel}
+              passProgress={passProgress.progress}
+              weightKg={weightKg}
+              bodyFatPercent={bodyFatPercent}
+              workoutCount={workoutRecords.length}
+            />
+          </Pressable>
 
           <Pressable onPress={() => setViewerOpen(true)} style={styles.characterTouchable}>
             <CharacterSilhouette
@@ -129,7 +129,7 @@ export default function HomeScreen() {
               tone={profile.bodyParameters.tone}
               angle="front"
             />
-            <ThemedText type="small" style={styles.rotateHint}>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.rotateHint}>
               🔄 터치해서{'\n'}캐릭터 회전
             </ThemedText>
           </Pressable>
@@ -145,14 +145,16 @@ export default function HomeScreen() {
         </View>
 
         {!sessionInProgress && (
-          <ThemedText type="small" style={styles.suggestionLine}>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.suggestionLine}>
             {scheduledRoutine ? `오늘 · ${scheduledRoutine.name}` : '오늘은 뭐 조질까?'}
           </ThemedText>
         )}
 
-        <StartWorkoutButton
+        <PrimaryButton
           label={sessionInProgress ? '운동으로 돌아가기' : '운동 시작'}
           subLabel="오늘도 한계를 돌파해보세요!"
+          variant="gold"
+          size="large"
           onPress={handleStartPress}
         />
 
@@ -164,7 +166,7 @@ export default function HomeScreen() {
           />
         )}
 
-        <ThemedText type="small" style={styles.statsLine}>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.statsLine}>
           이번 주 {weeklyCount}회 · 연속 {streak.currentStreakDays}일째
         </ThemedText>
       </ScrollView>
@@ -176,61 +178,13 @@ export default function HomeScreen() {
         size={profile.bodyParameters.size}
         tone={profile.bodyParameters.tone}
       />
-
-      {noticeOpen && (
-        <Pressable style={styles.noticeBackdrop} onPress={() => setNoticeOpen(false)}>
-          <Pressable style={styles.noticeCard} onPress={(event) => event.stopPropagation()}>
-            <ThemedText type="smallBold" style={styles.noticeTitle}>
-              알림
-            </ThemedText>
-            {!openEventPass.active && (
-              <View style={styles.noticeItem}>
-                <ThemedText type="small" style={styles.noticeText}>
-                  🎉 오픈 이벤트: 지금 시작하면 무료 패스 {AppConfig.openEventPassDays}일을 받을 수
-                  있어요.
-                </ThemedText>
-                <PrimaryButton
-                  label="무료 패스 받기"
-                  variant="secondary"
-                  onPress={() => {
-                    setNoticeOpen(false);
-                    router.push('/settings');
-                  }}
-                />
-              </View>
-            )}
-            {canClaimReward && (
-              <View style={styles.noticeItem}>
-                <ThemedText type="small" style={styles.noticeText}>
-                  {AppConfig.streakRewardDays}일 연속 기록 달성! 특별 트레이너 이용권을 받을 수
-                  있어요.
-                </ThemedText>
-                <PrimaryButton
-                  label="보상 받기"
-                  onPress={() => {
-                    claimStreakReward();
-                    setNoticeOpen(false);
-                  }}
-                />
-              </View>
-            )}
-            {!noticeAvailable && (
-              <ThemedText type="small" style={styles.noticeText}>
-                새로운 알림이 없어요.
-              </ThemedText>
-            )}
-            <PrimaryButton label="닫기" variant="secondary" onPress={() => setNoticeOpen(false)} />
-          </Pressable>
-        </Pressable>
-      )}
-    </View>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: GymTheme.background,
   },
   topBar: {
     flexDirection: 'row',
@@ -239,16 +193,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.two,
   },
-  logo: {
-    color: GymTheme.text,
-  },
   topActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
-  },
-  topActionText: {
-    color: GymTheme.gold,
   },
   topActionIcon: {
     fontSize: 18,
@@ -263,7 +211,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#E0433C',
   },
   scroll: {
     flex: 1,
@@ -282,7 +229,6 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
   },
   rotateHint: {
-    color: GymTheme.textSecondary,
     textAlign: 'center',
     fontSize: 11,
   },
@@ -291,40 +237,8 @@ const styles = StyleSheet.create({
   },
   suggestionLine: {
     textAlign: 'center',
-    color: GymTheme.textSecondary,
   },
   statsLine: {
     textAlign: 'center',
-    color: GymTheme.textSecondary,
-  },
-  noticeBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.four,
-  },
-  noticeCard: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: GymTheme.surface,
-    borderRadius: Spacing.three,
-    borderWidth: 1,
-    borderColor: GymTheme.border,
-    padding: Spacing.four,
-    gap: Spacing.three,
-  },
-  noticeTitle: {
-    color: GymTheme.gold,
-  },
-  noticeItem: {
-    gap: Spacing.two,
-  },
-  noticeText: {
-    color: GymTheme.text,
   },
 });

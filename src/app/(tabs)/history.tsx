@@ -2,12 +2,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { CharacterSilhouette } from '@/components/character/character-silhouette';
+import { CharacterViewer } from '@/components/character/character-viewer';
 import { ThemedText } from '@/components/themed-text';
 import { Chip } from '@/components/ui/chip';
 import { PhotoSlot } from '@/components/ui/photo-slot';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { SectionCard } from '@/components/ui/section-card';
+import { CompactStat, StatRow } from '@/components/ui/stat-row';
 import { TextField } from '@/components/ui/text-field';
 import { StanleyTrainer } from '@/config/trainers';
 import {
@@ -18,13 +21,43 @@ import {
 } from '@/config/workout-labels';
 import { Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
-import { WorkoutCategory, WorkoutIntensity } from '@/types/workout';
+import { getThisWeekRecords } from '@/data/workout-repository';
+import { useTheme } from '@/hooks/use-theme';
+import { WorkoutCategory, WorkoutIntensity, WorkoutRecord } from '@/types/workout';
 import { todayDateString } from '@/utils/date';
 import { buildHistoryDays } from '@/utils/history';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 
+/** 완료된 세트(무게×횟수)만 합산한다 — 세션 화면의 computeTotalVolumeKg와 같은 규칙. */
+function sumWeeklyVolumeKg(records: WorkoutRecord[]): number {
+  return records.reduce((total, record) => {
+    const recordVolume = (record.exercises ?? []).reduce((sum, exercise) => {
+      const sets = exercise.setDetails;
+      if (sets) {
+        return (
+          sum +
+          sets.reduce(
+            (setSum, set) =>
+              set.completed && set.weightKg !== undefined && set.reps !== undefined
+                ? setSum + set.weightKg * set.reps
+                : setSum,
+            0
+          )
+        );
+      }
+      if (exercise.weightKg !== undefined && exercise.reps !== undefined && exercise.sets) {
+        return sum + exercise.weightKg * exercise.reps * exercise.sets;
+      }
+      return sum;
+    }, 0);
+    return total + recordVolume;
+  }, 0);
+}
+
 export default function HistoryScreen() {
+  const theme = useTheme();
   const {
+    profile,
     bodyHistory,
     workoutRecords,
     addBodyHistoryEntry,
@@ -32,6 +65,11 @@ export default function HistoryScreen() {
     canAddPhotoToday,
     nextPhotoAvailableDate,
   } = useAppData();
+
+  const thisWeekRecords = useMemo(() => getThisWeekRecords(workoutRecords), [workoutRecords]);
+  const weeklyMinutes = thisWeekRecords.reduce((sum, r) => sum + (r.durationMinutes ?? 0), 0);
+  const weeklyVolumeKg = useMemo(() => sumWeeklyVolumeKg(thisWeekRecords), [thisWeekRecords]);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [weightKg, setWeightKg] = useState('');
   const [photoUri, setPhotoUri] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +154,14 @@ export default function HistoryScreen() {
     <ScreenScroll>
       <ThemedText type="subtitle">히스토리</ThemedText>
 
+      <SectionCard title="이번 주">
+        <StatRow>
+          <CompactStat label="운동 횟수" value={`${thisWeekRecords.length}회`} emphasize />
+          <CompactStat label="운동 시간" value={`${weeklyMinutes}분`} />
+          {weeklyVolumeKg > 0 && <CompactStat label="총 볼륨" value={`${Math.round(weeklyVolumeKg)}kg`} />}
+        </StatRow>
+      </SectionCard>
+
       <SectionCard title="오늘 기록 추가">
         <TextField
           label="오늘 체중 (kg)"
@@ -139,7 +185,7 @@ export default function HistoryScreen() {
         )}
 
         {error && (
-          <ThemedText type="small" style={styles.error}>
+          <ThemedText type="small" style={{ color: theme.mutedRed }}>
             {error}
           </ThemedText>
         )}
@@ -199,7 +245,7 @@ export default function HistoryScreen() {
             />
 
             {manualError && (
-              <ThemedText type="small" style={styles.error}>
+              <ThemedText type="small" style={{ color: theme.mutedRed }}>
                 {manualError}
               </ThemedText>
             )}
@@ -216,6 +262,22 @@ export default function HistoryScreen() {
           <PrimaryButton label="놓친 기록 추가하기" variant="secondary" onPress={() => setManualOpen(true)} />
         )}
       </SectionCard>
+
+      {profile && (
+        <SectionCard title="내 캐릭터">
+          <View style={styles.characterRow}>
+            <View style={styles.characterPreview}>
+              <CharacterSilhouette
+                genderExpression={profile.genderExpression}
+                size={profile.bodyParameters.size}
+                tone={profile.bodyParameters.tone}
+                idle={false}
+              />
+            </View>
+            <PrimaryButton label="360도 보기" variant="secondary" onPress={() => setViewerOpen(true)} />
+          </View>
+        </SectionCard>
+      )}
 
       <SectionCard title="전후 비교">
         {comparableDates.length < 2 ? (
@@ -304,13 +366,29 @@ export default function HistoryScreen() {
           ))
         )}
       </SectionCard>
+
+      {profile && (
+        <CharacterViewer
+          visible={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          genderExpression={profile.genderExpression}
+          size={profile.bodyParameters.size}
+          tone={profile.bodyParameters.tone}
+        />
+      )}
     </ScreenScroll>
   );
 }
 
 const styles = StyleSheet.create({
-  error: {
-    color: '#D64545',
+  characterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  characterPreview: {
+    width: 90,
+    height: 130,
   },
   chipRow: {
     flexDirection: 'row',

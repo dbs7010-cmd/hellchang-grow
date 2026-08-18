@@ -29,4 +29,10 @@ export const AppConfig = {
   restTimerPresetsSeconds: [60, 90, 120],
   /** 휴식 타이머 기본값(초) */
   defaultRestSeconds: 90,
+  /** 세트 중량 +/- 스테퍼 증감 단위(kg) */
+  setWeightStepKg: 2.5,
+  /** 세트 횟수 +/- 스테퍼 증감 단위(회) */
+  setRepsStep: 1,
+  /** 휴식 타이머가 이 초 이하로 남으면 밝은 gold로 강조 */
+  restUrgentThresholdSeconds: 10,
 } as const;

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { StyleSheet } from 'react-native';
 
 import { BodyAvatarPreview } from '@/components/body-avatar-preview';
 import { ThemedText } from '@/components/themed-text';
@@ -10,8 +9,10 @@ import { Stepper } from '@/components/ui/stepper';
 import { TextField } from '@/components/ui/text-field';
 import { useAppData } from '@/context/app-data-context';
 import { useOnboardingDraft } from '@/context/onboarding-draft-context';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function BodyAdjustScreen() {
+  const theme = useTheme();
   const { draft, setBodyParameters, setWeightKg, setHeightCm } = useOnboardingDraft();
   const { completeOnboarding } = useAppData();
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +85,7 @@ export default function BodyAdjustScreen() {
           placeholder="예: 170"
         />
         {error && (
-          <ThemedText type="small" style={styles.error}>
+          <ThemedText type="small" style={{ color: theme.mutedRed }}>
             {error}
           </ThemedText>
         )}
@@ -94,9 +95,3 @@ export default function BodyAdjustScreen() {
     </ScreenScroll>
   );
 }
-
-const styles = StyleSheet.create({
-  error: {
-    color: '#D64545',
-  },
-});

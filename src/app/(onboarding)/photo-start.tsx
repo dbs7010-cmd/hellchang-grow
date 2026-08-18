@@ -9,8 +9,10 @@ import { PrimaryButton } from '@/components/ui/primary-button';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { SectionCard } from '@/components/ui/section-card';
 import { useOnboardingDraft } from '@/context/onboarding-draft-context';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function PhotoStartScreen() {
+  const theme = useTheme();
   const router = useRouter();
   const { draft, setPhotoUri } = useOnboardingDraft();
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export default function PhotoStartScreen() {
       <PhotoSlot label={draft.photoUri ? '선택한 사진' : '사진 없음'} photoUri={draft.photoUri} />
 
       {error && (
-        <ThemedText type="small" style={styles.error}>
+        <ThemedText type="small" style={{ color: theme.mutedRed }}>
           {error}
         </ThemedText>
       )}
@@ -93,8 +95,5 @@ const styles = StyleSheet.create({
   },
   centerText: {
     textAlign: 'center',
-  },
-  error: {
-    color: '#D64545',
   },
 });

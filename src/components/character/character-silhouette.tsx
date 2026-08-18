@@ -1,8 +1,17 @@
 import { Image } from 'expo-image';
+import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
-import { GymTheme } from '@/constants/theme';
 import { CharacterAngle, PlayerCharacterImages } from '@/config/character-assets';
+import { useTheme } from '@/hooks/use-theme';
 import { GenderExpression } from '@/types/user';
 
 export interface CharacterSilhouetteProps {
@@ -12,6 +21,8 @@ export interface CharacterSilhouetteProps {
   /** 0-100, 근육 톤/선명도 보정값 */
   tone: number;
   angle?: CharacterAngle;
+  /** 미세한 breathing idle 애니메이션 (60 ALIVE). 360 뷰어 등에서는 꺼둘 수 있다. */
+  idle?: boolean;
 }
 
 const ANGLE_ROTATION_DEG: Record<CharacterAngle, number> = {
@@ -26,8 +37,37 @@ const ANGLE_ROTATION_DEG: Record<CharacterAngle, number> = {
  * 실사 캐릭터 아트가 준비되기 전까지 쓰는 전신 실루엣 placeholder.
  * PlayerCharacterImages에 해당 각도 이미지가 등록되면 자동으로 그 이미지를 쓰고,
  * 없으면 도형 + perspective rotateY로 방향을 흉내낸 실루엣을 그린다.
+ * 캐릭터 전체를 gold로 두르지 않는다 — gold는 어깨/팔 쪽 rim light로만 쓴다.
  */
-export function CharacterSilhouette({ genderExpression, size, tone, angle = 'front' }: CharacterSilhouetteProps) {
+export function CharacterSilhouette({
+  genderExpression,
+  size,
+  tone,
+  angle = 'front',
+  idle = true,
+}: CharacterSilhouetteProps) {
+  const theme = useTheme();
+  const breatheY = useSharedValue(0);
+
+  useEffect(() => {
+    if (!idle) {
+      breatheY.value = 0;
+      return;
+    }
+    breatheY.value = withRepeat(
+      withSequence(
+        withTiming(-1, { duration: 2200, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 2200, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      false
+    );
+  }, [idle, breatheY]);
+
+  const breatheStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: breatheY.value }],
+  }));
+
   const image = PlayerCharacterImages[angle];
   if (image) {
     return <Image source={image} style={styles.image} contentFit="contain" />;
@@ -37,42 +77,56 @@ export function CharacterSilhouette({ genderExpression, size, tone, angle = 'fro
   const waistWidth = 46 + (size / 100) * 30;
   const definition = 1 + (tone / 100) * 3;
   const rotateDeg = ANGLE_ROTATION_DEG[angle];
-  const accent = genderExpression === 'female' ? '#F0B8D9' : GymTheme.gold;
+  const rimAccent = genderExpression === 'female' ? '#F0B8D9' : theme.goldBright;
+  const bodyLine = theme.border;
 
   return (
     <View style={styles.wrapper}>
-      <View
+      {/* graphite gym backdrop + 은은한 warm ceiling light */}
+      <View style={[styles.backdropGlow, { backgroundColor: theme.gold, opacity: 0.06 }]} />
+      <View style={[styles.contactShadow, { backgroundColor: theme.backgroundDeep }]} />
+
+      <Animated.View
         style={[
           styles.rig,
+          breatheStyle,
           { transform: [{ perspective: 900 }, { rotateY: `${rotateDeg}deg` }] },
         ]}>
-        <View style={[styles.head, { borderColor: accent }]} />
-        <View style={styles.neck} />
+        <View style={[styles.head, { borderColor: rimAccent, backgroundColor: theme.backgroundSelected }]} />
+        <View style={[styles.neck, { backgroundColor: theme.backgroundSelected }]} />
         <View
           style={[
             styles.torso,
             {
               width: shoulderWidth,
               borderWidth: definition,
-              borderColor: accent,
+              borderColor: bodyLine,
+              backgroundColor: theme.backgroundSelected,
             },
           ]}>
-          <View style={[styles.waist, { width: waistWidth, borderColor: accent, borderWidth: definition }]} />
+          {/* 어깨 rim light — 캐릭터 전체가 아니라 상단 어깨 라인에만 */}
+          <View style={[styles.shoulderRim, { backgroundColor: rimAccent, width: shoulderWidth * 0.9 }]} />
+          <View
+            style={[
+              styles.waist,
+              { width: waistWidth, borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected },
+            ]}
+          />
         </View>
         <View style={styles.armRow}>
-          <View style={[styles.arm, { borderColor: accent, borderWidth: definition }]} />
+          <View style={[styles.arm, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
           <View style={{ width: shoulderWidth * 0.55 }} />
-          <View style={[styles.arm, { borderColor: accent, borderWidth: definition }]} />
+          <View style={[styles.arm, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
         </View>
         <View style={styles.legRow}>
-          <View style={[styles.leg, { borderColor: accent, borderWidth: definition }]} />
-          <View style={[styles.leg, { borderColor: accent, borderWidth: definition }]} />
+          <View style={[styles.leg, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
+          <View style={[styles.leg, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
         </View>
         <View style={styles.shoeRow}>
-          <View style={[styles.shoe, { backgroundColor: accent }]} />
-          <View style={[styles.shoe, { backgroundColor: accent }]} />
+          <View style={[styles.shoe, { backgroundColor: theme.gold }]} />
+          <View style={[styles.shoe, { backgroundColor: theme.gold }]} />
         </View>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -87,6 +141,21 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  backdropGlow: {
+    position: 'absolute',
+    top: -40,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+  },
+  contactShadow: {
+    position: 'absolute',
+    bottom: 4,
+    width: 140,
+    height: 18,
+    borderRadius: 70,
+    opacity: 0.5,
+  },
   rig: {
     alignItems: 'center',
   },
@@ -95,25 +164,29 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     borderWidth: 3,
-    backgroundColor: GymTheme.surfaceElevated,
   },
   neck: {
     width: 20,
     height: 10,
-    backgroundColor: GymTheme.surfaceElevated,
   },
   torso: {
     height: 160,
     borderRadius: 28,
-    backgroundColor: GymTheme.surfaceElevated,
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  shoulderRim: {
+    position: 'absolute',
+    top: 0,
+    height: 4,
+    borderRadius: 2,
+    opacity: 0.8,
   },
   waist: {
     position: 'absolute',
     bottom: -6,
     height: 40,
     borderRadius: 18,
-    backgroundColor: GymTheme.surfaceElevated,
   },
   armRow: {
     flexDirection: 'row',
@@ -123,7 +196,6 @@ const styles = StyleSheet.create({
     width: 26,
     height: 130,
     borderRadius: 14,
-    backgroundColor: GymTheme.surfaceElevated,
   },
   legRow: {
     flexDirection: 'row',
@@ -134,7 +206,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 150,
     borderRadius: 18,
-    backgroundColor: GymTheme.surfaceElevated,
   },
   shoeRow: {
     flexDirection: 'row',

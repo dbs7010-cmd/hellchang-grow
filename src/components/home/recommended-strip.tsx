@@ -1,7 +1,8 @@
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { GymTheme, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 export interface RecommendedStripItem {
   id: string;
@@ -20,27 +21,31 @@ export interface RecommendedStripProps {
  * 탭하면 기존 workout-start 흐름으로 이동할 뿐, 새 추천 엔진을 만들지 않는다.
  */
 export function RecommendedStrip({ items, onPressItem, onPressMore }: RecommendedStripProps) {
+  const theme = useTheme();
   if (items.length === 0) return null;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <ThemedText type="small" style={styles.title}>
+        <ThemedText type="small" themeColor="textSecondary">
           오늘 추천 운동
         </ThemedText>
         <Pressable onPress={onPressMore} hitSlop={8}>
-          <ThemedText type="small" style={styles.more}>
+          <ThemedText type="small" style={{ color: theme.gold }}>
             더보기 &gt;
           </ThemedText>
         </Pressable>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {items.map((item) => (
-          <Pressable key={item.id} onPress={onPressItem} style={styles.item}>
+          <Pressable
+            key={item.id}
+            onPress={onPressItem}
+            style={[styles.item, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
             <ThemedText type="small" style={styles.itemName} numberOfLines={1}>
               {item.name}
             </ThemedText>
-            <ThemedText type="small" style={styles.itemSubtitle}>
+            <ThemedText type="small" style={[styles.itemSubtitle, { color: theme.gold }]}>
               {item.subtitle}
             </ThemedText>
           </Pressable>
@@ -60,12 +65,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  title: {
-    color: GymTheme.textSecondary,
-  },
-  more: {
-    color: GymTheme.gold,
-  },
   row: {
     gap: Spacing.two,
   },
@@ -73,18 +72,14 @@ const styles = StyleSheet.create({
     width: 92,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.two,
-    backgroundColor: GymTheme.surface,
+    borderRadius: Radius.medium,
     borderWidth: 1,
-    borderColor: GymTheme.border,
     gap: Spacing.half,
   },
   itemName: {
-    color: GymTheme.text,
     fontWeight: '700',
   },
   itemSubtitle: {
-    color: GymTheme.goldMuted,
     fontSize: 11,
   },
 });

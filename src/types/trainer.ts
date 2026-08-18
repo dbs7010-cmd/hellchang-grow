@@ -28,6 +28,10 @@ export interface TrainerDialogueSet {
   sessionEnd: TrainerDialogueLine[];
   /** 홈 화면 상단의 짧은 말풍선 한마디 (세션 중이 아닐 때) */
   homeGreeting: TrainerDialogueLine[];
+  /** PR 축하 연출 중 등장하는 반응 */
+  prReaction: TrainerDialogueLine[];
+  /** 휴식 화면에 가끔 등장하는 반응 */
+  restReaction: TrainerDialogueLine[];
 }
 
 export type TrainerUnlockType = 'always' | 'streak_reward' | 'subscription';

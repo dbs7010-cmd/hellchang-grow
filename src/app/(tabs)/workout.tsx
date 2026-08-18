@@ -13,6 +13,7 @@ import { MuscleGroupLabels, MuscleGroups } from '@/config/muscle-groups';
 import { WeekdayLabels } from '@/config/weekdays';
 import { Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
+import { useTheme } from '@/hooks/use-theme';
 import { ExerciseDefinition, MuscleGroup } from '@/types/exercise';
 import { WorkoutRecord } from '@/types/workout';
 import { findPreviousPerformance } from '@/utils/exercise-history';
@@ -198,6 +199,7 @@ function ExerciseListItem({
   onToggle: () => void;
   workoutRecords: WorkoutRecord[];
 }) {
+  const theme = useTheme();
   const previous = expanded ? findPreviousPerformance(exercise.id, workoutRecords) : null;
 
   return (
@@ -208,7 +210,10 @@ function ExerciseListItem({
       {expanded && (
         <View style={styles.exerciseDetail}>
           <ThemedText type="small" themeColor="textSecondary">
-            주요 부위: {MuscleGroupLabels[exercise.primaryMuscleGroup]}
+            주요 부위:{' '}
+            <ThemedText type="small" style={{ color: theme.warmOrange }}>
+              {MuscleGroupLabels[exercise.primaryMuscleGroup]}
+            </ThemedText>
             {exercise.secondaryMuscleGroups && exercise.secondaryMuscleGroups.length > 0
               ? ` · 보조: ${exercise.secondaryMuscleGroups.map((g) => MuscleGroupLabels[g]).join(', ')}`
               : ''}
