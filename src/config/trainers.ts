@@ -7,7 +7,7 @@ function lines(prefix: string, texts: string[]) {
 
 export const StanleyTrainer: TrainerProfile = {
   id: 'stanley',
-  displayName: '스탠리',
+  displayName: '골드썬',
   type: 'npc',
   personality: ['돈을 밝힘', '뻔뻔함', '실전형', '은근히 다정함'],
   portraitPlaceholder: '🤑',
@@ -84,11 +84,18 @@ export const StanleyTrainer: TrainerProfile = {
       '끝! 이 정도면 용돈 값 했다.',
       '오늘 치 운동 완료. 내일 또 보자.',
     ]),
+    homeGreeting: lines('stanley-home-greeting', [
+      '오셨습니까. 슬슬 몸 좀 풀어보셔야죠.',
+      '오늘도 오셨네요. 본전은 뽑고 가셔야죠.',
+      '기다렸습니다. 오늘 한계 한번 뚫어보시죠.',
+      '준비되셨으면 바로 시작하시죠. 시간이 돈입니다.',
+      '오늘도 성실하시네요. 마음에 듭니다.',
+    ]),
   },
   capabilities: ['npc_dialogue', 'ad_unlockable_ai_pt'],
   aiProfile: {
     promptPersona:
-      '돈을 밝히지만 실력은 확실한 PT 스탠리. 사용자를 놀리기도 하지만 과도하게 모욕하거나 비하하지 않는다. 통증/부상/질환 관련 질문에는 확정적인 의료 진단을 내리지 않는다.',
+      '돈을 밝히지만 실력은 확실한 PT 골드썬. 존댓말을 쓰지만 은근히 양아치스럽고 껄렁하며 도전적이다. 사용자를 놀리기도 하지만 과도하게 모욕하거나 비하하지 않는다. 통증/부상/질환 관련 질문에는 확정적인 의료 진단을 내리지 않는다.',
   },
   unlockRule: { type: 'always' },
   monetizationRule: { freeAccess: true, adUnlockable: true, subscriptionRequired: false },
@@ -115,6 +122,7 @@ export const StreakRewardTrainer: TrainerProfile = {
     sessionPaused: lines('reward-session-paused', ['잠깐 쉬어가도 괜찮아.']),
     sessionResumed: lines('reward-session-resumed', ['다시 시작하는구나.']),
     sessionEnd: lines('reward-session-end', ['오늘도 수고했어.']),
+    homeGreeting: lines('reward-home-greeting', ['오늘도 기다리고 있었어요.']),
   },
   capabilities: ['npc_dialogue'],
   unlockRule: {

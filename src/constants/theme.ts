@@ -67,3 +67,19 @@ export const Spacing = {
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
+
+/**
+ * 홈 화면 전용 "다크 짐 + 골드" 비주얼 캐논. 시스템 라이트/다크 모드와 무관하게
+ * 항상 이 팔레트를 쓴다 — 홈이 일반적인 흰색 피트니스 앱처럼 보이지 않게 하기 위함.
+ * 다른 화면(운동/히스토리/트레이너/설정)은 기존 Colors.light/dark를 그대로 쓴다.
+ */
+export const GymTheme = {
+  background: '#0A0A0B',
+  surface: '#16171A',
+  surfaceElevated: '#1E2024',
+  gold: '#FFC107',
+  goldMuted: '#8A6A1F',
+  text: '#FFFFFF',
+  textSecondary: '#B0B0B0',
+  border: '#2A2B2F',
+} as const;

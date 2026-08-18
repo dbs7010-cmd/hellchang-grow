@@ -26,6 +26,8 @@ export interface TrainerDialogueSet {
   sessionPaused: TrainerDialogueLine[];
   sessionResumed: TrainerDialogueLine[];
   sessionEnd: TrainerDialogueLine[];
+  /** 홈 화면 상단의 짧은 말풍선 한마디 (세션 중이 아닐 때) */
+  homeGreeting: TrainerDialogueLine[];
 }
 
 export type TrainerUnlockType = 'always' | 'streak_reward' | 'subscription';
