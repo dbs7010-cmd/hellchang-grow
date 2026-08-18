@@ -32,6 +32,7 @@ export function createSession(
     activeSince: nowIso,
     accumulatedSeconds: 0,
     status: 'active',
+    lastHeartbeatMs: new Date(nowIso).getTime(),
     primaryCategory: category,
     primaryMuscleGroup: options?.primaryMuscleGroup,
     routineId: options?.routineId,
@@ -66,7 +67,69 @@ export function pauseSession(session: WorkoutSession, nowMs: number): WorkoutSes
 
 export function resumeSession(session: WorkoutSession, nowIso: string): WorkoutSession {
   if (session.status !== 'paused') return session;
-  return { ...session, status: 'active', activeSince: nowIso };
+  return {
+    ...session,
+    status: 'active',
+    activeSince: nowIso,
+    lastHeartbeatMs: new Date(nowIso).getTime(),
+    pausedByAppBackground: undefined,
+    pausedAtMs: undefined,
+  };
+}
+
+/**
+ * 앱이 백그라운드로 전환될 때 호출하는 pauseSession의 변형 — 방치된 시간이 운동 시간에
+ * 섞이지 않도록 즉시 시간을 확정하면서, "이건 사용자가 누른 게 아니라 앱이 자동으로
+ * 일시정지한 것"이라는 표시를 세션에 남긴다. 짧은 백그라운드 뒤 곧바로 돌아오면
+ * resumeIfRecentBackground()가 이 표시를 보고 조용히 다시 재개한다.
+ */
+export function pauseSessionForBackground(session: WorkoutSession, nowMs: number): WorkoutSession {
+  const paused = pauseSession(session, nowMs);
+  if (paused === session) return session;
+  return { ...paused, pausedByAppBackground: true, pausedAtMs: nowMs };
+}
+
+/**
+ * 앱이 포그라운드로 돌아왔을 때 호출한다. 이 세션이 (사용자가 아니라) 방금 전
+ * pauseSessionForBackground()로 자동 일시정지됐고, 그 간격이 staleThresholdMs보다
+ * 짧으면 조용히 다시 재개한다 — 알림 확인 등 짧은 전환 때문에 [재개]를 매번
+ * 누르게 만들지 않기 위함이다. 간격이 길었거나 사용자가 직접 일시정지한 세션은
+ * 건드리지 않는다(그대로 '일시정지' 상태로 남아 사용자의 명시적 판단을 기다린다).
+ */
+export function resumeIfRecentBackground(
+  session: WorkoutSession,
+  nowMs: number,
+  staleThresholdMs: number
+): WorkoutSession {
+  if (session.status !== 'paused' || !session.pausedByAppBackground || session.pausedAtMs === undefined) {
+    return session;
+  }
+  if (nowMs - session.pausedAtMs >= staleThresholdMs) return session;
+  return resumeSession(session, new Date(nowMs).toISOString());
+}
+
+/** status가 'active'인 동안 주기적으로 호출해 "앱이 마지막으로 살아있던 시각"을 기록한다. */
+export function heartbeatSession(session: WorkoutSession, nowMs: number): WorkoutSession {
+  if (session.status !== 'active') return session;
+  return { ...session, lastHeartbeatMs: nowMs };
+}
+
+/**
+ * 세션이 'active' 상태로 저장된 채 오랫동안(staleThresholdMs 이상) heartbeat가 없었다면
+ * — 백그라운드에 방치됐거나 앱이 강제 종료됐다가 뒤늦게 재시작된 것으로 보고,
+ * "마지막으로 확인된 시각"을 기준으로 pauseSession과 동일한 규칙으로 일시정지 처리한다.
+ * 방치된 구간(gap)은 운동 시간에 포함되지 않는다 — 임의로 특정 시간 이상을 잘라내는
+ * masking이 아니라, 마지막으로 실제 활성 상태였던 시각까지만 정확히 계산하는 것이다.
+ */
+export function recoverStaleSession(
+  session: WorkoutSession,
+  nowMs: number,
+  staleThresholdMs: number
+): WorkoutSession {
+  if (session.status !== 'active' || !session.activeSince) return session;
+  const lastKnownMs = session.lastHeartbeatMs ?? new Date(session.activeSince).getTime();
+  if (nowMs - lastKnownMs < staleThresholdMs) return session;
+  return pauseSession(session, lastKnownMs);
 }
 
 export function changeSessionCategory(

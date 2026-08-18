@@ -35,4 +35,11 @@ export const AppConfig = {
   setRepsStep: 1,
   /** 휴식 타이머가 이 초 이하로 남으면 밝은 gold로 강조 */
   restUrgentThresholdSeconds: 10,
+  /**
+   * 세션이 'active' 상태로 저장되어 있는데 이 시간(분) 이상 heartbeat가 없으면
+   * 백그라운드/강제종료로 방치된 것으로 보고 자동 일시정지한다.
+   */
+  staleActiveSessionThresholdMinutes: 3,
+  /** 세션이 active인 동안 heartbeat를 저장하는 주기(초) — 강제 종료 대비용 */
+  sessionHeartbeatIntervalSeconds: 20,
 } as const;

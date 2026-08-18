@@ -4,7 +4,6 @@ import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
-import { CharacterSilhouette } from '@/components/character/character-silhouette';
 import { GoldsunReaction } from '@/components/goldsun/goldsun-reaction';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -45,7 +44,6 @@ function prKey(pr: PrEvent) {
 export default function SessionScreen() {
   const router = useRouter();
   const {
-    profile,
     activeSession,
     workoutRecords,
     pauseWorkoutSession,
@@ -246,24 +244,16 @@ export default function SessionScreen() {
 
   return (
     <ScreenScroll>
+      {/* ACTIVE 화면의 HERO는 캐릭터가 아니라 지금 이 세트다 — 운동시간은 보조 정보로
+          같은 줄에 작게만 둔다. 사용자가 첫 화면에서 바로 세트를 조작할 수 있어야 한다. */}
       <View style={styles.statusRow}>
         <ThemedText type="small" themeColor="textSecondary">
           {isPaused ? '⏸ 일시정지' : '🟢 운동 중'}
         </ThemedText>
+        <ThemedText type="smallBold" style={styles.timerCompact}>
+          {formatElapsedTime(elapsedSeconds)}
+        </ThemedText>
       </View>
-
-      {profile && (
-        <CharacterSilhouette
-          genderExpression={profile.genderExpression}
-          size={profile.bodyParameters.size}
-          tone={profile.bodyParameters.tone}
-          idle={!isPaused}
-        />
-      )}
-
-      <ThemedText type="title" style={styles.timer}>
-        {formatElapsedTime(elapsedSeconds)}
-      </ThemedText>
 
       <View style={styles.reactionAnchor}>
         <GoldsunReaction
@@ -286,21 +276,6 @@ export default function SessionScreen() {
                 label={WorkoutCategoryLabels[category]}
                 selected={activeSession.primaryCategory === category}
                 onPress={() => changeSessionCategory(category)}
-              />
-            ))}
-          </View>
-        </SectionCard>
-      )}
-
-      {activeSession.exercises.length > 0 && (
-        <SectionCard title="이번 세션 운동">
-          <View style={styles.chipRow}>
-            {activeSession.exercises.map((exercise) => (
-              <Chip
-                key={exercise.id}
-                label={exercise.exerciseName}
-                selected={exercise.id === currentExercise?.id}
-                onPress={() => setCurrentSessionExercise(exercise.id)}
               />
             ))}
           </View>
@@ -350,6 +325,21 @@ export default function SessionScreen() {
             )}
           </View>
         </SectionCard>
+      )}
+
+      {activeSession.exercises.length > 1 && (
+        <View style={styles.exerciseSwitcher}>
+          <View style={styles.chipRow}>
+            {activeSession.exercises.map((exercise) => (
+              <Chip
+                key={exercise.id}
+                label={exercise.exerciseName}
+                selected={exercise.id === currentExercise?.id}
+                onPress={() => setCurrentSessionExercise(exercise.id)}
+              />
+            ))}
+          </View>
+        </View>
       )}
 
       <SectionCard title="휴식">
@@ -627,12 +617,16 @@ function PrCelebrationOverlay({ pr }: { pr: PrEvent }) {
 
 const styles = StyleSheet.create({
   statusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: Spacing.three,
+    marginTop: Spacing.two,
   },
-  timer: {
-    textAlign: 'center',
+  timerCompact: {
     fontVariant: ['tabular-nums'],
+  },
+  exerciseSwitcher: {
+    opacity: 0.9,
   },
   reactionAnchor: {
     alignItems: 'flex-end',

@@ -1,4 +1,5 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 
 import { AppConfig } from '@/config/app-config';
 import { MuscleGroupLabels } from '@/config/muscle-groups';
@@ -64,7 +65,11 @@ import {
   computeCompletedSetsCount,
   computeTotalVolumeKg,
   createSession,
+  heartbeatSession,
   pauseSession,
+  pauseSessionForBackground,
+  recoverStaleSession,
+  resumeIfRecentBackground,
   resumeSession,
   sessionToWorkoutRecordInput,
   setCurrentExercise as setCurrentExercisePure,
@@ -212,6 +217,26 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       if (cancelled) return;
 
+      // 세션이 'active'로 저장된 채 오래 방치됐다면(백그라운드/강제종료) 마지막으로 확인된
+      // 시각을 기준으로 자동 일시정지한다 — 그렇지 않으면 방치된 시간이 그대로 운동 시간에
+      // 더해진다("1217분 버그"). 세션 화면을 거치지 않고도 앱 시작 시점에 바로잡는다.
+      //
+      // 앱을 처음 로드하는 시점은 AppState 'change' 이벤트가 발생하지 않는다(전환할
+      // 이전 상태가 없다 — 강제 종료 후 재실행, 또는 이 테스트의 페이지 리로드가 그렇다).
+      // 그래서 백그라운드 전환 직전에 자동 일시정지됐던 세션(pausedByAppBackground)도
+      // 여기서 함께 확인해, 짧게 벗어났다 돌아온 경우라면 조용히 다시 재개한다.
+      let recoveredSession = activeSession;
+      if (activeSession) {
+        const nowMs = Date.now();
+        const staleThresholdMs = AppConfig.staleActiveSessionThresholdMinutes * 60 * 1000;
+        let recovered = recoverStaleSession(activeSession, nowMs, staleThresholdMs);
+        recovered = resumeIfRecentBackground(recovered, nowMs, staleThresholdMs);
+        if (recovered !== activeSession) {
+          await saveActiveSession(recovered);
+          recoveredSession = recovered;
+        }
+      }
+
       setState({
         loading: false,
         onboardingComplete,
@@ -223,7 +248,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         trainerUsage,
         referral,
         openEventPass,
-        activeSession,
+        activeSession: recoveredSession,
         routines,
         pass,
       });
@@ -232,6 +257,57 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // 앱이 백그라운드로 전환되는 순간 활성 세션을 즉시 일시정지해, 방치된 시간이 운동 시간에
+  // 섞이지 않게 한다("1217분 버그"의 근본 원인). 짧게 백그라운드에 있었다가 곧바로 돌아오면
+  // (예: 알림 확인) 사용자가 다시 [재개]를 누르지 않아도 되도록 자동으로 이어서 재개한다 —
+  // 단, 이 화면이 자동으로 일시정지시킨 경우에만 그렇게 한다(사용자가 직접 일시정지한
+  // 세션은 절대 자동으로 재개하지 않는다). "자동으로 일시정지시켰다"는 사실은 메모리가
+  // 아니라 세션 자체(pausedByAppBackground)에 저장한다 — 그래야 백그라운드 중 앱이
+  // 재시작되어 JS 컨텍스트가 새로 만들어져도(예: 강제 종료 후 재실행) 판단이 살아남는다.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const nowMs = Date.now();
+      if (nextAppState !== 'active') {
+        setState((prev) => {
+          if (!prev.activeSession || prev.activeSession.status !== 'active') return prev;
+          const updated = pauseSessionForBackground(prev.activeSession, nowMs);
+          saveActiveSession(updated);
+          return { ...prev, activeSession: updated };
+        });
+      } else {
+        setState((prev) => {
+          if (!prev.activeSession) return prev;
+          const updated = resumeIfRecentBackground(
+            prev.activeSession,
+            nowMs,
+            AppConfig.staleActiveSessionThresholdMinutes * 60 * 1000
+          );
+          if (updated === prev.activeSession) return prev;
+          saveActiveSession(updated);
+          return { ...prev, activeSession: updated };
+        });
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  // 앱이 완전히 강제 종료되는 경우 위 background 이벤트가 못 울릴 수 있으므로,
+  // "마지막으로 살아있던 시각"을 주기적으로 저장해둔다 — 다음 실행 시 recoverStaleSession이
+  // 이 값을 기준으로 방치된 구간을 잘라낸다.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setState((prev) => {
+        if (!prev.activeSession || prev.activeSession.status !== 'active') return prev;
+        const updated = heartbeatSession(prev.activeSession, Date.now());
+        saveActiveSession(updated);
+        return { ...prev, activeSession: updated };
+      });
+    }, AppConfig.sessionHeartbeatIntervalSeconds * 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const completeOnboarding = useCallback<AppDataContextValue['completeOnboarding']>(

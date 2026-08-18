@@ -14,7 +14,11 @@ import {
   formatElapsedTime,
   getLastSetValues,
   getRestSecondsRemaining,
+  heartbeatSession,
   pauseSession,
+  pauseSessionForBackground,
+  recoverStaleSession,
+  resumeIfRecentBackground,
   resumeSession,
   sessionToWorkoutRecordInput,
   setCurrentExercise,
@@ -202,6 +206,104 @@ const START_MS = new Date(START_ISO).getTime();
   check('formats under an hour as MM:SS', formatElapsedTime(65), '01:05');
   check('formats an hour+ as H:MM:SS', formatElapsedTime(3661), '1:01:01');
   check('formats zero', formatElapsedTime(0), '00:00');
+}
+
+// 13. heartbeatSession: only stamps while active, no-op otherwise
+{
+  let session = createSession('strength', 'session-14', START_ISO);
+  session = heartbeatSession(session, START_MS + 15_000);
+  check('heartbeat stamps lastHeartbeatMs while active', session.lastHeartbeatMs, START_MS + 15_000);
+
+  const paused = pauseSession(session, START_MS + 20_000);
+  const heartbeatWhilePaused = heartbeatSession(paused, START_MS + 30_000);
+  check('heartbeat is a no-op while paused', heartbeatWhilePaused, paused);
+}
+
+// 14. recoverStaleSession — the "1217분 버그": a session left 'active' in storage while the
+// app was backgrounded/killed for a long time must NOT count that whole gap as workout time.
+{
+  const THRESHOLD_MS = 3 * 60_000; // matches AppConfig.staleActiveSessionThresholdMinutes = 3
+
+  // Fresh gap (app just reloaded a few seconds ago) — not stale, session stays untouched.
+  let fresh = createSession('strength', 'session-15', START_ISO);
+  fresh = heartbeatSession(fresh, START_MS + 10_000);
+  const notStale = recoverStaleSession(fresh, START_MS + 10_000 + 5_000, THRESHOLD_MS);
+  check('a fresh session (small gap since heartbeat) is left untouched', notStale, fresh);
+
+  // Reproduces the reported bug: session heartbeated once, then the app was backgrounded/killed
+  // for ~20 hours (1217+ minutes) before being reopened. Without the fix, computeElapsedSeconds
+  // would read the full 20-hour gap as active workout time.
+  let abandoned = createSession('strength', 'session-16', START_ISO);
+  abandoned = heartbeatSession(abandoned, START_MS + 5 * 60_000); // last confirmed alive at +5 min
+  const twentyHoursLaterMs = START_MS + 5 * 60_000 + 20 * 60 * 60_000;
+  const recovered = recoverStaleSession(abandoned, twentyHoursLaterMs, THRESHOLD_MS);
+  check('a session abandoned for 20h is auto-paused, not left active', recovered.status, 'paused');
+  check(
+    'recovered duration is bounded by the last heartbeat (5 min), not the 20h gap',
+    recovered.accumulatedSeconds,
+    5 * 60
+  );
+  check(
+    'elapsed time after recovery reflects only genuinely-active time, never the abandonment gap',
+    computeElapsedSeconds(recovered, twentyHoursLaterMs),
+    5 * 60
+  );
+
+  // Legacy sessions saved before this fix existed have no lastHeartbeatMs — recovery must fall
+  // back to activeSince so old persisted sessions don't crash or misbehave.
+  let legacy = createSession('strength', 'session-17', START_ISO);
+  legacy = { ...legacy, lastHeartbeatMs: undefined };
+  const legacyRecovered = recoverStaleSession(legacy, START_MS + 20 * 60 * 60_000, THRESHOLD_MS);
+  check('a legacy session with no lastHeartbeatMs falls back to activeSince for recovery',
+    legacyRecovered.accumulatedSeconds, 0);
+
+  // Sessions that are already paused/completed, or genuinely still fresh, are untouched (identity).
+  const pausedSession = pauseSession(createSession('strength', 'session-18', START_ISO), START_MS + 60_000);
+  check('recoverStaleSession never touches an already-paused session',
+    recoverStaleSession(pausedSession, START_MS + 20 * 60 * 60_000, THRESHOLD_MS), pausedSession);
+}
+
+// 15. pauseSessionForBackground / resumeIfRecentBackground — a session backgrounded briefly
+// (e.g. checking a notification) should resume transparently; one backgrounded for a long time,
+// or paused manually by the user, must never auto-resume.
+{
+  const THRESHOLD_MS = 3 * 60_000;
+
+  let session = createSession('strength', 'session-19', START_ISO);
+  session = pauseSessionForBackground(session, START_MS + 30_000);
+  check('pauseSessionForBackground behaves like pauseSession for accumulated time',
+    session.accumulatedSeconds, 30);
+  check('pauseSessionForBackground marks the session as auto-paused', session.pausedByAppBackground, true);
+  check('pauseSessionForBackground records when it happened', session.pausedAtMs, START_MS + 30_000);
+
+  const resumedQuickly = resumeIfRecentBackground(session, START_MS + 30_000 + 5_000, THRESHOLD_MS);
+  check('a short background gap (5s) resumes automatically', resumedQuickly.status, 'active');
+  check('auto-resume clears the background-pause markers', resumedQuickly.pausedByAppBackground, undefined);
+
+  const stillBackgrounded = resumeIfRecentBackground(
+    session,
+    START_MS + 30_000 + 20 * 60_000,
+    THRESHOLD_MS
+  );
+  check('a long background gap (20 min) is left paused, not auto-resumed', stillBackgrounded, session);
+
+  // A manual pause must never be mistaken for an auto-pause and silently resumed.
+  let manuallyPaused = createSession('strength', 'session-20', START_ISO);
+  manuallyPaused = pauseSession(manuallyPaused, START_MS + 10_000);
+  const notTouched = resumeIfRecentBackground(manuallyPaused, START_MS + 10_000 + 1_000, THRESHOLD_MS);
+  check('a manually-paused session is never auto-resumed', notTouched, manuallyPaused);
+
+  // This is the scenario that broke a naive in-memory ("did I just auto-pause this?") tracker:
+  // pause happens, then the JS context is torn down and rebuilt (app reload/relaunch) before the
+  // matching foreground event fires. Because the marker lives on the session, not in memory, a
+  // brand-new resumeIfRecentBackground() call still resumes it correctly.
+  const survivesContextReload = resumeIfRecentBackground(
+    { ...session }, // simulates re-reading the exact same persisted session from storage after reload
+    START_MS + 30_000 + 2_000,
+    THRESHOLD_MS
+  );
+  check('auto-resume works even after a simulated context reload, since it reads from persisted state',
+    survivesContextReload.status, 'active');
 }
 
 console.log(
