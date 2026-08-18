@@ -7,21 +7,23 @@ import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { TextField } from '@/components/ui/text-field';
 import { AppConfig } from '@/config/app-config';
 import { BodyPresetId, BodyPresetLabels } from '@/config/body-presets';
-import { Radius, Spacing } from '@/constants/theme';
+import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { useTheme } from '@/hooks/use-theme';
 import { toDateString } from '@/utils/date';
 
-type SectionId = 'subscription' | 'referral' | 'event' | 'reset';
+type SectionId = 'profile' | 'subscription' | 'referral' | 'event' | 'reset';
 
 /**
- * 16 SCREEN 중 "16 SETTINGS". SectionCard가 5개 연달아 쌓이던 이전 구조를 폐기하고,
- * CANON의 "compact row + chevron" 아코디언 패턴으로 바꿨다 — row를 탭하면 그 아래에만
- * 상세 조작 영역이 펼쳐지고, 다른 row를 열면 접힌다. 도메인 로직(subscribeMock,
- * redeemReferralCode, activateOpenEventPass, resetAllData)은 그대로 재사용한다.
+ * 16 SETTINGS. 설정은 재미있을 필요가 없는 화면이다 — compact row + 아코디언만 쓴다.
+ * 도메인 로직(subscribeMock, redeemReferralCode, activateOpenEventPass, resetAllData)은
+ * 그대로 재사용한다.
+ *
+ * [내 정보]는 실제로 저장된 프로필 값(성별 표현 / 현재 체형 / 키 / 체중)만 라벨-값 행으로
+ * 펼친다. 목표 체형 / Body Goal 행은 도메인이 생기면 이 목록에 그대로 추가하면 되고,
+ * 지금은 없는 값을 지어내지 않는다.
  */
 export default function SettingsScreen() {
-  const theme = useTheme();
   const {
     profile,
     subscription,
@@ -55,23 +57,31 @@ export default function SettingsScreen() {
   const alreadyRedeemed = Boolean(referral.referredByCode);
 
   return (
-    <ScreenScroll>
-      <ThemedText type="heading">내 정보 / 설정</ThemedText>
+    <ScreenScroll gap={Spacing.two}>
+      <ThemedText type="heading">설정</ThemedText>
 
-      <View style={[styles.infoRow, { backgroundColor: theme.backgroundElement }]}>
-        <ThemedText type="smallBold">내 정보</ThemedText>
+      <SettingsRow
+        id="profile"
+        label="내 정보"
+        value={profile ? `${profile.weightKg}kg${profile.heightCm ? ` · ${profile.heightCm}cm` : ''}` : '정보 없음'}
+        openSection={openSection}
+        onToggle={toggleSection}>
         {profile ? (
-          <ThemedText type="small" themeColor="textSecondary">
-            {profile.genderExpression === 'female' ? '여' : '남'} ·{' '}
-            {BodyPresetLabels[profile.bodyPresetId as BodyPresetId]} · {profile.weightKg}kg
-            {profile.heightCm ? ` · 키 ${profile.heightCm}cm` : ''}
-          </ThemedText>
+          <>
+            <InfoLine label="성별 표현" value={profile.genderExpression === 'female' ? '여성' : '남성'} />
+            <InfoLine label="현재 체형" value={BodyPresetLabels[profile.bodyPresetId as BodyPresetId]} />
+            <InfoLine label="키" value={profile.heightCm ? `${profile.heightCm}cm` : '미입력'} />
+            <InfoLine label="체중" value={`${profile.weightKg}kg`} />
+            <ThemedText type="caption" themeColor="textSecondary">
+              체중/사진 기록은 히스토리의 BODY GROWTH에서 추가해요.
+            </ThemedText>
+          </>
         ) : (
           <ThemedText type="small" themeColor="textSecondary">
             프로필 정보가 없어요.
           </ThemedText>
         )}
-      </View>
+      </SettingsRow>
 
       <SettingsRow
         id="subscription"
@@ -105,7 +115,7 @@ export default function SettingsScreen() {
               placeholder="코드 입력"
             />
             {referralMessage && (
-              <ThemedText type="small" themeColor="textSecondary">
+              <ThemedText type="caption" themeColor="textSecondary">
                 {referralMessage}
               </ThemedText>
             )}
@@ -152,6 +162,17 @@ export default function SettingsScreen() {
   );
 }
 
+function InfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.infoLine}>
+      <ThemedText type="caption" themeColor="textSecondary">
+        {label}
+      </ThemedText>
+      <ThemedText type="small">{value}</ThemedText>
+    </View>
+  );
+}
+
 function SettingsRow({
   id,
   label,
@@ -173,12 +194,12 @@ function SettingsRow({
   return (
     <View style={[styles.row, { backgroundColor: theme.backgroundElement }]}>
       <Pressable onPress={() => onToggle(id)} style={styles.rowHeader}>
-        <View style={styles.rowText}>
-          <ThemedText type="smallBold">{label}</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {value}
-          </ThemedText>
-        </View>
+        <ThemedText type="smallBold" style={styles.rowLabel}>
+          {label}
+        </ThemedText>
+        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.rowValue}>
+          {value}
+        </ThemedText>
         <ThemedText type="smallBold" style={{ color: theme.gold }}>
           {isOpen ? '⌄' : '›'}
         </ThemedText>
@@ -189,29 +210,34 @@ function SettingsRow({
 }
 
 const styles = StyleSheet.create({
-  infoRow: {
-    borderRadius: Radius.large,
-    padding: Spacing.three,
-    gap: Spacing.half,
-  },
   row: {
-    borderRadius: Radius.large,
+    borderRadius: Radius.medium,
     overflow: 'hidden',
   },
+  /** 라벨과 값을 한 줄에 둬서 설정 목록이 세로로 두 배가 되지 않게 한다. */
   rowHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: Spacing.three,
-    minHeight: 44,
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    minHeight: Layout.compactRowHeight,
   },
-  rowText: {
+  rowLabel: {
+    flexShrink: 0,
+  },
+  rowValue: {
     flex: 1,
-    gap: Spacing.half,
+    textAlign: 'right',
   },
   rowBody: {
     paddingHorizontal: Spacing.three,
     paddingBottom: Spacing.three,
     gap: Spacing.two,
+  },
+  infoLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
   },
 });

@@ -5,17 +5,18 @@ import { ThemedText } from '@/components/themed-text';
 import { NavRow } from '@/components/ui/nav-row';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
+import { Section } from '@/components/ui/section';
 import { getExerciseById } from '@/config/exercises';
-import { Radius, Spacing } from '@/constants/theme';
+import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { useTheme } from '@/hooks/use-theme';
+import { WorkoutCategoryLabels } from '@/config/workout-labels';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 
 /**
- * 16 SCREEN 중 "06 WORKOUT HUB". Exercise DB 전체를 한 화면에 나열하던 이전 구조를
- * 폐기하고, CANON처럼 오늘 운동 / 내 루틴 / 최근 운동 / 운동 찾기로 이어지는
- * compact navigation row로 바꿨다. 전체 Exercise DB 탐색은 "13 운동 찾기"
- * (exercise-select.tsx)로, 루틴 생성/수정은 "12 루틴 편집"(routine-edit.tsx)으로 옮겼다.
+ * 06 WORKOUT HUB. Exercise DB 전체를 한 화면에 나열하던 구조로 되돌리지 않는다 —
+ * 여기는 "오늘 운동 / 내 루틴 / 최근 운동 / 운동 찾기 / 새 루틴 만들기"로 이어지는
+ * compact navigation 화면이다. 전체 탐색은 13 EXERCISE SELECT, 루틴 편집은 12 ROUTINE EDIT.
  */
 export default function WorkoutHubScreen() {
   const router = useRouter();
@@ -35,47 +36,25 @@ export default function WorkoutHubScreen() {
         onPress={() => router.push('/workout-start')}
       />
 
-      <NavRow
-        label="내 루틴"
-        value={routines.length > 0 ? `${routines.length}개` : '루틴 없음 · 선택 사항'}
-        onPress={() => router.push('/routine-edit')}
-      />
-
-      <View style={styles.recentBlock}>
-        <ThemedText type="small" themeColor="textSecondary">
-          최근 운동
-        </ThemedText>
-        {recentRecords.length === 0 ? (
-          <ThemedText type="small" themeColor="textSecondary" style={styles.emptyLine}>
-            아직 기록이 없어요.
+      <Section
+        title="내 루틴"
+        actionLabel="+ 새 루틴"
+        onPressAction={() => router.push('/routine-edit')}>
+        {routines.length === 0 ? (
+          <ThemedText type="caption" themeColor="textSecondary">
+            루틴은 선택 사항이에요. 없어도 [운동 시작]으로 바로 운동할 수 있어요.
           </ThemedText>
         ) : (
-          recentRecords.map((record) => (
-            <View key={record.id} style={[styles.recentRow, { backgroundColor: theme.backgroundElement }]}>
-              <ThemedText type="smallBold" numberOfLines={1} style={styles.recentTitle}>
-                {record.title}
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {record.date}
-              </ThemedText>
-            </View>
-          ))
-        )}
-      </View>
-
-      {routines.length > 0 && (
-        <View style={styles.recentBlock}>
-          <ThemedText type="small" themeColor="textSecondary">
-            루틴 목록
-          </ThemedText>
-          {routines.map((routine) => (
+          routines.map((routine) => (
             <Pressable
               key={routine.id}
               onPress={() => router.push(`/routine-edit?routineId=${routine.id}`)}
-              style={[styles.recentRow, { backgroundColor: theme.backgroundElement }]}>
-              <View style={styles.recentTitle}>
-                <ThemedText type="smallBold">{routine.name}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+              style={[styles.row, { backgroundColor: theme.backgroundElement }]}>
+              <View style={styles.rowText}>
+                <ThemedText type="smallBold" numberOfLines={1}>
+                  {routine.name}
+                </ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
                   {routine.exerciseIds.map((id) => getExerciseById(id)?.name ?? id).join(', ')}
                 </ThemedText>
               </View>
@@ -83,34 +62,58 @@ export default function WorkoutHubScreen() {
                 ›
               </ThemedText>
             </Pressable>
-          ))}
-        </View>
-      )}
+          ))
+        )}
+      </Section>
+
+      <Section title="최근 운동">
+        {recentRecords.length === 0 ? (
+          <ThemedText type="caption" themeColor="textSecondary">
+            아직 기록이 없어요.
+          </ThemedText>
+        ) : (
+          recentRecords.map((record) => (
+            <View key={record.id} style={[styles.row, { backgroundColor: theme.backgroundElement }]}>
+              <View style={styles.rowText}>
+                <ThemedText type="smallBold" numberOfLines={1}>
+                  {record.title}
+                </ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                  {WorkoutCategoryLabels[record.category]}
+                  {record.durationMinutes ? ` · ${record.durationMinutes}분` : ''}
+                </ThemedText>
+              </View>
+              <ThemedText type="caption" themeColor="textSecondary">
+                {record.date}
+              </ThemedText>
+            </View>
+          ))
+        )}
+      </Section>
 
       <NavRow label="운동 찾기" value="전체 Exercise DB" onPress={() => router.push('/exercise-select')} />
 
-      <PrimaryButton label="+ 새 루틴 만들기" variant="secondary" onPress={() => router.push('/routine-edit')} />
+      <PrimaryButton
+        label="+ 새 루틴 만들기"
+        variant="secondary"
+        onPress={() => router.push('/routine-edit')}
+      />
     </ScreenScroll>
   );
 }
 
 const styles = StyleSheet.create({
-  recentBlock: {
-    gap: Spacing.two,
-  },
-  recentRow: {
+  row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderRadius: Radius.medium,
-    padding: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
     gap: Spacing.two,
+    minHeight: Layout.compactRowHeight,
   },
-  recentTitle: {
+  rowText: {
     flex: 1,
-    gap: Spacing.half,
-  },
-  emptyLine: {
-    paddingVertical: Spacing.one,
   },
 });

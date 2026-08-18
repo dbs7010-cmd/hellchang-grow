@@ -4,7 +4,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Motion, Radius, Spacing } from '@/constants/theme';
+import { Layout, Motion, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type PrimaryButtonVariant = 'primary' | 'secondary' | 'gold';
@@ -90,7 +90,7 @@ export function PrimaryButton({
             isGold && { borderWidth: 2, borderColor: theme.gold },
           ]}>
           <ThemedText
-            type={size === 'large' ? 'subtitle' : 'smallBold'}
+            type={size === 'large' ? 'heading' : 'smallBold'}
             style={isGold ? { color: theme.gold } : undefined}>
             {label}
           </ThemedText>
@@ -107,14 +107,14 @@ export function PrimaryButton({
 
 const styles = StyleSheet.create({
   button: {
-    minHeight: 52,
+    minHeight: Layout.ctaHeight,
     borderRadius: Radius.medium,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.four,
   },
   buttonLarge: {
-    minHeight: 80,
+    minHeight: Layout.ctaHeightLarge,
     borderRadius: Radius.large,
   },
   subLabel: {

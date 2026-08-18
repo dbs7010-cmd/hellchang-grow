@@ -30,6 +30,14 @@ export interface CharacterSilhouetteProps {
   scale?: number;
 }
 
+/**
+ * 도형 placeholder rig의 고유 높이(px).
+ * head 56 + neck 10 + torso 160 + armRow(오버랩 후 10) + legRow(4+150) + shoeRow(2+16) = 408.
+ * 홈처럼 남는 세로 공간에 캐릭터를 꽉 채워야 하는 화면이 이 값을 기준으로 scale을 계산한다 —
+ * 화면 코드가 408을 하드코딩하지 않게 하려고 여기서 내보낸다.
+ */
+export const CharacterIntrinsicHeight = 408;
+
 const ANGLE_ROTATION_DEG: Record<CharacterAngle, number> = {
   front: 0,
   'front-side': 25,

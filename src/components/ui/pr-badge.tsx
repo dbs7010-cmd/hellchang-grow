@@ -9,7 +9,7 @@ export function PRBadge() {
   const theme = useTheme();
   return (
     <View style={[styles.badge, { backgroundColor: theme.gold }]}>
-      <ThemedText type="small" style={styles.text}>
+      <ThemedText type="captionBold" style={styles.text}>
         NEW PR
       </ThemedText>
     </View>
@@ -25,7 +25,5 @@ const styles = StyleSheet.create({
   },
   text: {
     color: '#1B1D20',
-    fontSize: 11,
-    fontWeight: '700',
   },
 });

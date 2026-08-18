@@ -2,7 +2,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ExerciseArtSlot } from '@/components/ui/exercise-art-slot';
-import { Radius, Spacing } from '@/constants/theme';
+import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export interface RecommendedStripItem {
@@ -17,8 +17,11 @@ export interface RecommendedStripProps {
   onPressMore: () => void;
 }
 
+/** 카드 폭 — 412 화면에서 3개가 온전히 보이고 4번째가 살짝 걸쳐 "더 있다"가 드러나는 값. */
+const ITEM_WIDTH = 108;
+
 /**
- * "오늘 추천 운동" — 홈의 조연. 큰 카드/긴 리스트가 아니라 최대 4개짜리 가로 스크롤 strip.
+ * "오늘 추천 운동" — 홈의 조연. 큰 카드/긴 리스트가 아니라 가로 스크롤 strip.
  * 탭하면 기존 workout-start 흐름으로 이동할 뿐, 새 추천 엔진을 만들지 않는다.
  */
 export function RecommendedStrip({ items, onPressItem, onPressMore }: RecommendedStripProps) {
@@ -28,28 +31,32 @@ export function RecommendedStrip({ items, onPressItem, onPressMore }: Recommende
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <ThemedText type="small" themeColor="textSecondary">
-          오늘 추천 운동
-        </ThemedText>
+        <ThemedText type="sectionTitle">오늘 추천 운동</ThemedText>
         <Pressable onPress={onPressMore} hitSlop={8}>
-          <ThemedText type="small" style={{ color: theme.gold }}>
-            더보기 &gt;
+          <ThemedText type="captionBold" style={{ color: theme.gold }}>
+            더보기 ›
           </ThemedText>
         </Pressable>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.scroll}
+        contentContainerStyle={styles.row}>
         {items.map((item) => (
           <Pressable
             key={item.id}
             onPress={onPressItem}
             style={[styles.item, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
             <ExerciseArtSlot exerciseId={item.id} style={styles.thumbnail} />
-            <ThemedText type="small" style={styles.itemName} numberOfLines={1}>
-              {item.name}
-            </ThemedText>
-            <ThemedText type="small" style={[styles.itemSubtitle, { color: theme.gold }]}>
-              {item.subtitle}
-            </ThemedText>
+            <View style={styles.itemText}>
+              <ThemedText type="captionBold" numberOfLines={1}>
+                {item.name}
+              </ThemedText>
+              <ThemedText type="caption" style={{ color: theme.gold }} numberOfLines={1}>
+                {item.subtitle}
+              </ThemedText>
+            </View>
           </Pressable>
         ))}
       </ScrollView>
@@ -59,7 +66,7 @@ export function RecommendedStrip({ items, onPressItem, onPressMore }: Recommende
 
 const styles = StyleSheet.create({
   container: {
-    gap: Spacing.two,
+    gap: Spacing.one,
     width: '100%',
   },
   header: {
@@ -67,29 +74,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  scroll: {
+    flexGrow: 0,
+    marginHorizontal: -Layout.screenPaddingX,
+  },
   row: {
     gap: Spacing.two,
+    paddingHorizontal: Layout.screenPaddingX,
   },
   item: {
-    width: 104,
-    paddingBottom: Spacing.two,
-    paddingHorizontal: Spacing.two,
+    width: ITEM_WIDTH,
     borderRadius: Radius.medium,
     borderWidth: 1,
-    gap: Spacing.half,
     overflow: 'hidden',
   },
   thumbnail: {
-    marginHorizontal: -Spacing.two,
-    marginBottom: Spacing.one,
-    width: 104,
+    width: ITEM_WIDTH,
+    aspectRatio: 2 / 1,
     borderRadius: 0,
     borderWidth: 0,
   },
-  itemName: {
-    fontWeight: '700',
-  },
-  itemSubtitle: {
-    fontSize: 11,
+  itemText: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
   },
 });

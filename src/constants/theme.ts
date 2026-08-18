@@ -82,8 +82,41 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 60, android: 110 }) ?? 0;
+/**
+ * 하단 탭바가 콘텐츠 "위를 덮는" 만큼의 여유 높이.
+ *
+ * 탭바가 콘텐츠를 밀어내는 플랫폼에서는 0이어야 한다 — 그렇지 않으면 그만큼이
+ * 그대로 화면 아래 죽은 공간이 된다 (홈이 스크롤돼야 했던 원인 중 하나).
+ *  - android: NativeTabs가 불투명한 Material bottom nav를 레이아웃에 포함시키므로 겹치지 않는다.
+ *             숨 쉴 틈만 남긴다.
+ *  - ios    : 반투명 탭바 아래로 콘텐츠가 지나가므로 실제 여유가 필요하다.
+ *  - web    : app-tabs.web.tsx가 position:absolute 플로팅 pill(약 76px)로 떠 있다.
+ */
+export const BottomTabInset = Platform.select({ ios: 60, android: Spacing.two, web: 80 }) ?? 0;
 export const MaxContentWidth = 800;
+
+/**
+ * LAYOUT CANON — 화면마다 padding/gap을 새로 정하지 않는다.
+ * PRIMARY VIEWPORT는 Galaxy 412x915 세로다. 세로 공간이 늘 부족하므로 gap을 넉넉하게 잡지 않는다.
+ */
+export const Layout = {
+  /** 모든 화면 공통 좌우 여백 */
+  screenPaddingX: 20,
+  /** 서로 다른 섹션 사이 */
+  sectionGap: Spacing.three,
+  /** 같은 섹션 안의 row 사이 */
+  rowGap: Spacing.two,
+  /** 카드/패널 내부 padding */
+  cardPadding: Spacing.three,
+  /** 기본 CTA 높이 */
+  ctaHeight: 52,
+  /** 화면의 주 CTA(운동 시작 / 세트 완료) 높이 */
+  ctaHeightLarge: 68,
+  /** 탭 가능한 compact row 최소 높이 — 터치 영역 하한선 */
+  compactRowHeight: 44,
+  /** 리스트(운동 찾기 등) row 높이 */
+  listRowHeight: 56,
+} as const;
 
 export const Radius = {
   small: 8,

@@ -34,7 +34,7 @@ export function BarChart({ items, height = 90 }: BarChartProps) {
               ]}
             />
           </View>
-          <ThemedText type="small" themeColor="textSecondary" style={styles.label}>
+          <ThemedText type="caption" themeColor="textSecondary">
             {item.label}
           </ThemedText>
         </View>
@@ -63,8 +63,5 @@ const styles = StyleSheet.create({
   bar: {
     width: '100%',
     borderRadius: Radius.small,
-  },
-  label: {
-    fontSize: 11,
   },
 });

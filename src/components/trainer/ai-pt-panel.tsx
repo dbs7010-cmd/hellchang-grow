@@ -5,6 +5,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Chip } from '@/components/ui/chip';
+import { ChipRow } from '@/components/ui/chip-row';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { TextField } from '@/components/ui/text-field';
 import { AiQuickActionIds, AiQuickActionLabels } from '@/config/ai-quick-actions';
@@ -59,11 +60,11 @@ export function AiPtPanel({ accessLabel, onQuickAction, onSendMessage }: AiPtPan
 
   return (
     <View style={styles.container}>
-      <ThemedText type="small" themeColor="textSecondary">
+      <ThemedText type="caption" themeColor="textSecondary">
         {accessLabel}
       </ThemedText>
 
-      <View style={styles.chipRow}>
+      <ChipRow bleed>
         {AiQuickActionIds.map((actionId) => (
           <Chip
             key={actionId}
@@ -71,7 +72,7 @@ export function AiPtPanel({ accessLabel, onQuickAction, onSendMessage }: AiPtPan
             onPress={() => handleQuickAction(actionId)}
           />
         ))}
-      </View>
+      </ChipRow>
 
       {messages.length > 0 && (
         <View style={styles.messages}>
@@ -88,6 +89,7 @@ export function AiPtPanel({ accessLabel, onQuickAction, onSendMessage }: AiPtPan
           value={inputText}
           onChangeText={setInputText}
           placeholder="직접 물어보기"
+          containerStyle={styles.inputField}
           onSubmitEditing={handleSend}
         />
         <PrimaryButton label="전송" variant="secondary" onPress={handleSend} disabled={loading} />
@@ -140,11 +142,6 @@ const styles = StyleSheet.create({
   container: {
     gap: Spacing.three,
   },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
-  },
   messages: {
     gap: Spacing.two,
   },
@@ -168,7 +165,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.two,
+  },
+  inputField: {
+    flex: 1,
   },
   typingRow: {
     flexDirection: 'row',
