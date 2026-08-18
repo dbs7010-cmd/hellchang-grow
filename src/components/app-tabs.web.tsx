@@ -1,17 +1,21 @@
-import {
-  Tabs,
-  TabList,
-  TabTrigger,
-  TabSlot,
-  TabTriggerSlotProps,
-  TabListProps,
-} from 'expo-router/ui';
-import { Pressable, ScrollView, View, StyleSheet } from 'react-native';
+import { Tabs, TabList, TabTrigger, TabSlot, TabTriggerSlotProps, TabListProps } from 'expo-router/ui';
+import { Pressable, View, StyleSheet } from 'react-native';
 
 import { ThemedText } from './themed-text';
-import { ThemedView } from './themed-view';
 
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Colors, Layout, MaxContentWidth, Spacing } from '@/constants/theme';
+
+/**
+ * 웹 미리보기용 탭바. 네이티브 NativeTabs와 같은 규칙을 따른다 —
+ * 선택은 Gold 아이콘 + 흰 라벨로만 드러내고, 큰 pill 배경을 쓰지 않는다.
+ */
+const TABS = [
+  { name: 'home', href: '/', icon: '🏠', label: '홈' },
+  { name: 'workout', href: '/workout', icon: '🏋', label: '운동' },
+  { name: 'trainer', href: '/trainer', icon: '🕶', label: '트레이너' },
+  { name: 'history', href: '/history', icon: '📈', label: '히스토리' },
+  { name: 'settings', href: '/settings', icon: '⚙️', label: '설정' },
+] as const;
 
 export default function AppTabs() {
   return (
@@ -19,53 +23,44 @@ export default function AppTabs() {
       <TabSlot style={{ height: '100%' }} />
       <TabList asChild>
         <CustomTabList>
-          <TabTrigger name="home" href="/" asChild>
-            <TabButton>홈</TabButton>
-          </TabTrigger>
-          <TabTrigger name="workout" href="/workout" asChild>
-            <TabButton>운동</TabButton>
-          </TabTrigger>
-          <TabTrigger name="trainer" href="/trainer" asChild>
-            <TabButton>트레이너</TabButton>
-          </TabTrigger>
-          <TabTrigger name="history" href="/history" asChild>
-            <TabButton>히스토리</TabButton>
-          </TabTrigger>
-          <TabTrigger name="settings" href="/settings" asChild>
-            <TabButton>설정</TabButton>
-          </TabTrigger>
+          {TABS.map((tab) => (
+            <TabTrigger key={tab.name} name={tab.name} href={tab.href} asChild>
+              <TabButton icon={tab.icon}>{tab.label}</TabButton>
+            </TabTrigger>
+          ))}
         </CustomTabList>
       </TabList>
     </Tabs>
   );
 }
 
-export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
+export function TabButton({
+  children,
+  isFocused,
+  icon,
+  ...props
+}: TabTriggerSlotProps & { icon?: string }) {
+  const colors = Colors.dark;
   return (
-    <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
-      <ThemedView
-        type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
-        style={styles.tabButtonView}>
-        <ThemedText type="small" themeColor={isFocused ? 'text' : 'textSecondary'}>
-          {children}
-        </ThemedText>
-      </ThemedView>
+    <Pressable {...props} style={({ pressed }) => [styles.tabButton, pressed && styles.pressed]}>
+      <ThemedText style={[styles.icon, !isFocused && styles.iconMuted]}>{icon}</ThemedText>
+      <ThemedText type="caption" style={{ color: isFocused ? colors.text : colors.textSecondary }}>
+        {children}
+      </ThemedText>
+      <View
+        style={[styles.activeBar, { backgroundColor: isFocused ? colors.gold : 'transparent' }]}
+      />
     </Pressable>
   );
 }
 
 export function CustomTabList(props: TabListProps) {
+  const colors = Colors.dark;
   return (
-    <View {...props} style={styles.tabListContainer}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}>
-        <ThemedView type="backgroundElement" style={styles.innerContainer}>
-          {props.children}
-        </ThemedView>
-      </ScrollView>
+    <View
+      {...props}
+      style={[styles.tabListContainer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+      <View style={styles.inner}>{props.children}</View>
     </View>
   );
 }
@@ -75,32 +70,36 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    padding: Spacing.three,
+    borderTopWidth: 1,
     alignItems: 'center',
   },
-  scrollView: {
-    flexGrow: 0,
-    maxWidth: MaxContentWidth,
-    width: '100%',
-  },
-  scrollContent: {
-    justifyContent: 'center',
-    flexGrow: 1,
-  },
-  innerContainer: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.five,
+  inner: {
     flexDirection: 'row',
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    paddingHorizontal: Spacing.two,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.three,
+  },
+  tabButton: {
+    flex: 1,
     alignItems: 'center',
-    gap: Spacing.one,
+    gap: 1,
+    minHeight: Layout.compactRowHeight,
+  },
+  icon: {
+    fontSize: 18,
+  },
+  iconMuted: {
+    opacity: 0.45,
+  },
+  activeBar: {
+    marginTop: 2,
+    width: 18,
+    height: 2,
+    borderRadius: 1,
   },
   pressed: {
     opacity: 0.7,
-  },
-  tabButtonView: {
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.three,
   },
 });

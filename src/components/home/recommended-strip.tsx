@@ -53,7 +53,7 @@ export function RecommendedStrip({ items, onPressItem, onPressMore }: Recommende
               <ThemedText type="captionBold" numberOfLines={1}>
                 {item.name}
               </ThemedText>
-              <ThemedText type="caption" style={{ color: theme.gold }} numberOfLines={1}>
+              <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
                 {item.subtitle}
               </ThemedText>
             </View>

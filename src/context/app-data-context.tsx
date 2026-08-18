@@ -125,6 +125,11 @@ interface AppDataContextValue extends AppDataState {
     profile: Omit<UserProfile, 'id' | 'createdAt'>;
     photoUri?: string;
   }) => Promise<void>;
+  /**
+   * 설정 > 내 정보에서 프로필 일부(운동 목표 등)를 고친다.
+   * id/createdAt은 바꿀 수 없고, 프로필이 없으면 아무 일도 하지 않는다.
+   */
+  updateProfile: (patch: Partial<Omit<UserProfile, 'id' | 'createdAt'>>) => Promise<void>;
   addWorkoutRecord: (
     input: Parameters<typeof addWorkoutRecordRepo>[0]
   ) => Promise<{ workoutRecords: WorkoutRecord[]; streak: StreakState }>;
@@ -346,6 +351,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     []
   );
+
+  // 저장소를 source of truth로 읽어서 합친다 — setState 업데이터 안에서 저장을 일으키지 않는다.
+  const updateProfile = useCallback<AppDataContextValue['updateProfile']>(async (patch) => {
+    const current = await getUserProfile();
+    if (!current) return;
+    const next: UserProfile = { ...current, ...patch };
+    await saveUserProfile(next);
+    setState((prev) => ({ ...prev, profile: next }));
+  }, []);
 
   const addWorkoutRecord = useCallback<AppDataContextValue['addWorkoutRecord']>(async (input) => {
     const workoutRecords = await addWorkoutRecordRepo(input);
@@ -644,6 +658,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     nextPhotoAvailableDate: tomorrowDateString(today),
     passProgress: computePassLevelProgress(state.pass.xp),
     completeOnboarding,
+    updateProfile,
     addWorkoutRecord,
     deleteWorkoutRecord,
     addBodyHistoryEntry,

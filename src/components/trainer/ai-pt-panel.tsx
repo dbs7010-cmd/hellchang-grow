@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
@@ -22,11 +22,16 @@ interface AiPtMessage {
 
 export interface AiPtPanelProps {
   accessLabel: string;
+  /**
+   * 트레이너 화면의 빠른 질문으로 들어온 경우, 화면을 열자마자 그 질문을 한 번 보낸다.
+   * 대화 UI/이용권 소모 경로는 사용자가 직접 누른 것과 완전히 동일하다.
+   */
+  initialQuickAction?: AiQuickActionId;
   onQuickAction: (actionId: AiQuickActionId) => Promise<AiTrainerMessage | null>;
   onSendMessage: (text: string) => Promise<AiTrainerMessage | null>;
 }
 
-export function AiPtPanel({ accessLabel, onQuickAction, onSendMessage }: AiPtPanelProps) {
+export function AiPtPanel({ accessLabel, initialQuickAction, onQuickAction, onSendMessage }: AiPtPanelProps) {
   const [messages, setMessages] = useState<AiPtMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -49,6 +54,14 @@ export function AiPtPanel({ accessLabel, onQuickAction, onSendMessage }: AiPtPan
     appendMessage('user', AiQuickActionLabels[actionId]);
     handleReply(() => onQuickAction(actionId));
   };
+
+  const autoSentRef = useRef(false);
+  useEffect(() => {
+    if (!initialQuickAction || autoSentRef.current) return;
+    autoSentRef.current = true;
+    handleQuickAction(initialQuickAction);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuickAction]);
 
   const handleSend = () => {
     const trimmed = inputText.trim();

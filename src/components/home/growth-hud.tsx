@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ProgressBar } from '@/components/ui/progress-bar';
-import { Layout, Radius, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export interface GrowthHudProps {
@@ -14,11 +14,14 @@ export interface GrowthHudProps {
 }
 
 /**
- * 홈 상단의 얇은 성장 스트립. 캐릭터 옆에 세로로 쌓던 HUD를 가로 1줄로 눕혔다 —
- * 세로 공간을 캐릭터에 돌려주기 위해서다.
+ * 홈 하단의 얇은 HELL PASS 줄.
  *
- * 여기 있는 진행도는 HELL PASS 하나뿐이다. 체중/체지방 같은 "실제 몸" 수치는
- * 여기 섞지 않는다 (REAL BODY != GAME PROGRESSION). 몸 변화는 HISTORY의 BODY GROWTH에서 본다.
+ * HELL PASS는 진행 정보이지 홈의 주인공이 아니다 — 채워진 pill 카드로 상단에 두면
+ * 캐릭터/운동 시작과 시선을 다툰다. 그래서 배경 없이, 라벨은 secondary로 두고
+ * Gold는 "진행"을 뜻하는 progress bar에만 남긴다.
+ *
+ * 여기 있는 진행도는 HELL PASS 하나뿐이다. 체중/체지방 같은 실제 몸 수치는 섞지 않는다
+ * (REAL BODY != GAME PROGRESSION). 몸 변화는 히스토리의 [몸 변화]에서 본다.
  */
 export function GrowthHud({
   passLevel,
@@ -32,17 +35,18 @@ export function GrowthHud({
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.container, { backgroundColor: theme.backgroundElement }]}
+      style={styles.container}
+      hitSlop={6}
       accessibilityRole="button"
-      accessibilityLabel={`HELL PASS 레벨 ${passLevel}`}>
-      <ThemedText type="captionBold" style={{ color: theme.gold }}>
+      accessibilityLabel={`HELL PASS 레벨 ${passLevel}, 성장 리포트 열기`}>
+      <ThemedText type="caption" themeColor="textSecondary">
         HELL PASS
       </ThemedText>
-      <ThemedText type="smallBold">Lv.{passLevel}</ThemedText>
+      <ThemedText type="captionBold">Lv.{passLevel}</ThemedText>
       <View style={styles.bar}>
         <ProgressBar
           progress={passProgress}
-          height={6}
+          height={4}
           color={theme.gold}
           trackColor={theme.backgroundSelected}
         />
@@ -50,7 +54,7 @@ export function GrowthHud({
       <ThemedText type="caption" themeColor="textSecondary">
         {passXpIntoLevel}/{passXpForLevel}
       </ThemedText>
-      <ThemedText type="captionBold" style={{ color: theme.gold }}>
+      <ThemedText type="caption" themeColor="textSecondary">
         ›
       </ThemedText>
     </Pressable>
@@ -62,10 +66,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.pill,
-    minHeight: Layout.compactRowHeight - 8,
   },
   bar: {
     flex: 1,

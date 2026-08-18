@@ -82,10 +82,7 @@ export default function HomeScreen() {
       return {
         id: exercise.id,
         name: exercise.name,
-        // 세트 없이 이름만 남은 기록도 있어서(세션에 추가만 하고 세트를 안 채운 경우)
-        // sets.length가 0이면 "지난번 0세트"가 아니라 "첫 도전"으로 보여준다.
-        subtitle:
-          previous && previous.sets.length > 0 ? '지난번 ' + previous.sets.length + '세트' : '첫 도전',
+        subtitle: describePreviousPerformance(previous),
       };
     });
   }, [scheduledRoutine, workoutRecords]);
@@ -109,12 +106,9 @@ export default function HomeScreen() {
       <View style={[styles.topBar, { paddingTop: insets.top + Spacing.one }]}>
         <ThemedText type="smallBold">🏋 헬창키우기</ThemedText>
         <View style={styles.topActions}>
-          <Pressable
-            onPress={() => router.push('/trainer')}
-            hitSlop={8}
-            style={[styles.ptButton, { borderColor: theme.gold }]}>
+          <Pressable onPress={() => router.push('/trainer')} hitSlop={10}>
             <ThemedText type="captionBold" style={{ color: theme.gold }}>
-              골드썬 PT
+              골드썬 PT ›
             </ThemedText>
           </Pressable>
           <Pressable onPress={() => router.push('/notifications')} hitSlop={10} style={styles.bellButton}>
@@ -128,14 +122,6 @@ export default function HomeScreen() {
       </View>
 
       <View style={[styles.content, { paddingBottom: BottomTabInset + insets.bottom + Spacing.two }]}>
-        <GrowthHud
-          passLevel={passProgress.level}
-          passXpIntoLevel={passProgress.xpIntoLevel}
-          passXpForLevel={passProgress.xpForLevel}
-          passProgress={passProgress.progress}
-          onPress={() => router.push('/pass')}
-        />
-
         <Pressable
           onPress={() => setViewerOpen(true)}
           onLayout={handleStageLayout}
@@ -189,10 +175,20 @@ export default function HomeScreen() {
           />
         )}
 
-        <View style={[styles.statsRow, { borderColor: theme.border }]}>
-          <HomeStat label="이번 주" value={weekRecords.length + '회'} />
-          <HomeStat label="연속" value={'🔥 ' + streak.currentStreakDays + '일'} />
-          <HomeStat label="이번 주 볼륨" value={formatVolumeKg(weeklyVolumeKg)} />
+        {/* 4순위: 진행 정보. 캐릭터/CTA보다 조용해야 한다. */}
+        <View style={[styles.bottomBlock, { borderColor: theme.border }]}>
+          <GrowthHud
+            passLevel={passProgress.level}
+            passXpIntoLevel={passProgress.xpIntoLevel}
+            passXpForLevel={passProgress.xpForLevel}
+            passProgress={passProgress.progress}
+            onPress={() => router.push('/pass')}
+          />
+          <View style={styles.statsRow}>
+            <HomeStat label="이번 주" value={weekRecords.length + '회'} />
+            <HomeStat label="연속" value={'🔥 ' + streak.currentStreakDays + '일'} />
+            <HomeStat label="이번 주 볼륨" value={weeklyVolumeKg > 0 ? formatVolumeKg(weeklyVolumeKg) : '-'} />
+          </View>
         </View>
       </View>
 
@@ -205,6 +201,20 @@ export default function HomeScreen() {
       />
     </ThemedView>
   );
+}
+
+/**
+ * 추천 카드의 상태 한 줄. 지어낸 문구가 아니라 실제 기록에서 나온 값만 쓴다.
+ *  - 무게 기록이 있으면 지난번 최고 중량
+ *  - 무게 없이 세트만 있으면 세트 수
+ *  - 기록이 없거나(세션에 추가만 하고 세트를 안 채운 경우 포함) 비어 있으면 "첫 도전"
+ */
+function describePreviousPerformance(
+  previous: ReturnType<typeof findPreviousPerformance>
+): string {
+  if (!previous || previous.sets.length === 0) return '첫 도전';
+  if (previous.maxWeightKg !== undefined) return '지난번 ' + previous.maxWeightKg + 'kg';
+  return '지난번 ' + previous.sets.length + '세트';
 }
 
 /**
@@ -239,12 +249,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-  },
-  ptButton: {
-    borderWidth: 1,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 3,
   },
   topActionIcon: {
     fontSize: 18,
@@ -281,11 +285,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.one,
   },
+  bottomBlock: {
+    borderTopWidth: 1,
+    paddingTop: Spacing.two,
+    gap: Spacing.two,
+  },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderTopWidth: 1,
-    paddingTop: Spacing.two,
   },
   stat: {
     flex: 1,

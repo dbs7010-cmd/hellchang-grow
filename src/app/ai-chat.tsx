@@ -1,11 +1,14 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
 import { AiPtPanel } from '@/components/trainer/ai-pt-panel';
 import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { SubScreen } from '@/components/ui/sub-screen';
+import { AiQuickActionIds } from '@/config/ai-quick-actions';
 import { StanleyTrainer } from '@/config/trainers';
 import { useAppData } from '@/context/app-data-context';
+import { AiQuickActionId } from '@/services/trainer/ai-trainer-service';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 
 /**
@@ -17,6 +20,10 @@ import { pickTrainerLine } from '@/utils/trainer-dialogue';
  * 키보드 회피/safe area는 SubScreen이 담당한다.
  */
 export default function AiChatScreen() {
+  const { action } = useLocalSearchParams<{ action?: string }>();
+  const initialQuickAction = AiQuickActionIds.includes(action as AiQuickActionId)
+    ? (action as AiQuickActionId)
+    : undefined;
   const {
     hasSubscriptionAccess,
     hasAiPtAccess,
@@ -48,6 +55,7 @@ export default function AiChatScreen() {
               ? '구독 중이라 광고 없이 이용할 수 있어요.'
               : `남은 이용 횟수: ${trainerUsage.rewardedPtUsesRemaining}회`
           }
+          initialQuickAction={initialQuickAction}
           onQuickAction={sendAiQuickAction}
           onSendMessage={sendAiMessage}
         />
@@ -61,7 +69,12 @@ export default function AiChatScreen() {
             방식만 달라요.
           </ThemedText>
           <PrimaryButton label="광고 보고 이용하기" variant="gold" onPress={handleWatchAd} />
-          <PrimaryButton label="구독하기 (테스트)" variant="secondary" onPress={handleSubscribe} />
+          <PrimaryButton label="구독하기" variant="secondary" onPress={handleSubscribe} />
+          {__DEV__ && (
+            <ThemedText type="caption" themeColor="textSecondary">
+              DEV: 광고/결제 SDK 연동 전이라 mock으로 동작해요.
+            </ThemedText>
+          )}
         </>
       )}
     </SubScreen>

@@ -15,6 +15,7 @@ import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { Section } from '@/components/ui/section';
 import { TextField } from '@/components/ui/text-field';
 import { AppConfig } from '@/config/app-config';
+import { BodyGoalLabels } from '@/config/body-goals';
 import { StanleyTrainer } from '@/config/trainers';
 import {
   WorkoutCategories,
@@ -30,6 +31,7 @@ import { WorkoutCategory, WorkoutIntensity } from '@/types/workout';
 import { todayDateString } from '@/utils/date';
 import { countPeriodPRs } from '@/utils/exercise-history';
 import { buildHistoryDays } from '@/utils/history';
+import { buildRecommendationContext } from '@/utils/recommendation-context';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import { buildPeriodChart, formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
 
@@ -37,24 +39,25 @@ type Period = 'week' | 'month' | 'year';
 
 const PERIOD_LABELS: Record<Period, string> = { week: '주', month: '월', year: '연' };
 const BODY_PREVIEW_HEIGHT = 96;
+/** 값이 없을 때 쓰는 표기. 0을 대신 보여주지 않는다. */
+const EMPTY = '-';
 
 /** 부호를 항상 붙인 변화량 표기. 감소만 성공처럼 보이지 않게 색으로 평가하지 않는다. */
 function formatDelta(value: number, unit: string): string {
   const rounded = Math.round(value * 10) / 10;
-  if (rounded === 0) return `변화 없음`;
+  if (rounded === 0) return '변화 없음';
   return `${rounded > 0 ? '+' : ''}${rounded}${unit}`;
 }
 
 /**
- * 07 HISTORY + 08 BODY GROWTH.
+ * 07 HISTORY.
  *
- * HISTORY는 "얼마나 했나"(DATA), BODY GROWTH는 "몸이 어떻게 변하고 있나"를 본다.
- * 두 블록 모두 세로로 긴 라벨-값 목록 대신 2열 metric 그리드를 쓴다.
+ * 한 화면에 두 가지 이야기가 있다: "얼마나 했나"(운동 기록)와 "몸이 어떻게 변하고 있나"(몸 변화).
+ * 서로 다른 서비스처럼 보이지 않도록 같은 MetricGrid / Section 문법으로 통일하고,
+ * 몸 변화는 설명 문단 대신 사용자의 운동 목표 한 줄로만 맥락을 준다.
  *
- * BODY GROWTH는 체중계가 아니다 — 체중/체지방률 옆에 같은 기간의 총 볼륨과 PR을 나란히 둬서,
- * "체중이 줄어야만 성장"이 아니라 "체중 유지 + 수행 향상"도 성장으로 읽히게 한다.
- * (FAT CUT / STRENGTH UP / Body Growth 도메인이 생기면 이 블록에 그대로 붙인다 —
- *  아직 없는 수치를 지어내지 않는다.)
+ * 실제 값이 없는 지표(볼륨을 계산할 세트 기록이 없거나, 골격근량을 입력한 적이 없는 경우)는
+ * 0으로 표시하지 않고 '-'로 둔다 — 없는 데이터를 있는 것처럼 보이게 하지 않는다.
  */
 export default function HistoryScreen() {
   const theme = useTheme();
@@ -72,6 +75,8 @@ export default function HistoryScreen() {
   const [period, setPeriod] = useState<Period>('week');
   const [viewerOpen, setViewerOpen] = useState(false);
   const [weightKg, setWeightKg] = useState('');
+  const [bodyFatPercent, setBodyFatPercent] = useState('');
+  const [skeletalMuscleKg, setSkeletalMuscleKg] = useState('');
   const [photoUri, setPhotoUri] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -107,6 +112,7 @@ export default function HistoryScreen() {
     [cleanPeriodRecords, workoutRecords]
   );
   const chartData = useMemo(() => buildPeriodChart(workoutRecords, period), [workoutRecords, period]);
+  const chartHasData = chartData.some((point) => point.value > 0);
 
   const historyDays = useMemo(
     () => buildHistoryDays(bodyHistory, workoutRecords),
@@ -116,6 +122,11 @@ export default function HistoryScreen() {
   const photoDates = useMemo(
     () => historyDays.filter((day) => day.hasPhoto).map((day) => day.date),
     [historyDays]
+  );
+
+  const recommendationContext = useMemo(
+    () => buildRecommendationContext(profile, bodyHistory, workoutRecords),
+    [profile, bodyHistory, workoutRecords]
   );
 
   const handlePickPhoto = async () => {
@@ -130,6 +141,14 @@ export default function HistoryScreen() {
     setPhotoUri(result.assets[0].uri);
   };
 
+  /** 빈 문자열/잘못된 값은 저장하지 않는다 — 0으로 채워 넣지 않는다. */
+  const parseOptionalNumber = (raw: string): number | undefined => {
+    const trimmed = raw.trim();
+    if (!trimmed) return undefined;
+    const value = Number(trimmed);
+    return Number.isFinite(value) && value > 0 ? value : undefined;
+  };
+
   const handleAddEntry = async () => {
     const value = Number(weightKg);
     if (!weightKg || Number.isNaN(value) || value <= 0) {
@@ -140,10 +159,14 @@ export default function HistoryScreen() {
     await addBodyHistoryEntry({
       date: todayDateString(),
       weightKg: value,
+      bodyFatPercent: parseOptionalNumber(bodyFatPercent),
+      skeletalMuscleKg: parseOptionalNumber(skeletalMuscleKg),
       source: photoUri ? 'photo' : 'manual',
       photoReference: photoUri,
     });
     setWeightKg('');
+    setBodyFatPercent('');
+    setSkeletalMuscleKg('');
     setPhotoUri(undefined);
     setAddEntryOpen(false);
   };
@@ -173,11 +196,13 @@ export default function HistoryScreen() {
   const latestBody = bodyHistory[0];
   const previousBody = bodyHistory[1];
   const currentWeightKg = latestBody?.weightKg ?? profile?.weightKg;
-  const weightDeltaNote =
-    latestBody && previousBody ? `지난 기록 ${formatDelta(latestBody.weightKg - previousBody.weightKg, 'kg')}` : undefined;
-  const fatDeltaNote =
-    latestBody?.bodyFatPercent !== undefined && previousBody?.bodyFatPercent !== undefined
-      ? `지난 기록 ${formatDelta(latestBody.bodyFatPercent - previousBody.bodyFatPercent, '%')}`
+  const deltaNote = (
+    current: number | undefined,
+    previous: number | undefined,
+    unit: string
+  ): string | undefined =>
+    current !== undefined && previous !== undefined
+      ? `지난 기록 ${formatDelta(current - previous, unit)}`
       : undefined;
 
   const dayA = historyDays.find((day) => day.date === compareDateA);
@@ -202,28 +227,55 @@ export default function HistoryScreen() {
         </ChipRow>
 
         <MetricGrid>
-          <MetricTile label="운동 횟수" value={`${cleanPeriodRecords.length}회`} />
-          <MetricTile label="운동 시간" value={`${periodMinutes}분`} />
-          <MetricTile label="총 볼륨" value={formatVolumeKg(periodVolumeKg)} />
-          <MetricTile label="PR" value={periodPRs > 0 ? `${periodPRs}개` : '-'} accent={periodPRs > 0} />
+          <MetricTile
+            label="운동 횟수"
+            value={cleanPeriodRecords.length > 0 ? `${cleanPeriodRecords.length}회` : EMPTY}
+          />
+          <MetricTile label="운동 시간" value={periodMinutes > 0 ? `${periodMinutes}분` : EMPTY} />
+          <MetricTile
+            label="총 볼륨"
+            value={periodVolumeKg > 0 ? formatVolumeKg(periodVolumeKg) : EMPTY}
+            note={periodVolumeKg > 0 ? undefined : '세트 기록이 있는 운동만 합산돼요'}
+          />
+          <MetricTile label="PR" value={periodPRs > 0 ? `${periodPRs}개` : EMPTY} accent={periodPRs > 0} />
         </MetricGrid>
 
-        <BarChart items={chartData} height={72} />
+        {chartHasData ? (
+          <BarChart items={chartData} height={72} />
+        ) : (
+          <ThemedText type="caption" themeColor="textSecondary">
+            이 기간에는 볼륨으로 계산할 세트 기록이 없어요.
+          </ThemedText>
+        )}
       </Section>
 
       {profile && (
-        <Section title="BODY GROWTH">
-          <ThemedText type="caption" themeColor="textSecondary">
-            체중만 보는 화면이 아니에요. 같은 기간의 볼륨·PR과 함께 봐야 몸이 어떻게 변하는지 보여요.
-          </ThemedText>
+        <Section title="몸 변화">
+          {recommendationContext && (
+            <ThemedText type="caption" themeColor="textSecondary">
+              목표 · {BodyGoalLabels[recommendationContext.bodyGoal]}
+            </ThemedText>
+          )}
 
+          {/* 값이 없는 지표는 '-'로 둔다. 앱이 추정해서 채우지 않는다. */}
           <MetricGrid>
-            {currentWeightKg !== undefined && (
-              <MetricTile label="체중" value={`${currentWeightKg}kg`} note={weightDeltaNote} />
-            )}
-            {latestBody?.bodyFatPercent !== undefined && (
-              <MetricTile label="체지방률" value={`${latestBody.bodyFatPercent}%`} note={fatDeltaNote} />
-            )}
+            <MetricTile
+              label="체중"
+              value={currentWeightKg !== undefined ? `${currentWeightKg}kg` : EMPTY}
+              note={deltaNote(latestBody?.weightKg, previousBody?.weightKg, 'kg')}
+            />
+            <MetricTile
+              label="골격근량"
+              value={
+                latestBody?.skeletalMuscleKg !== undefined ? `${latestBody.skeletalMuscleKg}kg` : EMPTY
+              }
+              note={deltaNote(latestBody?.skeletalMuscleKg, previousBody?.skeletalMuscleKg, 'kg')}
+            />
+            <MetricTile
+              label="체지방률"
+              value={latestBody?.bodyFatPercent !== undefined ? `${latestBody.bodyFatPercent}%` : EMPTY}
+              note={deltaNote(latestBody?.bodyFatPercent, previousBody?.bodyFatPercent, '%')}
+            />
           </MetricGrid>
 
           <View style={styles.bodyRow}>
@@ -293,57 +345,94 @@ export default function HistoryScreen() {
               )}
             </View>
           )}
-        </Section>
-      )}
 
-      {addEntryOpen ? (
-        <Section title="오늘 체중/사진 기록">
-          <TextField
-            label="오늘 체중 (kg)"
-            keyboardType="numeric"
-            value={weightKg}
-            onChangeText={setWeightKg}
-            placeholder="예: 69.5"
-          />
-          {photoUri ? (
-            <View style={styles.photoPreviewRow}>
-              <PhotoSlot label="이번 사진" photoUri={photoUri} />
+          {addEntryOpen ? (
+            <View style={styles.formBlock}>
+              <TextField
+                label="오늘 체중 (kg)"
+                keyboardType="numeric"
+                value={weightKg}
+                onChangeText={setWeightKg}
+                placeholder="예: 69.5"
+              />
+              <View style={styles.inlineRow}>
+                <TextField
+                  label="체지방률 (%, 선택)"
+                  keyboardType="numeric"
+                  value={bodyFatPercent}
+                  onChangeText={setBodyFatPercent}
+                  placeholder="예: 18.4"
+                  containerStyle={styles.flexItem}
+                />
+                <TextField
+                  label="골격근량 (kg, 선택)"
+                  keyboardType="numeric"
+                  value={skeletalMuscleKg}
+                  onChangeText={setSkeletalMuscleKg}
+                  placeholder="예: 33.1"
+                  containerStyle={styles.flexItem}
+                />
+              </View>
+              <ThemedText type="caption" themeColor="textSecondary">
+                체지방률/골격근량은 인바디 등에서 직접 잰 값만 넣어요. 앱이 추정하지 않아요.
+              </ThemedText>
+              {photoUri ? (
+                <View style={styles.photoPreviewRow}>
+                  <PhotoSlot label="이번 사진" photoUri={photoUri} />
+                </View>
+              ) : canAddPhotoToday ? (
+                <PrimaryButton label="사진 추가 (선택)" variant="secondary" onPress={handlePickPhoto} />
+              ) : (
+                <ThemedText type="caption" themeColor="textSecondary">
+                  오늘 사진 업데이트는 이미 사용했어요. 다음 업데이트는 {nextPhotoAvailableDate}부터
+                  가능해요.
+                </ThemedText>
+              )}
+              {error && (
+                <ThemedText type="small" style={{ color: theme.mutedRed }}>
+                  {error}
+                </ThemedText>
+              )}
+              <View style={styles.inlineRow}>
+                <PrimaryButton
+                  label="취소"
+                  variant="secondary"
+                  style={styles.flexItem}
+                  onPress={() => setAddEntryOpen(false)}
+                />
+                <PrimaryButton label="기록 추가" style={styles.flexItem} onPress={handleAddEntry} />
+              </View>
             </View>
-          ) : canAddPhotoToday ? (
-            <PrimaryButton label="사진 추가 (선택)" variant="secondary" onPress={handlePickPhoto} />
           ) : (
-            <ThemedText type="caption" themeColor="textSecondary">
-              오늘 사진 업데이트는 이미 사용했어요. 다음 업데이트는 {nextPhotoAvailableDate}부터 가능해요.
-            </ThemedText>
-          )}
-          {error && (
-            <ThemedText type="small" style={{ color: theme.mutedRed }}>
-              {error}
-            </ThemedText>
-          )}
-          <View style={styles.inlineRow}>
             <PrimaryButton
-              label="취소"
+              label="오늘 체중/사진 기록 추가"
               variant="secondary"
-              style={styles.flexItem}
-              onPress={() => setAddEntryOpen(false)}
+              onPress={() => setAddEntryOpen(true)}
             />
-            <PrimaryButton label="기록 추가" style={styles.flexItem} onPress={handleAddEntry} />
-          </View>
+          )}
         </Section>
-      ) : (
-        <PrimaryButton
-          label="오늘 체중/사진 기록 추가"
-          variant="secondary"
-          onPress={() => setAddEntryOpen(true)}
-        />
       )}
 
-      {manualOpen ? (
-        <Section title="놓친 운동 기록 추가">
+      {/* 놓친 기록 채우기와 전체 기록 보기는 History의 보조 기능이다 —
+          Primary 버튼처럼 보이지 않게 텍스트 액션으로 둔다. */}
+      <View style={styles.secondaryActions}>
+        <Pressable onPress={() => setManualOpen((v) => !v)} hitSlop={8}>
+          <ThemedText type="captionBold" themeColor="textSecondary">
+            {manualOpen ? '놓친 운동 기록 닫기' : '놓친 운동 기록 추가'}
+          </ThemedText>
+        </Pressable>
+        <Pressable onPress={() => setFullListOpen((v) => !v)} hitSlop={8}>
+          <ThemedText type="captionBold" themeColor="textSecondary">
+            {fullListOpen ? '전체 기록 접기 ︿' : '전체 기록 보기 ﹀'}
+          </ThemedText>
+        </Pressable>
+      </View>
+
+      {manualOpen && (
+        <Section title="놓친 운동 기록">
           <ThemedText type="caption" themeColor="textSecondary">
-            실시간 세션 없이 이미 끝난 운동을 나중에 기록할 때만 써요. 홈의 [운동 시작]을 쓰면 이 입력
-            없이 자동으로 기록돼요.
+            이미 끝난 운동을 나중에 기록할 때만 써요. [운동 시작]으로 하면 이 입력 없이 자동으로
+            기록돼요.
           </ThemedText>
           <ChipRow>
             {WorkoutCategories.map((item) => (
@@ -390,30 +479,14 @@ export default function HistoryScreen() {
               {manualError}
             </ThemedText>
           )}
-          <View style={styles.inlineRow}>
-            <PrimaryButton
-              label="닫기"
-              variant="secondary"
-              style={styles.flexItem}
-              onPress={() => setManualOpen(false)}
-            />
-            <PrimaryButton label="기록 추가" style={styles.flexItem} onPress={handleAddManualRecord} />
-          </View>
+          <PrimaryButton label="기록 추가" variant="secondary" onPress={handleAddManualRecord} />
           {manualReaction && (
             <ThemedText type="caption" themeColor="textSecondary">
               {StanleyTrainer.portraitPlaceholder} {manualReaction}
             </ThemedText>
           )}
         </Section>
-      ) : (
-        <PrimaryButton label="놓친 운동 기록 추가" variant="secondary" onPress={() => setManualOpen(true)} />
       )}
-
-      <Pressable onPress={() => setFullListOpen((v) => !v)} style={styles.fullListToggle} hitSlop={8}>
-        <ThemedText type="captionBold" style={{ color: theme.gold }}>
-          {fullListOpen ? '전체 기록 접기 ︿' : '전체 기록 보기 ﹀'}
-        </ThemedText>
-      </Pressable>
 
       {fullListOpen && (
         <Section>
@@ -504,6 +577,9 @@ const styles = StyleSheet.create({
   centered: {
     textAlign: 'center',
   },
+  formBlock: {
+    gap: Spacing.two,
+  },
   photoPreviewRow: {
     flexDirection: 'row',
   },
@@ -514,7 +590,9 @@ const styles = StyleSheet.create({
   flexItem: {
     flex: 1,
   },
-  fullListToggle: {
+  secondaryActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Spacing.one,
   },

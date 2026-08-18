@@ -12,6 +12,11 @@ export interface BodyHistoryEntry {
   date: string;
   weightKg: number;
   bodyFatPercent?: number;
+  /**
+   * 골격근량(kg). 인바디 등 외부 측정값을 사용자가 직접 넣는 자리다 —
+   * 앱이 운동 기록으로부터 추정해서 채우지 않는다. 없으면 UI에서 '-'로 표시한다.
+   */
+  skeletalMuscleKg?: number;
   bodyPresetId?: string;
   bodyParameters?: BodyParameters;
   source: BodyHistorySource;
