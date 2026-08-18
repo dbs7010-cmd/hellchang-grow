@@ -1,70 +1,44 @@
-import { useRef, useState } from 'react';
-import {
-  Dimensions,
-  LayoutChangeEvent,
-  Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { useMemo, useState } from 'react';
+import { LayoutChangeEvent, Modal, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  Character3DViewerProps,
+  CharacterFrontRotationDeg,
+  CharacterRotationDegreesPerPixel,
+  normalizeRotationDeg,
+} from '@/components/character/character-3d-viewer';
 import { CharacterIntrinsicHeight, CharacterSilhouette } from '@/components/character/character-silhouette';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CharacterAngleLabels, CharacterAngles } from '@/config/character-assets';
-import { Layout, Radius, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-import { GenderExpression } from '@/types/user';
+import { PlayerCharacterModel } from '@/config/character-assets';
+import { Layout, Spacing } from '@/constants/theme';
 
-export interface CharacterViewerProps {
-  visible: boolean;
-  onClose: () => void;
-  genderExpression: GenderExpression;
-  size: number;
-  tone: number;
-}
+export type CharacterViewerProps = Character3DViewerProps;
 
 /** 뷰어의 캐릭터는 홈보다 커야 한다 — 다만 placeholder 도형이 흐려지지 않게 상한을 둔다. */
 const MAX_VIEWER_SCALE = 1.6;
 
 /**
- * 캐릭터 360도 뷰어. 진짜 3D가 아니라 방향별 이미지 slot(front/front-side/side/back-side/back)을
- * 가로 스와이프로 넘기는 구조 — CharacterSilhouette가 각 슬롯을 그린다.
+ * CHARACTER 360.
  *
- * 하단 표시는 의미 없는 page dot이 아니라 "지금 어느 방향을 보고 있는지"를 그대로 보여주는
- * 회전 상태 트랙이다 (dot만 있으면 사진 carousel로 오해된다). 각 방향은 눌러서 바로 갈 수 있다.
+ * 최종 사양은 실제 3D 캐릭터 모델을 좌우 드래그로 Y축 연속 회전시키는 뷰어다
+ * (components/character/character-3d-viewer.ts에 계약을 적어뒀다).
+ * 이 화면은 그 상호작용 계약을 이미 그대로 구현한다:
+ *  - 좌우 드래그로만 회전하고, 세로 제스처는 각도에 반영하지 않는다 (상하 회전 금지)
+ *  - 카메라(=캐릭터 stage의 크기/위치)는 고정이고 캐릭터만 수평으로 돈다
+ *  - 열 때마다 정면(0°)에서 시작한다
+ *  - 스냅/페이지/방향 버튼/page dot이 없다 — 각도는 연속값 하나뿐이다
+ *  - pinch zoom 없음 (V1 불필요)
  *
- * 캐릭터는 실제 페이지 높이를 재서 그 높이에 맞춰 확대된다 — placeholder든 실제 아트든
- * 레이아웃이 흔들리지 않는다.
+ * 지금 최종과 다른 건 "무엇을 그리는가" 하나뿐이다: PlayerCharacterModel이 비어 있는 동안
+ * 임시 placeholder(CharacterSilhouette)를 같은 각도로 돌려서 보여준다.
+ *
+ * TODO(character-3d): PlayerCharacterModel이 채워지면 CharacterStage 안의 placeholder를
+ * Character3DViewer 렌더로 교체한다. 제스처/각도/레이아웃은 그대로 쓴다.
  */
 export function CharacterViewer({ visible, onClose, genderExpression, size, tone }: CharacterViewerProps) {
-  const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
-  const [pageIndex, setPageIndex] = useState(0);
-  const [pageHeight, setPageHeight] = useState(0);
-  const screenWidth = Dimensions.get('window').width;
-
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
-    setPageIndex(Math.max(0, Math.min(CharacterAngles.length - 1, index)));
-  };
-
-  const handlePagerLayout = (event: LayoutChangeEvent) => {
-    setPageHeight(event.nativeEvent.layout.height);
-  };
-
-  const goToAngle = (index: number) => {
-    setPageIndex(index);
-    scrollRef.current?.scrollTo({ x: index * screenWidth, animated: true });
-  };
-
-  const characterScale =
-    pageHeight > 0 ? Math.min(MAX_VIEWER_SCALE, pageHeight / CharacterIntrinsicHeight) : 1;
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
@@ -78,58 +52,76 @@ export function CharacterViewer({ visible, onClose, genderExpression, size, tone
           </Pressable>
         </View>
 
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={handleScroll}
-          onLayout={handlePagerLayout}
-          style={styles.pager}>
-          {CharacterAngles.map((angle) => (
-            <View key={angle} style={[styles.page, { width: screenWidth }]}>
-              <CharacterSilhouette
-                genderExpression={genderExpression}
-                size={size}
-                tone={tone}
-                angle={angle}
-                idle={false}
-                scale={characterScale}
-              />
-            </View>
-          ))}
-        </ScrollView>
+        {/* visible일 때만 마운트한다 — 그래서 다시 열면 회전 상태가 자연히 정면으로 돌아간다. */}
+        {visible && <CharacterStage genderExpression={genderExpression} size={size} tone={tone} />}
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.four }]}>
-          {/* 회전 상태 트랙 — 현재 방향이 어디인지 그대로 읽힌다. */}
-          <View style={styles.angleTrack}>
-            {CharacterAngles.map((angle, index) => {
-              const active = index === pageIndex;
-              return (
-                <Pressable
-                  key={angle}
-                  onPress={() => goToAngle(index)}
-                  hitSlop={6}
-                  style={[
-                    styles.angleChip,
-                    active && { backgroundColor: theme.backgroundSelected, borderColor: theme.gold },
-                  ]}>
-                  <ThemedText
-                    type="caption"
-                    themeColor={active ? 'text' : 'textSecondary'}
-                    style={active ? { color: theme.gold } : undefined}>
-                    {CharacterAngleLabels[angle]}
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
-          </View>
-          <ThemedText type="caption" themeColor="textSecondary">
+          <ThemedText type="small" themeColor="textSecondary">
             드래그해서 돌려보기
           </ThemedText>
         </View>
       </ThemedView>
     </Modal>
+  );
+}
+
+/**
+ * 회전 상태를 들고 있는 무대. 카메라는 고정이므로 이 박스의 크기/위치는 회전과 무관하다.
+ *
+ * 각도를 "놓은 시점까지 누적된 각도(baseRotation)"와 "지금 드래그 중인 변화량(dragDelta)"으로
+ * 나눠서 들고 있는다 — 그래야 제스처 핸들러가 현재 각도를 되읽지 않아도 되고, 손을 뗀 각도가
+ * 스냅 없이 그대로 유지된다.
+ */
+function CharacterStage({ genderExpression, size, tone }: Omit<Character3DViewerProps, 'visible' | 'onClose'>) {
+  const [baseRotationDeg, setBaseRotationDeg] = useState(CharacterFrontRotationDeg);
+  const [dragDeltaDeg, setDragDeltaDeg] = useState(0);
+  const [stageHeight, setStageHeight] = useState(0);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        // 가로 이동이 세로보다 클 때만 회전 제스처로 받는다.
+        onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) > Math.abs(gesture.dy),
+        // gesture.dx는 잡은 지점부터의 누적 이동이라 dy를 볼 필요가 없다 (상하 회전 금지).
+        onPanResponderMove: (_event, gesture) => {
+          setDragDeltaDeg(gesture.dx * CharacterRotationDegreesPerPixel);
+        },
+        onPanResponderRelease: (_event, gesture) => {
+          // 스냅하지 않는다 — 놓은 각도가 그대로 유지된다 (방향 슬롯이 아니라 연속 회전).
+          setBaseRotationDeg((previous) =>
+            normalizeRotationDeg(previous + gesture.dx * CharacterRotationDegreesPerPixel)
+          );
+          setDragDeltaDeg(0);
+        },
+        onPanResponderTerminate: () => {
+          setDragDeltaDeg(0);
+        },
+      }),
+    []
+  );
+
+  const handleLayout = (event: LayoutChangeEvent) => {
+    setStageHeight(event.nativeEvent.layout.height);
+  };
+
+  const rotationYDeg = normalizeRotationDeg(baseRotationDeg + dragDeltaDeg);
+  const characterScale =
+    stageHeight > 0 ? Math.min(MAX_VIEWER_SCALE, stageHeight / CharacterIntrinsicHeight) : 1;
+
+  return (
+    <View style={styles.stage} onLayout={handleLayout} {...panResponder.panHandlers}>
+      {PlayerCharacterModel ? null : (
+        <CharacterSilhouette
+          genderExpression={genderExpression}
+          size={size}
+          tone={tone}
+          rotationYDeg={rotationYDeg}
+          idle={false}
+          scale={characterScale}
+        />
+      )}
+    </View>
   );
 }
 
@@ -144,27 +136,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Layout.screenPaddingX,
     paddingVertical: Spacing.three,
   },
-  pager: {
+  stage: {
     flex: 1,
-  },
-  page: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   footer: {
     alignItems: 'center',
-    gap: Spacing.two,
     paddingHorizontal: Layout.screenPaddingX,
-  },
-  angleTrack: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-  },
-  angleChip: {
-    borderWidth: 1,
-    borderColor: 'transparent',
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
   },
 });

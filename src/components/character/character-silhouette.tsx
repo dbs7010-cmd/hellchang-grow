@@ -20,7 +20,16 @@ export interface CharacterSilhouetteProps {
   size: number;
   /** 0-100, 근육 톤/선명도 보정값 */
   tone: number;
+  /**
+   * @deprecated 임시 fallback 전용 — 3D 모델이 들어오면 사라진다.
+   * rotationYDeg가 주어지면 무시된다.
+   */
   angle?: CharacterAngle;
+  /**
+   * Y축 회전 각도(도). 0 = 정면. 360 뷰어가 좌우 드래그로 이 값을 연속으로 바꾼다.
+   * 방향 슬롯(angle)과 달리 값이 이산적이지 않다 — 최종 3D 뷰어와 같은 회전 표현이다.
+   */
+  rotationYDeg?: number;
   /** 미세한 breathing idle 애니메이션 (60 ALIVE). 360 뷰어 등에서는 꺼둘 수 있다. */
   idle?: boolean;
   /**
@@ -57,6 +66,7 @@ export function CharacterSilhouette({
   size,
   tone,
   angle = 'front',
+  rotationYDeg,
   idle = true,
   scale = 1,
 }: CharacterSilhouetteProps) {
@@ -82,7 +92,10 @@ export function CharacterSilhouette({
     transform: [{ translateY: breatheY.value }],
   }));
 
-  const image = PlayerCharacterImages[angle];
+  // 방향별 이미지 fallback. 연속 회전(rotationYDeg) 중에는 쓰지 않는다 —
+  // 이산적인 5장으로는 연속 회전을 표현할 수 없기 때문이다.
+  // TODO(character-3d): PlayerCharacterModel 투입 시 이 분기를 통째로 제거한다.
+  const image = rotationYDeg === undefined ? PlayerCharacterImages[angle] : undefined;
   if (image) {
     return <Image source={image} style={styles.image} contentFit="contain" />;
   }
@@ -90,7 +103,7 @@ export function CharacterSilhouette({
   const shoulderWidth = 90 + (size / 100) * 60;
   const waistWidth = 46 + (size / 100) * 30;
   const definition = 1 + (tone / 100) * 3;
-  const rotateDeg = ANGLE_ROTATION_DEG[angle];
+  const rotateDeg = rotationYDeg ?? ANGLE_ROTATION_DEG[angle];
   const rimAccent = genderExpression === 'female' ? '#F0B8D9' : theme.goldBright;
   const bodyLine = theme.border;
 
