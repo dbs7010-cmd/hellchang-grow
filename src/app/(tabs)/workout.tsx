@@ -80,7 +80,7 @@ export default function WorkoutScreen() {
 
   return (
     <ScreenScroll>
-      <ThemedText type="subtitle">운동</ThemedText>
+      <ThemedText type="heading">운동</ThemedText>
 
       <SectionCard title="내 루틴">
         {routines.length === 0 ? (

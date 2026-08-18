@@ -233,6 +233,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   bubbleRow: {
+    width: '100%',
     alignItems: 'flex-end',
   },
   suggestionLine: {

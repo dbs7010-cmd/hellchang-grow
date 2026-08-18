@@ -16,7 +16,7 @@ export function ScreenScroll({ children }: { children: ReactNode }) {
       <ThemedView
         style={[
           styles.container,
-          { paddingTop: insets.top + Spacing.four, paddingBottom: BottomTabInset + Spacing.four },
+          { paddingTop: insets.top + Spacing.three, paddingBottom: BottomTabInset + Spacing.six },
         ]}>
         {children}
       </ThemedView>
@@ -37,6 +37,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    gap: Spacing.three,
   },
 });

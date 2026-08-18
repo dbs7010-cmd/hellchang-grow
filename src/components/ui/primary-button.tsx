@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
   },
   buttonLarge: {
-    minHeight: 108,
+    minHeight: 80,
     borderRadius: Radius.large,
   },
   subLabel: {

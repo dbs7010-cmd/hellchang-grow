@@ -54,7 +54,7 @@ export function GoldsunReaction({
 
   return (
     <Animated.View style={[styles.wrapper, animatedStyle]} pointerEvents="box-none">
-      <Pressable onPress={onDismiss}>
+      <Pressable onPress={onDismiss} style={styles.pressable}>
         <GoldsunBubble portrait={portrait} name={name} text={text} onPress={onDismiss} />
       </Pressable>
     </Animated.View>
@@ -63,6 +63,10 @@ export function GoldsunReaction({
 
 const styles = StyleSheet.create({
   wrapper: {
+    width: '100%',
     alignItems: 'flex-end',
+  },
+  pressable: {
+    width: '100%',
   },
 });

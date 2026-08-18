@@ -129,7 +129,7 @@ export default function WorkoutStartScreen() {
 
   return (
     <ScreenScroll>
-      <ThemedText type="subtitle">오늘 운동</ThemedText>
+      <ThemedText type="heading">오늘 운동</ThemedText>
 
       {scheduledRoutine && !showBodyPartPicker && (
         <SectionCard title={`오늘 · ${scheduledRoutine.name}`}>

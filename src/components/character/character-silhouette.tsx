@@ -23,6 +23,11 @@ export interface CharacterSilhouetteProps {
   angle?: CharacterAngle;
   /** 미세한 breathing idle 애니메이션 (60 ALIVE). 360 뷰어 등에서는 꺼둘 수 있다. */
   idle?: boolean;
+  /**
+   * 히스토리 미니 프리뷰처럼 작은 고정 박스 안에 넣을 때 쓰는 축소 배율.
+   * 내부 도형은 고정 픽셀 크기라, scale 없이 작은 박스에 넣으면 카드/인접 콘텐츠를 침범한다.
+   */
+  scale?: number;
 }
 
 const ANGLE_ROTATION_DEG: Record<CharacterAngle, number> = {
@@ -45,6 +50,7 @@ export function CharacterSilhouette({
   tone,
   angle = 'front',
   idle = true,
+  scale = 1,
 }: CharacterSilhouetteProps) {
   const theme = useTheme();
   const breatheY = useSharedValue(0);
@@ -81,52 +87,57 @@ export function CharacterSilhouette({
   const bodyLine = theme.border;
 
   return (
-    <View style={styles.wrapper}>
-      {/* graphite gym backdrop + 은은한 warm ceiling light */}
-      <View style={[styles.backdropGlow, { backgroundColor: theme.gold, opacity: 0.06 }]} />
-      <View style={[styles.contactShadow, { backgroundColor: theme.backgroundDeep }]} />
+    // scale이 있을 때(작은 고정 박스에 넣는 경우)는 wrapper 스스로도 그 박스 높이(100%)를 꽉
+    // 채워야 내부 콘텐츠가 "박스 중앙"을 기준으로 축소된다. 그렇지 않으면 wrapper가 원본
+    // 크기(약 400px)로 커진 뒤 그 중앙을 기준으로 줄어들어, 보이는 영역 밖으로 밀려난다.
+    <View style={[styles.wrapper, scale !== 1 && styles.wrapperFitted]}>
+      <View style={[styles.scaleGroup, scale !== 1 && { transform: [{ scale }] }]}>
+        {/* graphite gym backdrop + 은은한 warm ceiling light */}
+        <View style={[styles.backdropGlow, { backgroundColor: theme.gold, opacity: 0.06 }]} />
+        <View style={[styles.contactShadow, { backgroundColor: theme.backgroundDeep }]} />
 
-      <Animated.View
-        style={[
-          styles.rig,
-          breatheStyle,
-          { transform: [{ perspective: 900 }, { rotateY: `${rotateDeg}deg` }] },
-        ]}>
-        <View style={[styles.head, { borderColor: rimAccent, backgroundColor: theme.backgroundSelected }]} />
-        <View style={[styles.neck, { backgroundColor: theme.backgroundSelected }]} />
-        <View
+        <Animated.View
           style={[
-            styles.torso,
-            {
-              width: shoulderWidth,
-              borderWidth: definition,
-              borderColor: bodyLine,
-              backgroundColor: theme.backgroundSelected,
-            },
+            styles.rig,
+            breatheStyle,
+            { transform: [{ perspective: 900 }, { rotateY: `${rotateDeg}deg` }] },
           ]}>
-          {/* 어깨 rim light — 캐릭터 전체가 아니라 상단 어깨 라인에만 */}
-          <View style={[styles.shoulderRim, { backgroundColor: rimAccent, width: shoulderWidth * 0.9 }]} />
+          <View style={[styles.head, { borderColor: rimAccent, backgroundColor: theme.backgroundSelected }]} />
+          <View style={[styles.neck, { backgroundColor: theme.backgroundSelected }]} />
           <View
             style={[
-              styles.waist,
-              { width: waistWidth, borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected },
-            ]}
-          />
-        </View>
-        <View style={styles.armRow}>
-          <View style={[styles.arm, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
-          <View style={{ width: shoulderWidth * 0.55 }} />
-          <View style={[styles.arm, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
-        </View>
-        <View style={styles.legRow}>
-          <View style={[styles.leg, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
-          <View style={[styles.leg, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
-        </View>
-        <View style={styles.shoeRow}>
-          <View style={[styles.shoe, { backgroundColor: theme.gold }]} />
-          <View style={[styles.shoe, { backgroundColor: theme.gold }]} />
-        </View>
-      </Animated.View>
+              styles.torso,
+              {
+                width: shoulderWidth,
+                borderWidth: definition,
+                borderColor: bodyLine,
+                backgroundColor: theme.backgroundSelected,
+              },
+            ]}>
+            {/* 어깨 rim light — 캐릭터 전체가 아니라 상단 어깨 라인에만 */}
+            <View style={[styles.shoulderRim, { backgroundColor: rimAccent, width: shoulderWidth * 0.9 }]} />
+            <View
+              style={[
+                styles.waist,
+                { width: waistWidth, borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected },
+              ]}
+            />
+          </View>
+          <View style={styles.armRow}>
+            <View style={[styles.arm, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
+            <View style={{ width: shoulderWidth * 0.55 }} />
+            <View style={[styles.arm, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
+          </View>
+          <View style={styles.legRow}>
+            <View style={[styles.leg, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
+            <View style={[styles.leg, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
+          </View>
+          <View style={styles.shoeRow}>
+            <View style={[styles.shoe, { backgroundColor: theme.gold }]} />
+            <View style={[styles.shoe, { backgroundColor: theme.gold }]} />
+          </View>
+        </Animated.View>
+      </View>
     </View>
   );
 }
@@ -134,6 +145,13 @@ export function CharacterSilhouette({
 const styles = StyleSheet.create({
   wrapper: {
     width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wrapperFitted: {
+    height: '100%',
+  },
+  scaleGroup: {
     alignItems: 'center',
     justifyContent: 'center',
   },

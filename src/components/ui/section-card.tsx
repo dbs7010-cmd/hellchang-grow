@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 
 export function SectionCard({ title, children }: { title?: string; children: ReactNode }) {
   return (
@@ -20,11 +20,11 @@ export function SectionCard({ title, children }: { title?: string; children: Rea
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Spacing.four,
-    padding: Spacing.four,
-    gap: Spacing.three,
+    borderRadius: Radius.large,
+    padding: Spacing.three,
+    gap: Spacing.two,
   },
   title: {
-    marginBottom: Spacing.one,
+    marginBottom: Spacing.half,
   },
 });

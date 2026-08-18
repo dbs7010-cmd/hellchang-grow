@@ -42,7 +42,7 @@ export default function SettingsScreen() {
 
   return (
     <ScreenScroll>
-      <ThemedText type="subtitle">내 정보 / 설정</ThemedText>
+      <ThemedText type="heading">내 정보 / 설정</ThemedText>
 
       <SectionCard title="내 정보">
         {profile ? (

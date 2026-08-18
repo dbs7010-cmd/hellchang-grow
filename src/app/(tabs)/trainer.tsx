@@ -9,7 +9,7 @@ import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { SectionCard } from '@/components/ui/section-card';
 import { AiPtPanel } from '@/components/trainer/ai-pt-panel';
 import { StanleyTrainer } from '@/config/trainers';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { useTheme } from '@/hooks/use-theme';
 import { getTodayRecords } from '@/data/workout-repository';
@@ -58,10 +58,12 @@ export default function TrainerScreen() {
   return (
     <ScreenScroll>
       <View style={styles.header}>
-        <ThemedView type="backgroundSelected" style={[styles.portrait, { borderColor: theme.gold }]}>
+        {/* 실제 골드썬 반신 아트가 들어올 자리 — emoji 크기가 아니라 인물 사진 비율(세로가 긴 카드)로
+            미리 확보해둔다. 지금은 그 안에 emoji placeholder만 중앙에 띄운다. */}
+        <ThemedView type="backgroundSelected" style={[styles.portraitSlot, { borderColor: theme.gold }]}>
           <ThemedText style={styles.portraitEmoji}>{StanleyTrainer.portraitPlaceholder}</ThemedText>
         </ThemedView>
-        <ThemedText type="subtitle" style={{ color: theme.gold }}>
+        <ThemedText type="heading" style={{ color: theme.gold }}>
           {StanleyTrainer.displayName}
         </ThemedText>
       </View>
@@ -132,16 +134,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  portrait: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  portraitSlot: {
+    width: 128,
+    height: 168,
+    borderRadius: Radius.large,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   portraitEmoji: {
-    fontSize: 36,
+    fontSize: 48,
   },
   chipRow: {
     flexDirection: 'row',

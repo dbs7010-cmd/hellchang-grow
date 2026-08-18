@@ -152,7 +152,7 @@ export default function HistoryScreen() {
 
   return (
     <ScreenScroll>
-      <ThemedText type="subtitle">히스토리</ThemedText>
+      <ThemedText type="heading">히스토리</ThemedText>
 
       <SectionCard title="이번 주">
         <StatRow>
@@ -272,6 +272,7 @@ export default function HistoryScreen() {
                 size={profile.bodyParameters.size}
                 tone={profile.bodyParameters.tone}
                 idle={false}
+                scale={0.3}
               />
             </View>
             <PrimaryButton label="360도 보기" variant="secondary" onPress={() => setViewerOpen(true)} />
@@ -388,7 +389,8 @@ const styles = StyleSheet.create({
   },
   characterPreview: {
     width: 90,
-    height: 130,
+    height: 110,
+    overflow: 'hidden',
   },
   chipRow: {
     flexDirection: 'row',
