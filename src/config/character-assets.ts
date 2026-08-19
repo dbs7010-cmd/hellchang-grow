@@ -1,5 +1,8 @@
 import { ImageSourcePropType } from 'react-native';
 
+import { CharacterGrowthStage } from '@/config/character-growth';
+import { GenderExpression } from '@/types/user';
+
 /**
  * ─────────────────────────────────────────────────────────────────────────────
  * CHARACTER ASSET REGISTRY
@@ -18,7 +21,25 @@ import { ImageSourcePropType } from 'react-native';
 /** 2D 캐릭터가 쓰이는 자리. 슬롯이 늘어도 화면 코드는 이 유니온만 본다. */
 export type CharacterAssetSlot = 'home' | 'history' | 'result';
 
+/** 성별 × 성장 단계별 2D 에셋. 채운 조합만 쓰이고, 나머지는 아래 단일 슬롯으로 떨어진다. */
+export type CharacterGrowthImageMap = Partial<
+  Record<GenderExpression, Partial<Record<CharacterGrowthStage, ImageSourcePropType>>>
+>;
+
+/** 성별 × 성장 단계별 3D 모델(.glb). 2D와 같은 성장 단계로 고른다. */
+export type CharacterGrowthModelMap = Partial<
+  Record<GenderExpression, Partial<Record<CharacterGrowthStage, unknown>>>
+>;
+
 export interface PlayerCharacterAssetRegistry {
+  /**
+   * 성장 단계별 메인 2D. 파일명 규칙: char_{gender}_{stage}.png
+   * 예) growth: { male: { stage1: require('.../char_male_stage1.png') } }
+   *
+   * 단계별 에셋이 최우선이고, 해당 조합이 비어 있으면 아래 단일 슬롯(home/history/result)을
+   * 쓴다. "가까운 다른 단계"로 대체하지 않는다 — 사용자가 엉뚱한 단계를 보게 되기 때문이다.
+   */
+  growth?: CharacterGrowthImageMap;
   /** 메인 전신 2D. 나머지 슬롯의 기본값이기도 하다. */
   home?: ImageSourcePropType;
   /** 히스토리 [몸 변화] 미니 프리뷰. 비우면 home을 쓴다. */
@@ -30,8 +51,12 @@ export interface PlayerCharacterAssetRegistry {
    */
   result?: ImageSourcePropType;
   /**
-   * CHARACTER 360용 3D 모델(.glb / .gltf).
-   * 예) model3d: require('../../assets/characters/player/player.glb')
+   * 성장 단계별 3D 모델. 파일명 규칙: char_{gender}_{stage}.glb
+   * 2D와 같은 성장 단계(resolveCharacterGrowth 결과)로 고른다.
+   */
+  growthModels3d?: CharacterGrowthModelMap;
+  /**
+   * 단계 구분이 없는 단일 3D 모델. growthModels3d에 해당 조합이 없을 때 쓴다.
    *
    * 타입을 unknown으로 둔 이유: 지금은 3D 렌더링 dependency가 없어서 모델 소스 타입을
    * 확정할 수 없다. 렌더러를 도입할 때 그 라이브러리의 소스 타입으로 좁힌다.
@@ -49,16 +74,47 @@ export interface PlayerCharacterAssetRegistry {
 export const PlayerCharacterAssets: PlayerCharacterAssetRegistry = {};
 
 /**
- * 슬롯에 맞는 2D 에셋을 고른다. 전용 에셋이 없으면 메인(home) 캐릭터로 떨어진다 —
- * 화면마다 다른 캐릭터처럼 보이지 않게 하기 위해서다.
+ * 화면 슬롯 + 성별 + 성장 단계에 맞는 2D 에셋을 고른다.
+ *
+ * 우선순위:
+ *   1. growth[gender][stage]      — 성장 단계 전용 에셋
+ *   2. PlayerCharacterAssets[slot] — 단계 구분 없는 화면별 에셋
+ *   3. PlayerCharacterAssets.home  — 메인 캐릭터
+ *   4. undefined                   — 호출부가 중립 placeholder를 그린다
+ *
+ * 화면마다 다른 캐릭터처럼 보이지 않게 항상 같은 identity로 떨어진다.
  */
-export function resolveCharacterAsset(slot: CharacterAssetSlot): ImageSourcePropType | undefined {
-  return PlayerCharacterAssets[slot] ?? PlayerCharacterAssets.home;
+export function resolveCharacterAsset(
+  slot: CharacterAssetSlot,
+  genderExpression?: GenderExpression,
+  stage?: CharacterGrowthStage
+): ImageSourcePropType | undefined {
+  const staged =
+    genderExpression && stage ? PlayerCharacterAssets.growth?.[genderExpression]?.[stage] : undefined;
+  return staged ?? PlayerCharacterAssets[slot] ?? PlayerCharacterAssets.home;
+}
+
+/**
+ * CHARACTER 360이 쓸 3D 모델을 고른다. 단계별 모델이 없으면 단일 모델로 떨어진다.
+ * 여기서 모델을 로딩하지 않는다 — 존재 여부만 돌려준다.
+ */
+export function resolveCharacterModel(
+  genderExpression?: GenderExpression,
+  stage?: CharacterGrowthStage
+): unknown | undefined {
+  const staged =
+    genderExpression && stage
+      ? PlayerCharacterAssets.growthModels3d?.[genderExpression]?.[stage]
+      : undefined;
+  return staged ?? PlayerCharacterAssets.model3d;
 }
 
 /** 3D 모델이 준비됐는지. CHARACTER 360만 이 값을 본다. */
-export function hasPlayerCharacterModel(): boolean {
-  return PlayerCharacterAssets.model3d !== undefined;
+export function hasPlayerCharacterModel(
+  genderExpression?: GenderExpression,
+  stage?: CharacterGrowthStage
+): boolean {
+  return resolveCharacterModel(genderExpression, stage) !== undefined;
 }
 
 /**

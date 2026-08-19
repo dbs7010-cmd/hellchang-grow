@@ -31,7 +31,6 @@ import { WorkoutCategory, WorkoutIntensity } from '@/types/workout';
 import { todayDateString } from '@/utils/date';
 import { countPeriodPRs } from '@/utils/exercise-history';
 import { buildHistoryDays } from '@/utils/history';
-import { characterAppearanceFromProfile } from '@/utils/character-appearance';
 import { buildRecommendationContext } from '@/utils/recommendation-context';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import { buildPeriodChart, formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
@@ -71,6 +70,7 @@ export default function HistoryScreen() {
     deleteWorkoutRecord,
     canAddPhotoToday,
     nextPhotoAvailableDate,
+    characterAppearance,
   } = useAppData();
 
   const [period, setPeriod] = useState<Period>('week');
@@ -283,7 +283,7 @@ export default function HistoryScreen() {
             <View style={[styles.characterPreview, { backgroundColor: theme.backgroundElement }]}>
               {/* 홈과 같은 캐릭터 identity — 크기만 다르다. */}
               <PlayerCharacter
-                appearance={characterAppearanceFromProfile(profile)}
+                appearance={characterAppearance}
                 slot="history"
                 height={BODY_PREVIEW_HEIGHT}
               />
@@ -541,6 +541,7 @@ export default function HistoryScreen() {
           genderExpression={profile.genderExpression}
           size={profile.bodyParameters.size}
           tone={profile.bodyParameters.tone}
+          growthStage={characterAppearance.growthStage}
         />
       )}
     </ScreenScroll>

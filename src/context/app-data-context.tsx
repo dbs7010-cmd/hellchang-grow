@@ -61,6 +61,8 @@ import { todayDateString, tomorrowDateString } from '@/utils/date';
 import { PrEvent, detectPRs } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
 import { addXp, computePassLevelProgress } from '@/utils/pass';
+import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/character-appearance';
+import { CharacterGrowthResult, resolveCharacterGrowth } from '@/utils/character-growth-resolver';
 import {
   addExerciseToSession as addExerciseToSessionPure,
   addSetToExercise as addSetToExercisePure,
@@ -121,6 +123,13 @@ interface AppDataContextValue extends AppDataState {
   /** canAddPhotoToday가 false일 때, 다음으로 가능한 날짜 (YYYY-MM-DD) */
   nextPhotoAvailableDate: string;
   passProgress: ReturnType<typeof computePassLevelProgress>;
+  /**
+   * 캐릭터 성장 계산 결과. 앱 전체에서 여기 한 번만 계산한다 —
+   * 화면이 각자 성장 규칙을 구현하지 않는다.
+   */
+  characterGrowth: CharacterGrowthResult;
+  /** 캐릭터 렌더러(PlayerCharacter)에 그대로 넘기는 외형 view-model. */
+  characterAppearance: CharacterAppearance;
   completeOnboarding: (input: {
     profile: Omit<UserProfile, 'id' | 'createdAt'>;
     photoUri?: string;
@@ -666,6 +675,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const today = todayDateString();
   const canAddPhotoToday = __DEV__ || !hasReachedDailyPhotoLimit(state.bodyHistory, today);
 
+  // 성장 단계는 여기서 딱 한 번 계산해 모든 화면이 같은 값을 본다.
+  // HELL PASS Lv(passProgress)와는 별개의 개념이라 서로 파생시키지 않는다.
+  const characterGrowth = resolveCharacterGrowth({
+    workoutRecords: state.workoutRecords,
+    passXp: state.pass.xp,
+    bodyHistory: state.bodyHistory,
+  });
+  const characterAppearance = characterAppearanceFromProfile(state.profile, characterGrowth.stage);
+
   const value: AppDataContextValue = {
     ...state,
     hasSubscriptionAccess: isSubscribed,
@@ -673,6 +691,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     canAddPhotoToday,
     nextPhotoAvailableDate: tomorrowDateString(today),
     passProgress: computePassLevelProgress(state.pass.xp),
+    characterGrowth,
+    characterAppearance,
     completeOnboarding,
     updateProfile,
     addWorkoutRecord,

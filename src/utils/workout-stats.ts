@@ -1,4 +1,4 @@
-import { WorkoutRecord } from '@/types/workout';
+import type { WorkoutRecord } from '@/types/workout';
 
 /**
  * 완료된 세트(무게 x 횟수)만 합산한 총 볼륨(kg).

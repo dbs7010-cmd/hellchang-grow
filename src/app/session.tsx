@@ -30,7 +30,6 @@ import { SessionExerciseEntry, WorkoutSession } from '@/types/workout-session';
 import { detectPRs, findPreviousPerformance, PrEvent } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
-import { characterAppearanceFromProfile } from '@/utils/character-appearance';
 import { formatVolumeKg } from '@/utils/workout-stats';
 import {
   computeElapsedSeconds,
@@ -585,7 +584,7 @@ function getTodayRecordCount(records: WorkoutRecord[]): number {
 function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine; onConfirm: () => void }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { profile } = useAppData();
+  const { characterAppearance } = useAppData();
 
   return (
     <ThemedView style={[styles.root, { paddingTop: insets.top + Spacing.three, paddingBottom: insets.bottom + Spacing.three }]}>
@@ -597,7 +596,7 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
           {/* 홈과 같은 캐릭터. 승리/회복 포즈가 생기면 registry의 result 슬롯만 채우면 된다. */}
           <View style={styles.resultCharacter}>
             <PlayerCharacter
-              appearance={characterAppearanceFromProfile(profile)}
+              appearance={characterAppearance}
               slot="result"
               height={RESULT_CHARACTER_HEIGHT}
             />

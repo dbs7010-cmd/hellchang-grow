@@ -22,7 +22,6 @@ import { useTheme } from '@/hooks/use-theme';
 import { findPreviousPerformance } from '@/utils/exercise-history';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
-import { characterAppearanceFromProfile } from '@/utils/character-appearance';
 import { recommendMuscleGroup } from '@/utils/workout-recommendation';
 import { formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
 
@@ -52,6 +51,7 @@ export default function HomeScreen() {
     activeSession,
     routines,
     passProgress,
+    characterAppearance,
   } = useAppData();
 
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -101,8 +101,6 @@ export default function HomeScreen() {
     setStageHeight(event.nativeEvent.layout.height);
   };
 
-  // 캐릭터가 어떻게 보일지는 프로필에서 한 번만 뽑아 넘긴다 — 렌더러가 프로필을 직접 읽지 않는다.
-  const appearance = characterAppearanceFromProfile(profile);
 
   if (!profile) return null;
 
@@ -150,7 +148,7 @@ export default function HomeScreen() {
           accessibilityRole="button"
           accessibilityLabel="캐릭터 360도로 보기">
           {/* 실제 2D 에셋이 들어와도 stage 높이를 그대로 쓰므로 이 화면 레이아웃은 안 바뀐다. */}
-          <PlayerCharacter appearance={appearance} slot="home" height={stageHeight} idle />
+          <PlayerCharacter appearance={characterAppearance} slot="home" height={stageHeight} idle />
           <View
             style={[
               styles.rotatePill,
@@ -199,6 +197,7 @@ export default function HomeScreen() {
         genderExpression={profile.genderExpression}
         size={profile.bodyParameters.size}
         tone={profile.bodyParameters.tone}
+        growthStage={characterAppearance.growthStage}
       />
     </ThemedView>
   );

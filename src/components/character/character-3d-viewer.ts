@@ -1,3 +1,4 @@
+import { CharacterGrowthStage } from '@/config/character-growth';
 import { GenderExpression } from '@/types/user';
 
 /**
@@ -35,6 +36,11 @@ export interface Character3DViewerProps {
   size: number;
   /** 0-100, 근육 톤/선명도 */
   tone: number;
+  /**
+   * 캐릭터 성장 단계. 2D와 같은 단계로 GLB를 고른다
+   * (config/character-assets.ts의 growthModels3d).
+   */
+  growthStage: CharacterGrowthStage;
 }
 
 /** 정면. 뷰어는 열릴 때마다 항상 이 각도에서 시작한다. */

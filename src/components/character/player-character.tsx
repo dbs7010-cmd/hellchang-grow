@@ -22,13 +22,14 @@ export interface PlayerCharacterProps {
  * HOME / HISTORY / RESULT가 공유하는 단 하나의 플레이어 캐릭터 렌더러.
  *
  * 화면마다 placeholder 코드를 복사하지 않게 하려고 둔다 — 각 화면은 slot과 height만 다르게
- * 주고, "실제 에셋이 있으면 이미지, 없으면 중립 실루엣"이라는 판단은 여기 한 곳에만 있다.
+ * 주고, "성장 단계에 맞는 에셋이 있으면 이미지, 없으면 중립 실루엣"이라는 판단은 여기
+ * 한 곳에만 있다. 성장 단계 자체도 화면이 계산하지 않는다 (appearance.growthStage로 받는다).
  * 그래서 실제 2D 에셋을 넣을 때 고칠 파일은 config/character-assets.ts 하나뿐이다.
  *
  * 레이아웃 계약: 바깥에서 준 height를 넘지 않는다. 에셋 교체로 화면이 밀리지 않는다.
  */
 export function PlayerCharacter({ appearance, slot, height, idle = false }: PlayerCharacterProps) {
-  const asset = resolveCharacterAsset(slot);
+  const asset = resolveCharacterAsset(slot, appearance.genderExpression, appearance.growthStage);
 
   if (height <= 0) return null;
 
