@@ -26,8 +26,9 @@ import { recommendMuscleGroup } from '@/utils/workout-recommendation';
 import { formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
 
 /**
- * 01 HOME — 기존 기능/레이아웃 계약을 유지하면서 MASTER CANON의 HUD 밀도만 복원한다.
+ * 01 HOME — MASTER CANON의 모바일 밀도를 유지한다.
  * Header → HELL PASS/주간 기록 → 캐릭터(좌측 신체 HUD + 우측 스탠리) → CTA → 추천 운동.
+ * 추천 운동 이하 영역은 캐릭터 stage 조정의 영향을 받지 않는다.
  * 신체 HUD는 실제 입력값만 표시하며 없는 값은 '-'로 둔다.
  */
 export default function HomeScreen() {
@@ -144,7 +145,12 @@ export default function HomeScreen() {
             style={styles.characterPressable}
             accessibilityRole="button"
             accessibilityLabel="캐릭터 360도로 보기">
-            <PlayerCharacter appearance={characterAppearance} slot="home" height={stageHeight} idle />
+            <PlayerCharacter
+              appearance={characterAppearance}
+              slot="home"
+              height={stageHeight > 0 ? stageHeight * 1.2 : 0}
+              idle
+            />
           </Pressable>
 
           <View
@@ -304,6 +310,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    overflow: 'hidden',
   },
   characterPressable: {
     ...StyleSheet.absoluteFillObject,
@@ -314,21 +321,21 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     top: Spacing.two,
-    width: 92,
+    width: 76,
     borderWidth: 1,
     borderRadius: Radius.medium,
     overflow: 'hidden',
   },
   bodyHudMetric: {
-    paddingHorizontal: Spacing.two,
+    paddingHorizontal: Spacing.one,
     paddingVertical: Spacing.one,
     gap: 1,
   },
   trainerOverlay: {
     position: 'absolute',
     right: 0,
-    top: Spacing.two,
-    width: '46%',
+    top: Spacing.one,
+    width: '39%',
   },
   rotatePill: {
     position: 'absolute',
