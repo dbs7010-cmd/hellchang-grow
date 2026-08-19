@@ -4,13 +4,17 @@ import {
   AiTrainerMessage,
 } from '@/services/trainer/ai-trainer-service';
 
+/**
+ * 스탠리의 대사는 화면과 상관없이 톤이 같아야 한다 — 존댓말로 짧고 담백하게.
+ * (config/trainers.ts의 dialogueSet와 같은 규칙을 따른다.)
+ */
 const MOCK_RESPONSES: Record<AiQuickActionId, string> = {
-  what_today: '오늘은 가볍게 20분만 움직여봐. 그것도 안 하면 나만 손해야.',
-  build_routine: '주 3회, 상체/하체/유산소로 나눠서 시작해. 무리하지 말고.',
-  review_today: '오늘 기록 봤어. 나쁘지 않은데, 강도는 조금 더 올려도 되겠어.',
-  check_diet: '단백질부터 챙겨. 나머지는 그다음이야.',
-  ask_form: '자세 영상까지 봐주는 기능은 아직 준비 중이야. 조금만 기다려.',
-  weekly_summary: '이번 주는 꾸준했어. 다음 주도 이 페이스 유지해봐.',
+  what_today: '오늘은 가볍게 20분만 움직여보시죠. 안 하는 것보단 낫습니다.',
+  build_routine: '주 3회로 상체·하체·유산소를 나눠서 시작해보시죠.',
+  review_today: '오늘 기록 봤습니다. 나쁘지 않은데, 강도는 조금 더 올리셔도 되겠습니다.',
+  check_diet: '단백질부터 챙기시죠. 나머지는 그다음입니다.',
+  ask_form: '자세를 영상으로 봐드리는 기능은 아직 준비 중입니다.',
+  weekly_summary: '이번 주는 꾸준하셨습니다. 다음 주도 이 페이스로 가시죠.',
 };
 
 export class MockAITrainerService implements AITrainerService {
@@ -21,10 +25,10 @@ export class MockAITrainerService implements AITrainerService {
   async sendMessage(text: string): Promise<AiTrainerMessage> {
     const trimmed = text.trim();
     if (!trimmed) {
-      return { text: '뭐라도 적어야 대답을 하지.' };
+      return { text: '질문을 적어주시면 답해드리겠습니다.' };
     }
     return {
-      text: `"${trimmed}"에 대한 진짜 답은 아직 준비 중이야. 지금은 위에 있는 빠른 질문 버튼으로 먼저 물어봐줘.`,
+      text: `"${trimmed}"에 대한 답변은 아직 준비 중입니다. 지금은 위의 빠른 질문으로 먼저 물어봐주세요.`,
     };
   }
 }

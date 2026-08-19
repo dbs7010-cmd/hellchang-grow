@@ -26,9 +26,14 @@ import { recommendMuscleGroup } from '@/utils/workout-recommendation';
 import { formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
 
 /**
- * 01 HOME — 앱의 얼굴. Galaxy 412x915에서 스크롤 없이 아래가 전부 보여야 한다:
- * 타이틀 / 알림 / 설정 / 골드썬 PT / 캐릭터 / 캐릭터 회전 진입 / 골드썬 한마디 /
- * 운동 시작 CTA / 오늘 추천 운동 / 이번 주 운동 횟수 / streak / bottom navigation.
+ * 01 HOME — 앱의 얼굴. Galaxy 412x915에서 스크롤 없이 아래가 전부 보여야 한다.
+ *
+ * 최종 순서:
+ *   Header → HELL PASS → 이번 주 운동 기록 → 캐릭터 → 스탠리 한마디 →
+ *   운동 시작 CTA → 오늘 추천 운동 → Bottom Tabs
+ *
+ * 시각적 중요도는 순서와 다르다: 운동 시작 CTA > 캐릭터 > HELL PASS > 운동 기록.
+ * 그래서 위에 올라간 진행 정보는 카드가 아니라 얇은 줄이고, Gold는 진행 바에만 쓴다.
  *
  * 그래서 이 화면은 ScrollView가 아니라 고정 flex column이다. 남는 세로 공간은 전부
  * 캐릭터 stage(flex:1)가 흡수하고, 캐릭터는 stage 높이에 맞춰 scale된다 —
@@ -59,7 +64,7 @@ export default function HomeScreen() {
     [routines]
   );
 
-  // workoutRecords.length를 키에 포함해 기록을 남길 때마다 골드썬 대사가 새로 뽑히게 한다.
+  // workoutRecords.length를 키에 포함해 기록을 남길 때마다 스탠리 대사가 새로 뽑히게 한다.
   const greeting = useMemo(
     () => pickTrainerLine(StanleyTrainer.dialogueSet.homeGreeting),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,7 +113,7 @@ export default function HomeScreen() {
         <View style={styles.topActions}>
           <Pressable onPress={() => router.push('/trainer')} hitSlop={10}>
             <ThemedText type="captionBold" style={{ color: theme.gold }}>
-              골드썬 PT ›
+              스탠리 PT ›
             </ThemedText>
           </Pressable>
           <Pressable onPress={() => router.push('/notifications')} hitSlop={10} style={styles.bellButton}>
@@ -122,6 +127,22 @@ export default function HomeScreen() {
       </View>
 
       <View style={[styles.content, { paddingBottom: BottomTabInset + insets.bottom + Spacing.two }]}>
+        {/* 진행 정보. 캐릭터/CTA보다 조용해야 한다 — 카드로 띄우지 않고 얇은 줄로만 둔다. */}
+        <View style={[styles.progressBlock, { borderColor: theme.border }]}>
+          <GrowthHud
+            passLevel={passProgress.level}
+            passXpIntoLevel={passProgress.xpIntoLevel}
+            passXpForLevel={passProgress.xpForLevel}
+            passProgress={passProgress.progress}
+            onPress={() => router.push('/pass')}
+          />
+          <View style={styles.statsRow}>
+            <HomeStat label="이번 주" value={weekRecords.length + '회'} />
+            <HomeStat label="연속" value={'🔥 ' + streak.currentStreakDays + '일'} />
+            <HomeStat label="이번 주 볼륨" value={weeklyVolumeKg > 0 ? formatVolumeKg(weeklyVolumeKg) : '-'} />
+          </View>
+        </View>
+
         <Pressable
           onPress={() => setViewerOpen(true)}
           onLayout={handleStageLayout}
@@ -160,7 +181,7 @@ export default function HomeScreen() {
               ? '진행 중인 세션이 있어요'
               : scheduledRoutine
                 ? '오늘 · ' + scheduledRoutine.name
-                : '오늘은 뭐 조질까?'
+                : '바로 시작할 수 있어요'
           }
           variant="gold"
           size="large"
@@ -175,21 +196,6 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* 4순위: 진행 정보. 캐릭터/CTA보다 조용해야 한다. */}
-        <View style={[styles.bottomBlock, { borderColor: theme.border }]}>
-          <GrowthHud
-            passLevel={passProgress.level}
-            passXpIntoLevel={passProgress.xpIntoLevel}
-            passXpForLevel={passProgress.xpForLevel}
-            passProgress={passProgress.progress}
-            onPress={() => router.push('/pass')}
-          />
-          <View style={styles.statsRow}>
-            <HomeStat label="이번 주" value={weekRecords.length + '회'} />
-            <HomeStat label="연속" value={'🔥 ' + streak.currentStreakDays + '일'} />
-            <HomeStat label="이번 주 볼륨" value={weeklyVolumeKg > 0 ? formatVolumeKg(weeklyVolumeKg) : '-'} />
-          </View>
-        </View>
       </View>
 
       <CharacterViewer
@@ -285,10 +291,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.one,
   },
-  bottomBlock: {
-    borderTopWidth: 1,
-    paddingTop: Spacing.two,
-    gap: Spacing.two,
+  progressBlock: {
+    borderBottomWidth: 1,
+    paddingBottom: Spacing.two,
+    gap: Spacing.one,
   },
   statsRow: {
     flexDirection: 'row',

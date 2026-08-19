@@ -139,7 +139,7 @@ function MessageBubble({ role, text }: { role: 'user' | 'trainer'; text: string 
   );
 }
 
-/** "골드썬이 보고 있습니다..." — 흰 ChatGPT 느낌의 로딩 대신 쓰는 은은한 3-dot. */
+/** "스탠리가 보고 있습니다…" — 흰 ChatGPT 느낌의 로딩 대신 쓰는 은은한 표시. */
 function TypingIndicator() {
   return (
     <View style={styles.typingRow}>

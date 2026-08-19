@@ -11,17 +11,23 @@ export interface GoldsunBubbleProps {
   onPress?: () => void;
 }
 
-/** 골드썬 portrait + 말풍선 한마디. 큰 트레이너 카드가 아니라 홈/세션 등에서 작게 재사용한다. */
+/**
+ * 트레이너 portrait + 말풍선 한마디. 큰 트레이너 카드가 아니라 홈/세션 등에서 작게 재사용한다.
+ *
+ * 말풍선 안에 "- 이름 -" 서명을 넣지 않는다 — 옆의 portrait가 이미 화자를 말해준다.
+ * name은 화면에 그리지 않고 접근성 라벨로만 쓴다.
+ */
 export function GoldsunBubble({ portrait, name, text, onPress }: GoldsunBubbleProps) {
   const theme = useTheme();
   return (
-    <Pressable onPress={onPress} style={styles.row} hitSlop={8}>
+    <Pressable
+      onPress={onPress}
+      style={styles.row}
+      hitSlop={8}
+      accessibilityLabel={`${name}: ${text}`}>
       <View style={[styles.bubble, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
         <ThemedText type="small" style={styles.bubbleText} numberOfLines={3}>
           {text}
-        </ThemedText>
-        <ThemedText type="small" style={[styles.name, { color: theme.gold }]}>
-          - {name} -
         </ThemedText>
       </View>
       <View style={[styles.portrait, { borderColor: theme.gold, backgroundColor: theme.backgroundSelected }]}>
@@ -52,9 +58,6 @@ const styles = StyleSheet.create({
   },
   bubbleText: {
     lineHeight: 18,
-  },
-  name: {
-    textAlign: 'right',
   },
   portrait: {
     flexShrink: 0,
