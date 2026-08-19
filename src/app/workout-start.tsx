@@ -140,7 +140,19 @@ export default function WorkoutStartScreen() {
 
   return (
     <ScreenScroll>
-      <ThemedText type="heading">오늘의 운동</ThemedText>
+      <View style={styles.headerRow}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="뒤로가기">
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            ‹ 뒤로
+          </ThemedText>
+        </Pressable>
+        <ThemedText type="heading">오늘의 운동</ThemedText>
+        <View style={styles.headerSpacer} />
+      </View>
 
       {scheduledRoutine && !showBodyPartPicker && (
         <Section title="오늘 루틴">
@@ -240,7 +252,6 @@ export default function WorkoutStartScreen() {
               </Pressable>
             )}
 
-            {/* 운동을 하나도 안 골라도 시작할 수 있다 — 세션 안에서 추가하면 된다. */}
             <PrimaryButton
               label={selectedCount > 0 ? `${selectedCount}개로 시작` : '고르지 않고 바로 시작'}
               variant="gold"
@@ -269,6 +280,14 @@ export default function WorkoutStartScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerSpacer: {
+    width: 44,
+  },
   routineRow: {
     flexDirection: 'row',
     alignItems: 'center',
