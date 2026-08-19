@@ -11,10 +11,10 @@ import { RecommendedStrip } from '@/components/home/recommended-strip';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { AppConfig } from '@/config/app-config';
 import { Exercises, getExerciseById, getExercisesByMuscleGroup } from '@/config/exercises';
 import { MuscleGroups } from '@/config/muscle-groups';
 import { StanleyTrainer } from '@/config/trainers';
-import { AppConfig } from '@/config/app-config';
 import { BottomTabInset, Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { getThisWeekRecords } from '@/data/workout-repository';
@@ -26,18 +26,9 @@ import { recommendMuscleGroup } from '@/utils/workout-recommendation';
 import { formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
 
 /**
- * 01 HOME — 앱의 얼굴. Galaxy 412x915에서 스크롤 없이 아래가 전부 보여야 한다.
- *
- * 최종 순서:
- *   Header → HELL PASS → 이번 주 운동 기록 → 캐릭터 → 스탠리 한마디 →
- *   운동 시작 CTA → 오늘 추천 운동 → Bottom Tabs
- *
- * 시각적 중요도는 순서와 다르다: 운동 시작 CTA > 캐릭터 > HELL PASS > 운동 기록.
- * 그래서 위에 올라간 진행 정보는 카드가 아니라 얇은 줄이고, Gold는 진행 바에만 쓴다.
- *
- * 그래서 이 화면은 ScrollView가 아니라 고정 flex column이다. 남는 세로 공간은 전부
- * 캐릭터 stage(flex:1)가 흡수하고, 캐릭터는 stage 높이에 맞춰 scale된다 —
- * 화면이 더 작은 기기에서도 잘리지 않고, 더 큰 기기에서는 캐릭터가 더 커진다.
+ * 01 HOME — 기존 기능/레이아웃 계약을 유지하면서 MASTER CANON의 HUD 밀도만 복원한다.
+ * Header → HELL PASS/주간 기록 → 캐릭터(좌측 신체 HUD + 우측 스탠리) → CTA → 추천 운동.
+ * 신체 HUD는 실제 입력값만 표시하며 없는 값은 '-'로 둔다.
  */
 export default function HomeScreen() {
   const router = useRouter();
@@ -45,6 +36,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const {
     profile,
+    bodyHistory,
     workoutRecords,
     streak,
     openEventPass,
@@ -59,13 +51,20 @@ export default function HomeScreen() {
 
   const weekRecords = useMemo(() => getThisWeekRecords(workoutRecords), [workoutRecords]);
   const weeklyVolumeKg = useMemo(() => sumVolumeKg(weekRecords), [weekRecords]);
+  const latestBody = useMemo(
+    () =>
+      bodyHistory.reduce<(typeof bodyHistory)[number] | undefined>(
+        (latest, entry) => (!latest || entry.date > latest.date ? entry : latest),
+        undefined
+      ),
+    [bodyHistory]
+  );
   const sessionInProgress = activeSession && activeSession.status !== 'completed';
   const scheduledRoutine = useMemo(
     () => getTodaysScheduledRoutine(routines, new Date().getDay()),
     [routines]
   );
 
-  // workoutRecords.length를 키에 포함해 기록을 남길 때마다 스탠리 대사가 새로 뽑히게 한다.
   const greeting = useMemo(
     () => pickTrainerLine(StanleyTrainer.dialogueSet.homeGreeting),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,7 +100,6 @@ export default function HomeScreen() {
     setStageHeight(event.nativeEvent.layout.height);
   };
 
-
   if (!profile) return null;
 
   return (
@@ -125,7 +123,6 @@ export default function HomeScreen() {
       </View>
 
       <View style={[styles.content, { paddingBottom: BottomTabInset + insets.bottom + Spacing.two }]}>
-        {/* 진행 정보. 캐릭터/CTA보다 조용해야 한다 — 카드로 띄우지 않고 얇은 줄로만 둔다. */}
         <View style={[styles.progressBlock, { borderColor: theme.border }]}>
           <GrowthHud
             passLevel={passProgress.level}
@@ -141,14 +138,42 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <Pressable
-          onPress={() => setViewerOpen(true)}
-          onLayout={handleStageLayout}
-          style={styles.stage}
-          accessibilityRole="button"
-          accessibilityLabel="캐릭터 360도로 보기">
-          {/* 실제 2D 에셋이 들어와도 stage 높이를 그대로 쓰므로 이 화면 레이아웃은 안 바뀐다. */}
-          <PlayerCharacter appearance={characterAppearance} slot="home" height={stageHeight} idle />
+        <View onLayout={handleStageLayout} style={styles.stage}>
+          <Pressable
+            onPress={() => setViewerOpen(true)}
+            style={styles.characterPressable}
+            accessibilityRole="button"
+            accessibilityLabel="캐릭터 360도로 보기">
+            <PlayerCharacter appearance={characterAppearance} slot="home" height={stageHeight} idle />
+          </Pressable>
+
+          <View
+            pointerEvents="none"
+            style={[
+              styles.bodyHud,
+              { backgroundColor: theme.background + 'D9', borderColor: theme.border },
+            ]}>
+            <BodyHudMetric label="체중" value={`${latestBody?.weightKg ?? profile.weightKg}kg`} />
+            <BodyHudMetric
+              label="골격근량"
+              value={latestBody?.skeletalMuscleKg !== undefined ? `${latestBody.skeletalMuscleKg}kg` : '-'}
+            />
+            <BodyHudMetric
+              label="체지방률"
+              value={latestBody?.bodyFatPercent !== undefined ? `${latestBody.bodyFatPercent}%` : '-'}
+            />
+            <BodyHudMetric label="운동 기록" value={`${workoutRecords.length}회`} last />
+          </View>
+
+          <View style={styles.trainerOverlay}>
+            <GoldsunBubble
+              portrait={StanleyTrainer.portraitPlaceholder}
+              name={StanleyTrainer.displayName}
+              text={greeting.text}
+              onPress={() => router.push('/trainer')}
+            />
+          </View>
+
           <View
             style={[
               styles.rotatePill,
@@ -158,14 +183,7 @@ export default function HomeScreen() {
               🔄 360°
             </ThemedText>
           </View>
-        </Pressable>
-
-        <GoldsunBubble
-          portrait={StanleyTrainer.portraitPlaceholder}
-          name={StanleyTrainer.displayName}
-          text={greeting.text}
-          onPress={() => router.push('/trainer')}
-        />
+        </View>
 
         <PrimaryButton
           label={sessionInProgress ? '운동으로 돌아가기' : '운동 시작'}
@@ -188,7 +206,6 @@ export default function HomeScreen() {
             onPressMore={handleStartPress}
           />
         )}
-
       </View>
 
       <CharacterViewer
@@ -203,12 +220,6 @@ export default function HomeScreen() {
   );
 }
 
-/**
- * 추천 카드의 상태 한 줄. 지어낸 문구가 아니라 실제 기록에서 나온 값만 쓴다.
- *  - 무게 기록이 있으면 지난번 최고 중량
- *  - 무게 없이 세트만 있으면 세트 수
- *  - 기록이 없거나(세션에 추가만 하고 세트를 안 채운 경우 포함) 비어 있으면 "첫 도전"
- */
 function describePreviousPerformance(
   previous: ReturnType<typeof findPreviousPerformance>
 ): string {
@@ -217,13 +228,31 @@ function describePreviousPerformance(
   return '지난번 ' + previous.sets.length + '세트';
 }
 
-/**
- * 홈 하단 한 줄 요약. 체중이 아니라 "이번 주 활동량"을 보여준다 — 홈은 체중계가 아니다.
- * 라벨과 값을 한 줄에 붙여 세로 공간을 캐릭터 stage에 돌려준다.
- */
 function HomeStat({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.stat}>
+      <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+        {label}
+      </ThemedText>
+      <ThemedText type="smallBold" numberOfLines={1}>
+        {value}
+      </ThemedText>
+    </View>
+  );
+}
+
+function BodyHudMetric({
+  label,
+  value,
+  last = false,
+}: {
+  label: string;
+  value: string;
+  last?: boolean;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.bodyHudMetric, !last && { borderBottomColor: theme.border, borderBottomWidth: 1 }]}>
       <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
         {label}
       </ThemedText>
@@ -269,12 +298,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: Layout.screenPaddingX,
     gap: Spacing.two,
   },
-  /** 남는 세로 공간을 전부 캐릭터에 준다. 캐릭터는 이 높이에 맞춰 scale된다. */
   stage: {
     flex: 1,
     minHeight: 180,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  characterPressable: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bodyHud: {
+    position: 'absolute',
+    left: 0,
+    top: Spacing.two,
+    width: 92,
+    borderWidth: 1,
+    borderRadius: Radius.medium,
+    overflow: 'hidden',
+  },
+  bodyHudMetric: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    gap: 1,
+  },
+  trainerOverlay: {
+    position: 'absolute',
+    right: 0,
+    top: Spacing.two,
+    width: '46%',
   },
   rotatePill: {
     position: 'absolute',
