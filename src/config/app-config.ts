@@ -48,4 +48,12 @@ export const AppConfig = {
    * (recoverStaleSession이 적용되기 전에 저장된 기록에만 나타날 수 있다.)
    */
   suspiciousDurationMinutes: 240,
+  /**
+   * 프로필/신체 입력 허용 범위. 온보딩과 히스토리의 [몸 변화] 입력이 같은 값을 쓴다 —
+   * 화면마다 다른 숫자를 하드코딩하지 않는다.
+   */
+  profileHeightRangeCm: { min: 100, max: 250 },
+  profileWeightRangeKg: { min: 30, max: 300 },
+  bodyFatPercentRange: { min: 3, max: 60 },
+  skeletalMuscleRangeKg: { min: 10, max: 80 },
 } as const;

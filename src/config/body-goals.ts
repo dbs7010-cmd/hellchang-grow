@@ -35,3 +35,26 @@ export const DefaultBodyGoalId: BodyGoalId = 'balanced';
 export function resolveBodyGoal(value: string | undefined): BodyGoalId {
   return BodyGoalIds.includes(value as BodyGoalId) ? (value as BodyGoalId) : DefaultBodyGoalId;
 }
+
+/**
+ * 온보딩 선택 카드에서 쓰는 표현. 목표 이름(BodyGoalLabels)은 설정/히스토리 등 좁은 자리에서
+ * 그대로 쓰고, 아이콘과 한 줄 설명이 필요한 곳만 이 표를 참조한다.
+ * 특정 성별에만 해당하는 표현을 쓰지 않는다.
+ */
+export const BodyGoalOnboardingCopy: Record<BodyGoalId, { icon: string; label: string; description: string }> = {
+  fat_cut: {
+    icon: '🔥',
+    label: '지방 CUT',
+    description: '체지방을 줄이면서 몸의 선을 만들어요',
+  },
+  strength_up: {
+    icon: '💪',
+    label: '근력 UP',
+    description: '힘과 근육을 키우는 데 집중해요',
+  },
+  balanced: {
+    icon: '⚡',
+    label: '체형 개선',
+    description: '지방과 근력을 균형 있게 관리해요',
+  },
+};

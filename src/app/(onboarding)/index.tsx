@@ -1,47 +1,80 @@
 import { useRouter } from 'expo-router';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CharacterIntrinsicHeight, CharacterSilhouette } from '@/components/character/character-silhouette';
 import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { ScreenScroll } from '@/components/ui/screen-scroll';
-import { SectionCard } from '@/components/ui/section-card';
-import { Spacing } from '@/constants/theme';
+import { Layout, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
+/** 시작 화면의 캐릭터 크기 — 홈보다 작게 두고 문구가 주인공이 되게 한다. */
+const INTRO_CHARACTER_HEIGHT = 260;
+
+/**
+ * 온보딩 01 — 시작.
+ *
+ * 첫 화면은 설명이 아니라 정체성이다. 구독/광고/HELL PASS 이야기는 여기서 하지 않는다.
+ * 홈과 같은 언어(검은 배경 / Gold accent / 큰 타이포 / 캐릭터 중심)를 쓴다.
+ */
 export default function OnboardingStartScreen() {
   const router = useRouter();
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
-    <ScreenScroll>
-      <ThemedText type="title" style={styles.title}>
-        헬창키우기
-      </ThemedText>
-      <ThemedText themeColor="textSecondary">
-        현실에서 운동한 만큼 진행되는 운동 기록 게임이에요. 시작 방법을 골라주세요.
-      </ThemedText>
-
-      <SectionCard title="무료 체형 선택">
-        <ThemedText type="small" themeColor="textSecondary">
-          성별 표현과 체형을 직접 골라서 바로 시작해요.
+    <ThemedView style={[styles.root, { paddingTop: insets.top + Spacing.four, paddingBottom: insets.bottom + Spacing.four }]}>
+      <View style={styles.copy}>
+        <ThemedText type="heading" themeColor="textSecondary">
+          헬창키우기
         </ThemedText>
-        <PrimaryButton label="체형 고르고 시작하기" onPress={() => router.push('/gender')} />
-      </SectionCard>
+        <View style={styles.slogan}>
+          <ThemedText type="subtitle">
+            지방은 <ThemedText type="subtitle" style={{ color: theme.gold }}>CUT</ThemedText>.
+          </ThemedText>
+          <ThemedText type="subtitle">
+            근력은 <ThemedText type="subtitle" style={{ color: theme.gold }}>UP</ThemedText>.
+          </ThemedText>
+          <ThemedText type="subtitle">내 몸을 키워봅시다.</ThemedText>
+        </View>
+      </View>
 
-      <SectionCard title="내 사진으로 시작">
-        <ThemedText type="small" themeColor="textSecondary">
-          내 사진 기반으로 시작하는 기능은 준비 중이에요.
-        </ThemedText>
-        <PrimaryButton
-          label="내 사진으로 시작하기"
-          variant="secondary"
-          onPress={() => router.push('/photo-start')}
+      <View style={styles.stage}>
+        <CharacterSilhouette
+          genderExpression="male"
+          size={50}
+          tone={45}
+          scale={INTRO_CHARACTER_HEIGHT / CharacterIntrinsicHeight}
         />
-      </SectionCard>
-    </ScreenScroll>
+      </View>
+
+      <PrimaryButton
+        label="시작하기"
+        subLabel="1분이면 끝나요"
+        variant="gold"
+        size="large"
+        onPress={() => router.push('/basics')}
+      />
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  title: {
-    marginTop: Spacing.six,
+  root: {
+    flex: 1,
+    paddingHorizontal: Layout.screenPaddingX,
+    gap: Spacing.three,
+  },
+  copy: {
+    gap: Spacing.two,
+  },
+  slogan: {
+    gap: 0,
+  },
+  stage: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

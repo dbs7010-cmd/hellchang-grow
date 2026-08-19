@@ -124,6 +124,9 @@ interface AppDataContextValue extends AppDataState {
   completeOnboarding: (input: {
     profile: Omit<UserProfile, 'id' | 'createdAt'>;
     photoUri?: string;
+    /** 온보딩에서 "알고 있으면" 넣는 선택 값. 모르면 넘기지 않는다 — 기본값을 지어내지 않는다. */
+    bodyFatPercent?: number;
+    skeletalMuscleKg?: number;
   }) => Promise<void>;
   /**
    * 설정 > 내 정보에서 프로필 일부(운동 목표 등)를 고친다.
@@ -230,6 +233,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       if (cancelled) return;
 
+      // 기존 사용자 보호: 온보딩이 새로 생기기 전에 이미 프로필을 만든 사용자가 첫 화면에
+      // 다시 갇히지 않도록, 핵심 데이터(체중)가 있으면 완료로 간주하고 플래그를 채워준다.
+      // 기존 데이터는 건드리지 않는다 — 플래그만 보강한다.
+      let resolvedOnboardingComplete = onboardingComplete;
+      if (!onboardingComplete && profile && profile.weightKg > 0) {
+        resolvedOnboardingComplete = true;
+        await setOnboardingCompleteRepo(true);
+      }
+
       // 세션이 'active'로 저장된 채 오래 방치됐다면(백그라운드/강제종료) 마지막으로 확인된
       // 시각을 기준으로 자동 일시정지한다 — 그렇지 않으면 방치된 시간이 그대로 운동 시간에
       // 더해진다("1217분 버그"). 세션 화면을 거치지 않고도 앱 시작 시점에 바로잡는다.
@@ -252,7 +264,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       setState({
         loading: false,
-        onboardingComplete,
+        onboardingComplete: resolvedOnboardingComplete,
         profile,
         bodyHistory,
         workoutRecords,
@@ -324,7 +336,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const completeOnboarding = useCallback<AppDataContextValue['completeOnboarding']>(
-    async ({ profile, photoUri }) => {
+    async ({ profile, photoUri, bodyFatPercent, skeletalMuscleKg }) => {
       const newProfile: UserProfile = {
         ...profile,
         id: `profile-${Date.now().toString(36)}`,
@@ -333,9 +345,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       await saveUserProfile(newProfile);
       await setOnboardingCompleteRepo(true);
 
+      // 온보딩에서 받은 신체 수치는 기존 BodyHistoryEntry에 그대로 들어간다 —
+      // 히스토리의 [몸 변화]가 첫날부터 같은 소스를 읽는다.
       const bodyHistory = await addBodyHistoryEntryRepo({
         date: todayDateString(),
         weightKg: newProfile.weightKg,
+        bodyFatPercent,
+        skeletalMuscleKg,
         bodyPresetId: newProfile.bodyPresetId,
         bodyParameters: newProfile.bodyParameters,
         source: photoUri ? 'photo' : 'manual',
