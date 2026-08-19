@@ -11,7 +11,7 @@ import { PrimaryButton } from '@/components/ui/primary-button';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { Section } from '@/components/ui/section';
 import { AiQuickActionLabels } from '@/config/ai-quick-actions';
-import { GoldsunPortraitImage } from '@/config/character-assets';
+import { StanleyPortraitImage } from '@/config/character-assets';
 import { StanleyTrainer } from '@/config/trainers';
 import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
@@ -23,7 +23,7 @@ import { getGreetingLine } from '@/utils/trainer-dialogue';
 /**
  * 09 TRAINER — "내 담당 PT에게 들어왔다"는 느낌의 화면.
  *
- * 상단 골드썬이 HERO다. 실제 반신 아트가 들어올 자리(GoldsunPortraitImage)를 확보만 해두고,
+ * 상단 골드썬이 HERO다. 실제 반신 아트가 들어올 자리(StanleyPortraitImage)를 확보만 해두고,
  * 채워지면 레이아웃 변경 없이 그대로 교체된다.
  *
  * 4개 메뉴가 같은 무게로 보이던 문제를 고쳤다: [AI 상담]이 Primary이고
@@ -59,8 +59,8 @@ export default function TrainerScreen() {
     <ScreenScroll>
       <View style={styles.hero}>
         <ThemedView type="backgroundSelected" style={[styles.portraitSlot, { borderColor: theme.border }]}>
-          {GoldsunPortraitImage ? (
-            <Image source={GoldsunPortraitImage} style={styles.portraitImage} contentFit="cover" />
+          {StanleyPortraitImage ? (
+            <Image source={StanleyPortraitImage} style={styles.portraitImage} contentFit="cover" />
           ) : (
             <ThemedText style={styles.portraitEmoji}>{StanleyTrainer.portraitPlaceholder}</ThemedText>
           )}

@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
-import { CharacterIntrinsicHeight, CharacterSilhouette } from '@/components/character/character-silhouette';
+import { PlayerCharacter } from '@/components/character/player-character';
 import { GoldsunReaction } from '@/components/goldsun/goldsun-reaction';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -30,6 +30,7 @@ import { SessionExerciseEntry, WorkoutSession } from '@/types/workout-session';
 import { detectPRs, findPreviousPerformance, PrEvent } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
+import { characterAppearanceFromProfile } from '@/utils/character-appearance';
 import { formatVolumeKg } from '@/utils/workout-stats';
 import {
   computeElapsedSeconds,
@@ -593,17 +594,13 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
         contentContainerStyle={styles.resultContent}
         showsVerticalScrollIndicator={false}>
         <View style={styles.resultHero}>
-          {/* 승리/회복 캐릭터 아트가 준비되면 이 자리를 그대로 대체한다. */}
+          {/* 홈과 같은 캐릭터. 승리/회복 포즈가 생기면 registry의 result 슬롯만 채우면 된다. */}
           <View style={styles.resultCharacter}>
-            {profile && (
-              <CharacterSilhouette
-                genderExpression={profile.genderExpression}
-                size={profile.bodyParameters.size}
-                tone={profile.bodyParameters.tone}
-                idle={false}
-                scale={RESULT_CHARACTER_HEIGHT / CharacterIntrinsicHeight}
-              />
-            )}
+            <PlayerCharacter
+              appearance={characterAppearanceFromProfile(profile)}
+              slot="result"
+              height={RESULT_CHARACTER_HEIGHT}
+            />
           </View>
           <ThemedText type="subtitle" style={[styles.centered, { color: theme.gold }]}>
             🏆 WORKOUT COMPLETE

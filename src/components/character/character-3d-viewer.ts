@@ -15,12 +15,12 @@ import { GenderExpression } from '@/types/user';
  * 그리는 주체만 임시 placeholder(CharacterSilhouette)다. 상호작용 계약은 이미 최종과 같아서,
  * 나중에 바뀌는 것은 "무엇을 그리는가" 하나뿐이다.
  *
- * TODO(character-3d): PlayerCharacterModel이 채워지면
+ * TODO(character-3d): PlayerCharacterAssets.model3d가 채워지면
  *  1. 이 인터페이스를 구현하는 Character3DViewer 컴포넌트를 추가하고
  *     (3D 렌더링 라이브러리는 그때 도입한다 — 지금 미리 넣지 않는다),
  *  2. CharacterViewer 내부의 placeholder 분기를 Character3DViewer로 교체하고,
- *  3. config/character-assets.ts의 CharacterAngle / PlayerCharacterImages fallback과
- *     CharacterSilhouette의 rotationYDeg/angle 분기를 제거한다.
+ *  3. placeholder fallback(CharacterSilhouette)을 제거한다.
+ *     방향별 이미지 슬롯(CharacterAngle / PlayerCharacterImages)은 이미 제거됐다.
  * CharacterViewer를 호출하는 화면(홈 / 히스토리)은 props가 같아서 손댈 필요가 없다.
  */
 export interface Character3DViewerProps {

@@ -2,7 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { CharacterIntrinsicHeight, CharacterSilhouette } from '@/components/character/character-silhouette';
+import { PlayerCharacter } from '@/components/character/player-character';
 import { CharacterViewer } from '@/components/character/character-viewer';
 import { ThemedText } from '@/components/themed-text';
 import { BarChart } from '@/components/ui/bar-chart';
@@ -31,6 +31,7 @@ import { WorkoutCategory, WorkoutIntensity } from '@/types/workout';
 import { todayDateString } from '@/utils/date';
 import { countPeriodPRs } from '@/utils/exercise-history';
 import { buildHistoryDays } from '@/utils/history';
+import { characterAppearanceFromProfile } from '@/utils/character-appearance';
 import { buildRecommendationContext } from '@/utils/recommendation-context';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import { buildPeriodChart, formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
@@ -280,12 +281,11 @@ export default function HistoryScreen() {
 
           <View style={styles.bodyRow}>
             <View style={[styles.characterPreview, { backgroundColor: theme.backgroundElement }]}>
-              <CharacterSilhouette
-                genderExpression={profile.genderExpression}
-                size={profile.bodyParameters.size}
-                tone={profile.bodyParameters.tone}
-                idle={false}
-                scale={BODY_PREVIEW_HEIGHT / CharacterIntrinsicHeight}
+              {/* 홈과 같은 캐릭터 identity — 크기만 다르다. */}
+              <PlayerCharacter
+                appearance={characterAppearanceFromProfile(profile)}
+                slot="history"
+                height={BODY_PREVIEW_HEIGHT}
               />
             </View>
             <View style={styles.bodyActions}>

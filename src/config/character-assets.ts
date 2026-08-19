@@ -2,38 +2,67 @@ import { ImageSourcePropType } from 'react-native';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * 최종 사양: CHARACTER 360은 실제 3D 캐릭터 모델을 Y축으로 연속 회전시키는 뷰어다.
- * 아래 방향 슬롯(CharacterAngle / PlayerCharacterImages)은 3D 모델이 준비되기 전까지만
- * 쓰는 임시 fallback이며, Character3DViewer로 교체될 때 함께 제거된다.
- * 방향 선택 UI(방향 버튼 / page dot / 방향별 라벨)는 이미 제거했다.
+ * CHARACTER ASSET REGISTRY
+ *
+ * "어디서 어떤 캐릭터 에셋을 쓰는가"를 한 곳에서만 정한다. 화면 코드는 파일 경로를 모르고,
+ * 슬롯 이름(home/history/result)과 3D 모델 자리만 안다.
+ *
+ * 렌더링 계층은 둘로 나뉜다:
+ *  - 2D (home / history / result): 가벼운 전신 이미지 하나. 같은 캐릭터 identity를 공유한다.
+ *  - 3D (model3d): CHARACTER 360 전용. 진입할 때만 로딩한다 (홈에서 3D를 불러오지 않는다).
+ *
+ * 규격은 docs/ASSETS.md에 정리돼 있다.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-/**
- * @deprecated 임시 fallback 전용. 최종 3D 뷰어에는 "방향 슬롯" 개념이 없다 —
- * 회전은 연속적인 각도(도) 하나로 표현된다.
- */
-export type CharacterAngle = 'front' | 'front-side' | 'side' | 'back-side' | 'back';
+/** 2D 캐릭터가 쓰이는 자리. 슬롯이 늘어도 화면 코드는 이 유니온만 본다. */
+export type CharacterAssetSlot = 'home' | 'history' | 'result';
+
+export interface PlayerCharacterAssetRegistry {
+  /** 메인 전신 2D. 나머지 슬롯의 기본값이기도 하다. */
+  home?: ImageSourcePropType;
+  /** 히스토리 [몸 변화] 미니 프리뷰. 비우면 home을 쓴다. */
+  history?: ImageSourcePropType;
+  /**
+   * 운동 완료 화면. 비우면 home을 쓴다.
+   * TODO(character-pose): 승리/회복 포즈 variation이 생기면 여기만 채우면 된다 —
+   * RESULT 화면 레이아웃은 그대로 둔다. V1은 기본 캐릭터 하나로 충분하다.
+   */
+  result?: ImageSourcePropType;
+  /**
+   * CHARACTER 360용 3D 모델(.glb / .gltf).
+   * 예) model3d: require('../../assets/characters/player/player.glb')
+   *
+   * 타입을 unknown으로 둔 이유: 지금은 3D 렌더링 dependency가 없어서 모델 소스 타입을
+   * 확정할 수 없다. 렌더러를 도입할 때 그 라이브러리의 소스 타입으로 좁힌다.
+   */
+  model3d?: unknown;
+}
 
 /**
- * @deprecated 임시 fallback 전용. 3D 모델(PlayerCharacterModel)이 들어오면 이 맵과
- * 이걸 읽는 코드(CharacterSilhouette의 이미지 분기)는 통째로 사라진다.
- * 값이 없는 방향은 CharacterSilhouette가 도형 placeholder로 그린다.
- */
-export const PlayerCharacterImages: Partial<Record<CharacterAngle, ImageSourcePropType>> = {};
-
-/**
- * TODO(character-3d): 실제 플레이어 캐릭터 3D 모델(.glb / .gltf)이 준비되면 여기에 채운다.
- * 예) export const PlayerCharacterModel = require('../../assets/characters/player/player.glb');
+ * 실제 에셋이 들어오면 여기만 채운다 (assets/characters/player/ 참고).
+ * 비어 있으면 각 화면이 중립 placeholder(도형 실루엣)를 그린다 — 코드 수정 불필요.
  *
- * 이 값이 채워지는 순간부터 CharacterViewer는 placeholder 대신 Character3DViewer를 렌더하고,
- * 위의 방향 슬롯 fallback은 제거한다 (components/character/character-3d-viewer.ts 참고).
- * 지금 가짜 3D를 만들거나 3D 렌더링 dependency를 미리 넣지 않는다.
+ * 같은 이미지를 여러 슬롯에서 써도 파일을 복제하지 않는다. home 하나만 채우면
+ * history/result가 자동으로 그걸 쓴다 (resolveCharacterAsset 참고).
  */
-export const PlayerCharacterModel: unknown | undefined = undefined;
+export const PlayerCharacterAssets: PlayerCharacterAssetRegistry = {};
 
 /**
- * 골드썬 포트레이트 아트가 준비되면 채운다 (assets/characters/goldsun/ 참고).
- * 없으면 TrainerProfile.portraitPlaceholder 이모지를 그대로 쓴다.
+ * 슬롯에 맞는 2D 에셋을 고른다. 전용 에셋이 없으면 메인(home) 캐릭터로 떨어진다 —
+ * 화면마다 다른 캐릭터처럼 보이지 않게 하기 위해서다.
  */
-export const GoldsunPortraitImage: ImageSourcePropType | undefined = undefined;
+export function resolveCharacterAsset(slot: CharacterAssetSlot): ImageSourcePropType | undefined {
+  return PlayerCharacterAssets[slot] ?? PlayerCharacterAssets.home;
+}
+
+/** 3D 모델이 준비됐는지. CHARACTER 360만 이 값을 본다. */
+export function hasPlayerCharacterModel(): boolean {
+  return PlayerCharacterAssets.model3d !== undefined;
+}
+
+/**
+ * 스탠리 포트레이트. 트레이너 화면의 3:4 슬롯과 대화 말풍선 옆 원형 아바타에 쓴다.
+ * 없으면 TrainerProfile.portraitPlaceholder(중립 이모지)를 그대로 쓴다.
+ */
+export const StanleyPortraitImage: ImageSourcePropType | undefined = undefined;

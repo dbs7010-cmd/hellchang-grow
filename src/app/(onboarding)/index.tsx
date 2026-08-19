@@ -2,12 +2,13 @@ import { useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CharacterIntrinsicHeight, CharacterSilhouette } from '@/components/character/character-silhouette';
+import { PlayerCharacter } from '@/components/character/player-character';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Layout, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { DefaultCharacterAppearance } from '@/utils/character-appearance';
 
 /** 시작 화면의 캐릭터 크기 — 홈보다 작게 두고 문구가 주인공이 되게 한다. */
 const INTRO_CHARACTER_HEIGHT = 260;
@@ -41,11 +42,11 @@ export default function OnboardingStartScreen() {
       </View>
 
       <View style={styles.stage}>
-        <CharacterSilhouette
-          genderExpression="male"
-          size={50}
-          tone={45}
-          scale={INTRO_CHARACTER_HEIGHT / CharacterIntrinsicHeight}
+        {/* 아직 프로필이 없으므로 중립 외형. 홈과 같은 렌더러를 쓴다. */}
+        <PlayerCharacter
+          appearance={DefaultCharacterAppearance}
+          slot="home"
+          height={INTRO_CHARACTER_HEIGHT}
         />
       </View>
 

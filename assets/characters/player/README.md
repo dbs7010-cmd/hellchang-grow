@@ -1,8 +1,22 @@
-# 플레이어 캐릭터 이미지 위치
+# 플레이어 캐릭터 에셋
 
-최종 캐릭터 아트(정면/정측면/측면/후측면/후면)가 준비되면 이 폴더에 넣고
-`src/config/character-assets.ts`의 `PlayerCharacterImages`에 경로를 연결한다.
+규격은 `docs/ASSETS.md`를 따른다.
 
-아직 이 폴더가 비어 있는 동안은 `CharacterSilhouette` 컴포넌트가 도형 기반
-placeholder를 대신 그린다. UI 코드는 이 폴더의 실제 파일 유무와 무관하게
-동작한다 — 이미지가 추가되면 코드 수정 없이 자동으로 교체된다.
+## 2D (먼저 필요한 것)
+- `player-full.png` — PNG / 투명 배경 / 세로 전신 / 권장 1024x2048 (세로:가로 2:1)
+- 캐릭터가 canvas 높이의 92% 이상을 채울 것 (투명 여백이 많으면 화면에서 작아 보인다)
+
+넣은 뒤 `src/config/character-assets.ts`의 `PlayerCharacterAssets.home`에 연결한다:
+
+```ts
+export const PlayerCharacterAssets: PlayerCharacterAssetRegistry = {
+  home: require('../../../assets/characters/player/player-full.png'),
+};
+```
+
+history/result 슬롯은 비워두면 home을 그대로 쓴다. 같은 그림이면 파일을 복제하지 않는다.
+
+## 3D (CHARACTER 360용, 나중)
+- `player.glb` — Y-up / 정면이 0° / 발밑 중앙이 원점
+- 앱은 Y축 수평 회전만 한다 (상하 회전·zoom 없음)
+- `PlayerCharacterAssets.model3d`에 연결하고, 렌더러는 360 진입 시 지연 로딩한다

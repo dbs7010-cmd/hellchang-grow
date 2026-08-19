@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
@@ -10,7 +9,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { CharacterAngle, PlayerCharacterImages } from '@/config/character-assets';
 import { useTheme } from '@/hooks/use-theme';
 import { GenderExpression } from '@/types/user';
 
@@ -21,13 +19,8 @@ export interface CharacterSilhouetteProps {
   /** 0-100, 근육 톤/선명도 보정값 */
   tone: number;
   /**
-   * @deprecated 임시 fallback 전용 — 3D 모델이 들어오면 사라진다.
-   * rotationYDeg가 주어지면 무시된다.
-   */
-  angle?: CharacterAngle;
-  /**
-   * Y축 회전 각도(도). 0 = 정면. 360 뷰어가 좌우 드래그로 이 값을 연속으로 바꾼다.
-   * 방향 슬롯(angle)과 달리 값이 이산적이지 않다 — 최종 3D 뷰어와 같은 회전 표현이다.
+   * Y축 회전 각도(도). 0 = 정면. CHARACTER 360이 좌우 드래그로 이 값을 연속으로 바꾼다.
+   * 이산적인 "방향 슬롯"이 아니라 연속값 하나다 — 최종 3D 뷰어와 같은 회전 표현이다.
    */
   rotationYDeg?: number;
   /** 미세한 breathing idle 애니메이션 (60 ALIVE). 360 뷰어 등에서는 꺼둘 수 있다. */
@@ -47,26 +40,18 @@ export interface CharacterSilhouetteProps {
  */
 export const CharacterIntrinsicHeight = 408;
 
-const ANGLE_ROTATION_DEG: Record<CharacterAngle, number> = {
-  front: 0,
-  'front-side': 25,
-  side: 55,
-  'back-side': 130,
-  back: 180,
-};
-
 /**
- * 실사 캐릭터 아트가 준비되기 전까지 쓰는 전신 실루엣 placeholder.
- * PlayerCharacterImages에 해당 각도 이미지가 등록되면 자동으로 그 이미지를 쓰고,
- * 없으면 도형 + perspective rotateY로 방향을 흉내낸 실루엣을 그린다.
+ * 실제 캐릭터 에셋이 없을 때 쓰는 중립 전신 실루엣 placeholder (도형 rig).
+ *
+ * 화면이 이걸 직접 부르지 않는다 — 2D는 PlayerCharacter가, 360은 CharacterViewer가 감싼다.
+ * 여기서 에셋 존재 여부를 판단하지 않는다 (그 판단은 config/character-assets.ts 한 곳).
  * 캐릭터 전체를 gold로 두르지 않는다 — gold는 어깨/팔 쪽 rim light로만 쓴다.
  */
 export function CharacterSilhouette({
   genderExpression,
   size,
   tone,
-  angle = 'front',
-  rotationYDeg,
+  rotationYDeg = 0,
   idle = true,
   scale = 1,
 }: CharacterSilhouetteProps) {
@@ -92,18 +77,10 @@ export function CharacterSilhouette({
     transform: [{ translateY: breatheY.value }],
   }));
 
-  // 방향별 이미지 fallback. 연속 회전(rotationYDeg) 중에는 쓰지 않는다 —
-  // 이산적인 5장으로는 연속 회전을 표현할 수 없기 때문이다.
-  // TODO(character-3d): PlayerCharacterModel 투입 시 이 분기를 통째로 제거한다.
-  const image = rotationYDeg === undefined ? PlayerCharacterImages[angle] : undefined;
-  if (image) {
-    return <Image source={image} style={styles.image} contentFit="contain" />;
-  }
-
   const shoulderWidth = 90 + (size / 100) * 60;
   const waistWidth = 46 + (size / 100) * 30;
   const definition = 1 + (tone / 100) * 3;
-  const rotateDeg = rotationYDeg ?? ANGLE_ROTATION_DEG[angle];
+  const rotateDeg = rotationYDeg;
   const rimAccent = genderExpression === 'female' ? '#F0B8D9' : theme.goldBright;
   const bodyLine = theme.border;
 
@@ -175,10 +152,6 @@ const styles = StyleSheet.create({
   scaleGroup: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
   },
   backdropGlow: {
     position: 'absolute',

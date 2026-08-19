@@ -11,7 +11,7 @@ import {
 import { CharacterIntrinsicHeight, CharacterSilhouette } from '@/components/character/character-silhouette';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { PlayerCharacterModel } from '@/config/character-assets';
+import { hasPlayerCharacterModel } from '@/config/character-assets';
 import { Layout, Spacing } from '@/constants/theme';
 
 export type CharacterViewerProps = Character3DViewerProps;
@@ -31,11 +31,16 @@ const MAX_VIEWER_SCALE = 1.6;
  *  - 스냅/페이지/방향 버튼/page dot이 없다 — 각도는 연속값 하나뿐이다
  *  - pinch zoom 없음 (V1 불필요)
  *
- * 지금 최종과 다른 건 "무엇을 그리는가" 하나뿐이다: PlayerCharacterModel이 비어 있는 동안
- * 임시 placeholder(CharacterSilhouette)를 같은 각도로 돌려서 보여준다.
+ * 지금 최종과 다른 건 "무엇을 그리는가" 하나뿐이다: PlayerCharacterAssets.model3d가 비어
+ * 있는 동안 임시 placeholder(CharacterSilhouette)를 같은 각도로 돌려서 보여준다.
  *
- * TODO(character-3d): PlayerCharacterModel이 채워지면 CharacterStage 안의 placeholder를
- * Character3DViewer 렌더로 교체한다. 제스처/각도/레이아웃은 그대로 쓴다.
+ * 3D는 이 화면에서만 쓴다 — 홈/히스토리/결과는 2D 렌더러(PlayerCharacter)만 거치므로
+ * 3D 렌더러가 앱 시작이나 탭 전환에 끼어들지 않는다.
+ *
+ * TODO(character-3d): PlayerCharacterAssets.model3d가 채워지면 CharacterStage 안의
+ * placeholder를 Character3DViewer 렌더로 교체한다. 이때 렌더러 모듈은 이 파일 상단에서
+ * 정적으로 import하지 말고 뷰어가 열릴 때 지연 로딩해야 홈 진입 비용이 늘지 않는다.
+ * 제스처/각도/레이아웃 계약은 그대로 쓴다.
  */
 export function CharacterViewer({ visible, onClose, genderExpression, size, tone }: CharacterViewerProps) {
   const insets = useSafeAreaInsets();
@@ -111,7 +116,7 @@ function CharacterStage({ genderExpression, size, tone }: Omit<Character3DViewer
 
   return (
     <View style={styles.stage} onLayout={handleLayout} {...panResponder.panHandlers}>
-      {PlayerCharacterModel ? null : (
+      {hasPlayerCharacterModel() ? null : (
         <CharacterSilhouette
           genderExpression={genderExpression}
           size={size}
