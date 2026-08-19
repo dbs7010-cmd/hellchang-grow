@@ -26,9 +26,8 @@ import { recommendMuscleGroup } from '@/utils/workout-recommendation';
 import { formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
 
 /**
- * 01 HOME — MASTER CANON의 모바일 밀도를 유지한다.
+ * 01 HOME — 기존 기능/레이아웃 계약을 유지하면서 MASTER CANON의 HUD 밀도만 복원한다.
  * Header → HELL PASS/주간 기록 → 캐릭터(좌측 신체 HUD + 우측 스탠리) → CTA → 추천 운동.
- * 추천 운동 이하 영역은 캐릭터 stage 조정의 영향을 받지 않는다.
  * 신체 HUD는 실제 입력값만 표시하며 없는 값은 '-'로 둔다.
  */
 export default function HomeScreen() {
@@ -145,12 +144,7 @@ export default function HomeScreen() {
             style={styles.characterPressable}
             accessibilityRole="button"
             accessibilityLabel="캐릭터 360도로 보기">
-            <PlayerCharacter
-              appearance={characterAppearance}
-              slot="home"
-              height={stageHeight > 0 ? stageHeight * 1.2 : 0}
-              idle
-            />
+            <PlayerCharacter appearance={characterAppearance} slot="home" height={stageHeight} idle />
           </Pressable>
 
           <View
@@ -180,7 +174,11 @@ export default function HomeScreen() {
             />
           </View>
 
-          <View
+          <Pressable
+            onPress={() => setViewerOpen(true)}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="캐릭터 360도로 보기"
             style={[
               styles.rotatePill,
               { backgroundColor: theme.backgroundElement, borderColor: theme.border },
@@ -188,7 +186,7 @@ export default function HomeScreen() {
             <ThemedText type="caption" themeColor="textSecondary">
               🔄 360°
             </ThemedText>
-          </View>
+          </Pressable>
         </View>
 
         <PrimaryButton
@@ -310,10 +308,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    overflow: 'hidden',
   },
   characterPressable: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: '-10%',
+    bottom: '-10%',
+    left: 0,
+    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -325,6 +326,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.medium,
     overflow: 'hidden',
+    zIndex: 2,
   },
   bodyHudMetric: {
     paddingHorizontal: Spacing.one,
@@ -334,8 +336,9 @@ const styles = StyleSheet.create({
   trainerOverlay: {
     position: 'absolute',
     right: 0,
-    top: Spacing.one,
-    width: '39%',
+    top: 0,
+    width: '40%',
+    zIndex: 2,
   },
   rotatePill: {
     position: 'absolute',
@@ -345,6 +348,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.one,
+    zIndex: 3,
   },
   progressBlock: {
     borderBottomWidth: 1,
