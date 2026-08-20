@@ -257,8 +257,7 @@ export default function HomeScreen() {
         onClose={() => setViewerOpen(false)}
         genderExpression={profile.genderExpression}
         size={profile.bodyParameters.size}
-        tone={profile.bodyParameters.tone}
-        growthStage={characterAppearance.growthStage}
+        tone={profile.bodyParameters.tone}
       />
     </ThemedView>
   );

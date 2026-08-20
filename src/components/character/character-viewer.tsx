@@ -42,14 +42,7 @@ const MAX_VIEWER_SCALE = 1.6;
  * 정적으로 import하지 말고 뷰어가 열릴 때 지연 로딩해야 홈 진입 비용이 늘지 않는다.
  * 제스처/각도/레이아웃 계약은 그대로 쓴다.
  */
-export function CharacterViewer({
-  visible,
-  onClose,
-  genderExpression,
-  size,
-  tone,
-  growthStage,
-}: CharacterViewerProps) {
+export function CharacterViewer({ visible, onClose, genderExpression, size, tone }: CharacterViewerProps) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -65,14 +58,7 @@ export function CharacterViewer({
         </View>
 
         {/* visible일 때만 마운트한다 — 그래서 다시 열면 회전 상태가 자연히 정면으로 돌아간다. */}
-        {visible && (
-          <CharacterStage
-            genderExpression={genderExpression}
-            size={size}
-            tone={tone}
-            growthStage={growthStage}
-          />
-        )}
+        {visible && <CharacterStage genderExpression={genderExpression} size={size} tone={tone} />}
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.four }]}>
           <ThemedText type="small" themeColor="textSecondary">
@@ -91,12 +77,7 @@ export function CharacterViewer({
  * 나눠서 들고 있는다 — 그래야 제스처 핸들러가 현재 각도를 되읽지 않아도 되고, 손을 뗀 각도가
  * 스냅 없이 그대로 유지된다.
  */
-function CharacterStage({
-  genderExpression,
-  size,
-  tone,
-  growthStage,
-}: Omit<Character3DViewerProps, 'visible' | 'onClose'>) {
+function CharacterStage({ genderExpression, size, tone }: Omit<Character3DViewerProps, 'visible' | 'onClose'>) {
   const [baseRotationDeg, setBaseRotationDeg] = useState(CharacterFrontRotationDeg);
   const [dragDeltaDeg, setDragDeltaDeg] = useState(0);
   const [stageHeight, setStageHeight] = useState(0);
@@ -135,7 +116,7 @@ function CharacterStage({
 
   return (
     <View style={styles.stage} onLayout={handleLayout} {...panResponder.panHandlers}>
-      {hasPlayerCharacterModel(genderExpression, growthStage) ? null : (
+      {hasPlayerCharacterModel() ? null : (
         <CharacterSilhouette
           genderExpression={genderExpression}
           size={size}

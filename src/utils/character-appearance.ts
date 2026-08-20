@@ -1,5 +1,4 @@
 import { BodyPresetDefaultParameters, BodyPresetId, DefaultBodyPresetId } from '@/config/body-presets';
-import { CharacterGrowthStage, DefaultCharacterGrowthStage } from '@/config/character-growth';
 import { BodyParameters } from '@/types/body';
 import { GenderExpression, UserProfile } from '@/types/user';
 
@@ -11,11 +10,11 @@ import { GenderExpression, UserProfile } from '@/types/user';
  * 새 도메인을 만들지 않는다: 필드는 전부 기존 타입(GenderExpression / BodyPresetId /
  * BodyParameters)을 그대로 재사용한다.
  *
- * growthStage는 resolveCharacterGrowth()가 계산한 결과를 받아 넣는다 — 화면이 성장 규칙을
- * 다시 구현하지 않는다. 이 값은 게임 아바타 표현 전용이고 실제 신체 수치를 바꾸지 않는다.
+ * V1은 단일 아바타다 — 운동 기록으로 전신이 자동으로 커지는 성장 단계 필드는 없다.
+ * 여기 있는 값은 전부 사용자가 온보딩/설정에서 고른 프로필에서만 온다.
  *
- * TODO(character-growth): Body Goal / Body Growth 추세가 외형에 더 반영되면 필드를 더하고
- * resolver만 고친다. 화면과 렌더러는 손대지 않아도 된다.
+ * TODO(character-body-parts): 실제 3D 모델 단계에서 chest / back / shoulders / arms / legs
+ * 부위별 파라미터를 검토한다. 그때 이 인터페이스에 필드를 더하면 화면은 손대지 않아도 된다.
  */
 export interface CharacterAppearance {
   genderExpression: GenderExpression;
@@ -24,11 +23,6 @@ export interface CharacterAppearance {
   size: number;
   /** 0-100, 근육 톤/선명도 */
   tone: number;
-  /**
-   * 캐릭터 성장 단계 (stage1~stage5). HELL PASS Lv와는 별개의 개념이다 —
-   * UI에서 "Lv.N = stageN"으로 묶어 보여주지 않는다.
-   */
-  growthStage: CharacterGrowthStage;
 }
 
 /** 프로필이 아직 없을 때(온보딩 시작 화면 등) 쓰는 중립 외형. */
@@ -37,24 +31,18 @@ export const DefaultCharacterAppearance: CharacterAppearance = {
   bodyPresetId: DefaultBodyPresetId,
   size: BodyPresetDefaultParameters[DefaultBodyPresetId].size,
   tone: BodyPresetDefaultParameters[DefaultBodyPresetId].tone,
-  growthStage: DefaultCharacterGrowthStage,
 };
 
-/**
- * 저장된 프로필 + 성장 단계 → 캐릭터 외형. 프로필이 없으면 중립 외형을 쓴다.
- * 성장 단계는 바깥에서 resolveCharacterGrowth()로 한 번만 계산해 넘긴다 (app-data-context).
- */
+/** 저장된 프로필 → 캐릭터 외형. 프로필이 없으면 중립 외형을 쓴다. */
 export function characterAppearanceFromProfile(
-  profile: UserProfile | null | undefined,
-  growthStage: CharacterGrowthStage = DefaultCharacterGrowthStage
+  profile: UserProfile | null | undefined
 ): CharacterAppearance {
-  if (!profile) return { ...DefaultCharacterAppearance, growthStage };
+  if (!profile) return DefaultCharacterAppearance;
   return {
     genderExpression: profile.genderExpression,
     bodyPresetId: profile.bodyPresetId as BodyPresetId,
     size: profile.bodyParameters.size,
     tone: profile.bodyParameters.tone,
-    growthStage,
   };
 }
 
@@ -69,7 +57,5 @@ export function characterAppearanceFromDraft(input: {
     bodyPresetId: input.bodyPresetId,
     size: input.bodyParameters.size,
     tone: input.bodyParameters.tone,
-    // 온보딩 중에는 아직 운동/PASS 기록이 없다 — 항상 기본 단계에서 시작한다.
-    growthStage: DefaultCharacterGrowthStage,
   };
 }

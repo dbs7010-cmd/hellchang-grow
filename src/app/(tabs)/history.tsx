@@ -541,7 +541,6 @@ export default function HistoryScreen() {
           genderExpression={profile.genderExpression}
           size={profile.bodyParameters.size}
           tone={profile.bodyParameters.tone}
-          growthStage={characterAppearance.growthStage}
         />
       )}
     </ScreenScroll>
