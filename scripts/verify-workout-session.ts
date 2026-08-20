@@ -220,6 +220,13 @@ const START_MS = new Date(START_ISO).getTime();
   const completed = completeSession(session, new Date(START_MS + 30 * 60_000).toISOString(), START_MS + 30 * 60_000);
   const recordInput = sessionToWorkoutRecordInput(completed, '가슴');
   check('derived record title uses the given label', recordInput.title, '가슴 세션');
+
+  // 루틴으로 시작했으면 기록 제목은 사용자가 붙인 루틴 이름 그대로다. 루틴이 아니거나
+  // 이름이 비어 있으면 기존 라벨 제목으로 되돌아간다 (예전 세션/기록 호환).
+  const fromRoutine = sessionToWorkoutRecordInput({ ...completed, routineName: '가슴 A' }, '가슴');
+  check('a routine session is titled with the routine name', fromRoutine.title, '가슴 A');
+  const blankRoutineName = sessionToWorkoutRecordInput({ ...completed, routineName: '   ' }, '가슴');
+  check('a blank routine name falls back to the label title', blankRoutineName.title, '가슴 세션');
   check('derived record exercise carries setDetails from completed sets',
     recordInput.exercises?.[0].setDetails?.length, 2);
   check('derived record exercise summary uses the last completed set',

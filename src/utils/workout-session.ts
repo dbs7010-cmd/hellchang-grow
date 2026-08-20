@@ -16,6 +16,7 @@ export function createSession(
   options?: {
     primaryMuscleGroup?: MuscleGroup;
     routineId?: string;
+    routineName?: string;
     initialExercises?: { exerciseId: string; exerciseName: string }[];
   }
 ): WorkoutSession {
@@ -36,6 +37,7 @@ export function createSession(
     primaryCategory: category,
     primaryMuscleGroup: options?.primaryMuscleGroup,
     routineId: options?.routineId,
+    routineName: options?.routineName,
     exercises,
     currentExerciseId: exercises[0]?.id,
     createdAt: nowIso,
@@ -333,7 +335,9 @@ export function sessionToWorkoutRecordInput(
   return {
     date: toDateString(new Date(session.startedAt)),
     category: session.primaryCategory,
-    title: `${titleLabel} 세션`,
+    // 루틴으로 시작했으면 사용자가 붙인 이름을 그대로 쓴다 ("가슴 A"). 아니면 부위/종류 라벨
+    // 기반의 기존 제목("등 세션")이 그대로다 — 이미 저장된 기록은 건드리지 않는다.
+    title: session.routineName?.trim() || `${titleLabel} 세션`,
     durationMinutes: Math.max(1, Math.round(session.accumulatedSeconds / 60)),
     exercises: exercises.length > 0 ? exercises : undefined,
     memo: session.notes,

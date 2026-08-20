@@ -13,7 +13,8 @@ export interface RecommendedStripItem {
 
 export interface RecommendedStripProps {
   items: RecommendedStripItem[];
-  onPressItem: () => void;
+  /** 누른 카드의 Exercise DB ID를 그대로 넘긴다 — 어떤 운동을 눌렀는지 호출부가 안다. */
+  onPressItem: (exerciseId: string) => void;
   onPressMore: () => void;
 }
 
@@ -46,7 +47,9 @@ export function RecommendedStrip({ items, onPressItem, onPressMore }: Recommende
         {items.map((item) => (
           <Pressable
             key={item.id}
-            onPress={onPressItem}
+            onPress={() => onPressItem(item.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.name} 자세히 보기`}
             style={[styles.item, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
             <ExerciseArtSlot exerciseId={item.id} style={styles.thumbnail} />
             <View style={styles.itemText}>

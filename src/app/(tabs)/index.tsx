@@ -12,7 +12,7 @@ import { PrimaryButton } from '@/components/ui/primary-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { AppConfig } from '@/config/app-config';
-import { StanleyPortraitImage } from '@/config/character-assets';
+import { hasPlayerCharacterModel, StanleyPortraitImage } from '@/config/character-assets';
 import { Exercises, getExerciseById, getExercisesByMuscleGroup } from '@/config/exercises';
 import { MuscleGroups } from '@/config/muscle-groups';
 import { StanleyTrainer } from '@/config/trainers';
@@ -66,6 +66,8 @@ export default function HomeScreen() {
   } = useAppData();
 
   const windowHeight = Dimensions.get('window').height;
+  /** 실제 3D 모델이 등록돼 있을 때만 360 진입점을 노출한다 (V1은 아직 없다). */
+  const canView360 = hasPlayerCharacterModel();
   const [viewerOpen, setViewerOpen] = useState(false);
   const [stageHeight, setStageHeight] = useState(0);
 
@@ -114,6 +116,19 @@ export default function HomeScreen() {
 
   const handleStartPress = () => {
     router.push(sessionInProgress ? '/session' : '/workout-start');
+  };
+
+  /**
+   * 추천 카드는 "이 운동이 뭔지 먼저 보는" 입구다 — 누른 운동의 상세로 그대로 보낸다.
+   * 카드를 눌렀다고 세션을 자동으로 시작하지 않는다 (시작은 항상 [운동 시작] 흐름을 거친다).
+   * DB에 없는 ID가 들어와도 상세 화면이 "운동을 찾을 수 없어요"로 받아내므로 빈 화면이 없다.
+   */
+  const handleRecommendedPress = (exerciseId: string) => {
+    if (!getExerciseById(exerciseId)) {
+      router.push('/workout-start');
+      return;
+    }
+    router.push({ pathname: '/exercise-detail', params: { id: exerciseId } });
   };
 
   const handleStageLayout = (event: LayoutChangeEvent) => {
@@ -187,11 +202,11 @@ export default function HomeScreen() {
           {/* 캐릭터가 실제로 쓰는 영역. 이 박스를 직접 재서 그 높이만 PlayerCharacter에 넘긴다. */}
           <View style={styles.characterArea}>
             <Pressable
-              onPress={() => setViewerOpen(true)}
+              onPress={canView360 ? () => setViewerOpen(true) : undefined}
               onLayout={handleStageLayout}
               style={styles.characterFill}
-              accessibilityRole="button"
-              accessibilityLabel="캐릭터 360도로 보기">
+              accessibilityRole={canView360 ? 'button' : undefined}
+              accessibilityLabel={canView360 ? '캐릭터 360도로 보기' : undefined}>
               <PlayerCharacter appearance={characterAppearance} slot="home" height={characterHeight} idle />
             </Pressable>
 
@@ -214,19 +229,24 @@ export default function HomeScreen() {
               <BodyHudMetric label="운동 기록" value={`${workoutRecords.length}회`} last />
             </View>
 
-            <Pressable
-              onPress={() => setViewerOpen(true)}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="캐릭터 360도로 보기"
-              style={[
-                styles.rotatePill,
-                { backgroundColor: theme.backgroundElement, borderColor: theme.border },
-              ]}>
-              <ThemedText type="caption" themeColor="textSecondary">
-                🔄 360°
-              </ThemedText>
-            </Pressable>
+            {/* 실제 3D 모델이 등록되기 전에는 360을 아예 노출하지 않는다 — 눌러봐야 도형
+                placeholder가 도는 빈 기능이다. model3d가 채워지면 이 버튼과 CharacterViewer가
+                코드 수정 없이 그대로 다시 살아난다. */}
+            {canView360 && (
+              <Pressable
+                onPress={() => setViewerOpen(true)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="캐릭터 360도로 보기"
+                style={[
+                  styles.rotatePill,
+                  { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+                ]}>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  🔄 360°
+                </ThemedText>
+              </Pressable>
+            )}
           </View>
         </View>
 
@@ -247,7 +267,7 @@ export default function HomeScreen() {
         {!sessionInProgress && (
           <RecommendedStrip
             items={recommendedItems}
-            onPressItem={handleStartPress}
+            onPressItem={handleRecommendedPress}
             onPressMore={handleStartPress}
           />
         )}
@@ -258,7 +278,7 @@ export default function HomeScreen() {
         onClose={() => setViewerOpen(false)}
         genderExpression={profile.genderExpression}
         size={profile.bodyParameters.size}
-        tone={profile.bodyParameters.tone}
+        tone={profile.bodyParameters.tone}
       />
     </ThemedView>
   );
@@ -272,13 +292,18 @@ function describePreviousPerformance(
   return '지난번 ' + previous.sets.length + '세트';
 }
 
+/**
+ * 주간 요약 한 칸. 라벨과 값을 한 줄에 나란히 두면 360px 화면에서 "이번 주 볼륨 1,950kg"이
+ * 칸 폭을 넘겨 잘렸다 — 값이 잘리면 정보로서 쓸모가 없으므로 위/아래로 나눠 각자 칸 폭을
+ * 전부 쓰게 한다. 숫자는 라벨보다 크게 읽히도록 한 단계 키운다.
+ */
 function HomeStat({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.stat}>
       <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
         {label}
       </ThemedText>
-      <ThemedText type="smallBold" numberOfLines={1}>
+      <ThemedText type="smallBold" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
         {value}
       </ThemedText>
     </View>
@@ -345,6 +370,12 @@ const styles = StyleSheet.create({
   stage: {
     flex: 1,
     minHeight: 180,
+    /**
+     * 캐릭터 발밑과 [운동 시작] 사이의 틈을 좁힌다 — "캐릭터 → 운동 시작"이 두 개의 블록이
+     * 아니라 한 동작으로 읽히게 하려는 것. content의 공통 gap(8)에서 4만 되돌린다.
+     * 캐릭터는 이 박스 안에서 contain으로 맞춰지므로 몸을 가리거나 잘리지 않는다.
+     */
+    marginBottom: -Spacing.one,
   },
   /**
    * 캐릭터가 실제로 그려지는 영역. stage에서 스탠리 줄을 뺀 나머지를 전부 가져간다.
@@ -378,9 +409,9 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   bodyHudMetric: {
-    paddingHorizontal: Spacing.one,
-    paddingVertical: Spacing.one,
-    gap: 1,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one + 2,
+    gap: Spacing.half,
   },
   trainerRow: {
     width: '100%',
@@ -409,9 +440,9 @@ const styles = StyleSheet.create({
   },
   stat: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.one,
+    gap: Spacing.half,
+    paddingHorizontal: Spacing.half,
   },
 });

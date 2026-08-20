@@ -100,7 +100,11 @@ export default function WorkoutStartScreen() {
       .map((id) => getExerciseById(id))
       .filter((exercise): exercise is NonNullable<typeof exercise> => Boolean(exercise))
       .map((exercise) => ({ exerciseId: exercise.id, exerciseName: exercise.name }));
-    await startWorkoutSession('strength', { routineId: scheduledRoutine.id, initialExercises });
+    await startWorkoutSession('strength', {
+      routineId: scheduledRoutine.id,
+      routineName: scheduledRoutine.name,
+      initialExercises,
+    });
     await goToSession();
   };
 

@@ -25,6 +25,12 @@ export interface WorkoutSession {
   primaryMuscleGroup?: MuscleGroup;
   /** [이 루틴으로 시작]으로 시작했다면 해당 Routine ID (루틴 완료 감지에 사용) */
   routineId?: string;
+  /**
+   * 시작 시점의 루틴 이름. 기록 제목을 "가슴 A"처럼 사용자가 고른 이름 그대로 남기기 위해
+   * 세션이 직접 들고 간다 — 저장된 기록을 나중에 routineId로 되짚어 추론하지 않는다
+   * (루틴 이름이 바뀌거나 삭제돼도 그날의 기록은 그대로여야 한다).
+   */
+  routineName?: string;
   /** 세션에 추가된 운동들 (선택/강제 아님) */
   exercises: SessionExerciseEntry[];
   /** 현재 포커스된 운동 (session.exercises 중 하나의 id) */

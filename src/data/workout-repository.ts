@@ -18,7 +18,13 @@ export async function addWorkoutRecord(
     id: createId('workout'),
     createdAt: new Date().toISOString(),
   };
-  const updated = [newRecord, ...records].sort((a, b) => (a.date < b.date ? 1 : -1));
+  // 날짜 내림차순, 같은 날은 나중에 저장한 기록이 위로. 예전 비교자는 동률일 때도 -1을 돌려줘서
+  // 하루에 두 번 이상 운동하면 목록 순서가 뒤죽박죽이었다 (방금 끝낸 기록이 맨 위가 아니었다).
+  const updated = [newRecord, ...records].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    if (a.createdAt === b.createdAt) return 0;
+    return a.createdAt < b.createdAt ? 1 : -1;
+  });
   await writeJSON(StorageKeys.workoutRecords, updated);
   return updated;
 }

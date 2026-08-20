@@ -149,6 +149,7 @@ interface AppDataContextValue extends AppDataState {
     options?: {
       primaryMuscleGroup?: MuscleGroup;
       routineId?: string;
+      routineName?: string;
       initialExercises?: { exerciseId: string; exerciseName: string }[];
     }
   ) => Promise<void>;
