@@ -15,6 +15,14 @@ export const AppConfig = {
   dailyPhotoLimit: 1,
   /** 광고 1회 시청으로 얻는 AI PT 이용 횟수 */
   rewardedPtUses: 1,
+  /** PT 컨텍스트에 담는 최근 운동 개수 상한 (앱 전체 기록을 보내지 않는다) */
+  ptContextRecentExerciseLimit: 6,
+  /** PT 컨텍스트에 담는 최근 PR 개수 상한 */
+  ptContextRecentPrLimit: 3,
+  /** AI 요청에 함께 보내는 직전 대화 개수 상한 (토큰/비용 폭증 방지) */
+  aiHistoryMessageLimit: 8,
+  /** AI 요청 타임아웃(ms). 넘으면 대화를 유지한 채 재시도 안내를 띄운다. */
+  aiRequestTimeoutMs: 20000,
   /** 오픈 이벤트 무료 패스 기간(일) */
   openEventPassDays: 14,
   /** PASS: 운동 세션 1회 완료 시 지급되는 XP */

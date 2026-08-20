@@ -110,6 +110,59 @@ export function countPeriodPRs(periodRecords: WorkoutRecord[], allRecords: Worko
   return count;
 }
 
+export interface PrRecordEvent {
+  exerciseId: string;
+  exerciseName: string;
+  weightKg: number;
+  date: string;
+  /** 이 기록 직전까지의 최고 중량. 이 운동을 처음 한 것이면 undefined. */
+  previousBestWeightKg?: number;
+}
+
+/**
+ * 저장된 기록 전체를 시간순으로 훑어 "그 시점까지의 최고 중량을 갱신한 순간"을 오래된 것부터
+ * 모두 모은다 — PT가 "최근에 뭘 깼는지" 말할 때 쓴다. 판정 기준은 countPeriodPRs와 같은
+ * 누적 최고 기록이며, 기간 필터 없이 사건 자체를 돌려준다는 점만 다르다
+ * (scripts/verify-weight-core.ts가 두 함수의 개수가 항상 일치하는지 검증한다).
+ */
+export function listPRs(records: WorkoutRecord[]): PrRecordEvent[] {
+  // 날짜가 같으면 저장 시각까지 봐서 실제로 한 순서대로 훑는다 — 하루에 두 번 운동한 날에
+  // 순서가 뒤집히면 "무엇을 갱신했는지"가 달라진다.
+  const sorted = [...records].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if (a.createdAt === b.createdAt) return 0;
+    return a.createdAt < b.createdAt ? -1 : 1;
+  });
+  const bestSoFar = new Map<string, number>();
+  const events: PrRecordEvent[] = [];
+
+  for (const record of sorted) {
+    for (const exercise of record.exercises ?? []) {
+      if (!exercise.exerciseId) continue;
+      const sets =
+        exercise.setDetails ?? (exercise.weightKg !== undefined ? [{ weightKg: exercise.weightKg }] : []);
+      const maxInRecord = sets.reduce(
+        (max, set) => (set.weightKg !== undefined && set.weightKg > max ? set.weightKg : max),
+        0
+      );
+      if (maxInRecord <= 0) continue;
+
+      const prevBest = bestSoFar.get(exercise.exerciseId);
+      if (maxInRecord > (prevBest ?? 0)) {
+        events.push({
+          exerciseId: exercise.exerciseId,
+          exerciseName: exercise.name,
+          weightKg: maxInRecord,
+          date: record.date,
+          previousBestWeightKg: prevBest,
+        });
+        bestSoFar.set(exercise.exerciseId, maxInRecord);
+      }
+    }
+  }
+  return events;
+}
+
 export interface PrEvent {
   exerciseId: string;
   exerciseName: string;

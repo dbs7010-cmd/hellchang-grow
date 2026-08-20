@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
@@ -10,49 +10,105 @@ import { PrimaryButton } from '@/components/ui/primary-button';
 import { TextField } from '@/components/ui/text-field';
 import { AiQuickActionIds, AiQuickActionLabels } from '@/config/ai-quick-actions';
 import { StanleyTrainer } from '@/config/trainers';
+import { QuickActionPrompts } from '@/config/trainer-persona';
 import { Radius, Spacing } from '@/constants/theme';
-import { AiQuickActionId, AiTrainerMessage } from '@/services/trainer/ai-trainer-service';
+import { useTheme } from '@/hooks/use-theme';
+import {
+  AiQuickActionId,
+  AiTrainerHistoryEntry,
+  AiTrainerMessage,
+} from '@/services/trainer/ai-trainer-service';
 import { createId } from '@/utils/id';
 
 interface AiPtMessage {
   id: string;
   role: 'user' | 'trainer';
   text: string;
+  /** 트레이너 메시지가 실제 AI에서 온 것인지, 기록으로 계산한 것인지 */
+  source?: AiTrainerMessage['source'];
 }
 
 export interface AiPtPanelProps {
   accessLabel: string;
+  /** AI 백엔드가 연결돼 있지 않으면 그 사실을 대화 위에 그대로 알린다. */
+  aiConnected: boolean;
   /**
    * 트레이너 화면의 빠른 질문으로 들어온 경우, 화면을 열자마자 그 질문을 한 번 보낸다.
    * 대화 UI/이용권 소모 경로는 사용자가 직접 누른 것과 완전히 동일하다.
    */
   initialQuickAction?: AiQuickActionId;
-  onQuickAction: (actionId: AiQuickActionId) => Promise<AiTrainerMessage | null>;
-  onSendMessage: (text: string) => Promise<AiTrainerMessage | null>;
+  onSend: (input: {
+    text: string;
+    quickActionId?: AiQuickActionId;
+    history: AiTrainerHistoryEntry[];
+  }) => Promise<AiTrainerMessage | null>;
 }
 
-export function AiPtPanel({ accessLabel, initialQuickAction, onQuickAction, onSendMessage }: AiPtPanelProps) {
+export function AiPtPanel({ accessLabel, aiConnected, initialQuickAction, onSend }: AiPtPanelProps) {
+  const theme = useTheme();
   const [messages, setMessages] = useState<AiPtMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /** 실패한 요청 그대로 다시 보낼 수 있게 마지막 요청을 들고 있는다 (재시도 버튼 노출 조건). */
+  const [lastRequest, setLastRequest] = useState<{ text: string; quickActionId?: AiQuickActionId } | null>(
+    null
+  );
+  /** 전송 중 중복 요청 차단 — 버튼 disabled보다 앞선 방어선이다. */
+  const sendingRef = useRef(false);
 
-  const appendMessage = (role: AiPtMessage['role'], text: string) => {
-    setMessages((prev) => [...prev, { id: createId('ai-msg'), role, text }]);
-  };
+  const send = async (text: string, quickActionId?: AiQuickActionId, appendUserBubble = true) => {
+    const trimmed = text.trim();
+    if (!trimmed || sendingRef.current) return;
+    sendingRef.current = true;
+    setError(null);
+    setLastRequest({ text: trimmed, quickActionId });
 
-  const handleReply = async (getReply: () => Promise<AiTrainerMessage | null>) => {
+    const history: AiTrainerHistoryEntry[] = messages.map((message) => ({
+      role: message.role,
+      text: message.text,
+    }));
+
+    if (appendUserBubble) {
+      const label = quickActionId ? AiQuickActionLabels[quickActionId] : trimmed;
+      setMessages((prev) => [...prev, { id: createId('ai-msg'), role: 'user', text: label }]);
+    }
+
     setLoading(true);
     try {
-      const reply = await getReply();
-      appendMessage('trainer', reply?.text ?? '이용권이 부족해요. 광고를 보거나 구독하면 다시 이용할 수 있어요.');
+      const reply = await onSend({ text: trimmed, quickActionId, history });
+      if (!reply) {
+        setError('이용권이 부족해요. 광고를 보거나 구독하면 다시 이용할 수 있어요.');
+        return;
+      }
+      setMessages((prev) => [
+        ...prev,
+        { id: createId('ai-msg'), role: 'trainer', text: reply.text, source: reply.source },
+      ]);
+    } catch (caught) {
+      // 대화는 그대로 두고 오류만 알린다 — 실패했다고 지금까지 한 이야기를 날리지 않는다.
+      setError(caught instanceof Error ? caught.message : '답변을 받지 못했어요.');
     } finally {
       setLoading(false);
+      sendingRef.current = false;
     }
   };
 
   const handleQuickAction = (actionId: AiQuickActionId) => {
-    appendMessage('user', AiQuickActionLabels[actionId]);
-    handleReply(() => onQuickAction(actionId));
+    send(QuickActionPrompts[actionId], actionId);
+  };
+
+  const handleSend = () => {
+    const trimmed = inputText.trim();
+    if (!trimmed) return;
+    setInputText('');
+    send(trimmed);
+  };
+
+  const handleRetry = () => {
+    if (!lastRequest) return;
+    // 사용자 말풍선은 이미 있으므로 다시 붙이지 않는다.
+    send(lastRequest.text, lastRequest.quickActionId, false);
   };
 
   const autoSentRef = useRef(false);
@@ -63,39 +119,55 @@ export function AiPtPanel({ accessLabel, initialQuickAction, onQuickAction, onSe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuickAction]);
 
-  const handleSend = () => {
-    const trimmed = inputText.trim();
-    if (!trimmed || loading) return;
-    appendMessage('user', trimmed);
-    setInputText('');
-    handleReply(() => onSendMessage(trimmed));
-  };
-
   return (
     <View style={styles.container}>
       <ThemedText type="caption" themeColor="textSecondary">
         {accessLabel}
       </ThemedText>
 
+      {!aiConnected && (
+        <ThemedView type="backgroundElement" style={[styles.notice, { borderColor: theme.border }]}>
+          <ThemedText type="caption" themeColor="textSecondary">
+            AI가 아직 연결되지 않았어요. 지금은 스탠리가 저장된 운동 기록만 보고 답해요 — 기록에
+            없는 내용은 지어내지 않아요.
+          </ThemedText>
+        </ThemedView>
+      )}
+
       <ChipRow bleed>
         {AiQuickActionIds.map((actionId) => (
           <Chip
             key={actionId}
             label={AiQuickActionLabels[actionId]}
+            disabled={loading}
             onPress={() => handleQuickAction(actionId)}
           />
         ))}
       </ChipRow>
 
-      {messages.length > 0 && (
-        <View style={styles.messages}>
-          {messages.map((message) => (
-            <MessageBubble key={message.id} role={message.role} text={message.text} />
-          ))}
-        </View>
-      )}
+      {/* 대화만 가운데에서 스크롤된다 — 답변이 길어져도 아래 입력창이 화면 밖으로 밀려나지 않는다. */}
+      <ScrollView
+        style={styles.conversation}
+        contentContainerStyle={styles.conversationContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
+        {messages.map((message) => (
+          <MessageBubble key={message.id} role={message.role} text={message.text} />
+        ))}
 
-      {loading && <TypingIndicator />}
+        {loading && <TypingIndicator />}
+
+        {error && (
+          <ThemedView type="backgroundElement" style={[styles.notice, { borderColor: theme.mutedRed }]}>
+            <ThemedText type="caption" themeColor="textSecondary">
+              {error}
+            </ThemedText>
+            {lastRequest && (
+              <PrimaryButton label="다시 시도" variant="secondary" onPress={handleRetry} disabled={loading} />
+            )}
+          </ThemedView>
+        )}
+      </ScrollView>
 
       <View style={styles.inputRow}>
         <TextField
@@ -105,7 +177,12 @@ export function AiPtPanel({ accessLabel, initialQuickAction, onQuickAction, onSe
           containerStyle={styles.inputField}
           onSubmitEditing={handleSend}
         />
-        <PrimaryButton label="전송" variant="secondary" onPress={handleSend} disabled={loading} />
+        <PrimaryButton
+          label="전송"
+          variant="secondary"
+          onPress={handleSend}
+          disabled={loading || inputText.trim().length === 0}
+        />
       </View>
     </View>
   );
@@ -153,9 +230,20 @@ function TypingIndicator() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     gap: Spacing.three,
   },
-  messages: {
+  conversation: {
+    flex: 1,
+  },
+  conversationContent: {
+    gap: Spacing.two,
+    paddingBottom: Spacing.two,
+  },
+  notice: {
+    borderWidth: 1,
+    borderRadius: Radius.medium,
+    padding: Spacing.three,
     gap: Spacing.two,
   },
   bubbleRow: {

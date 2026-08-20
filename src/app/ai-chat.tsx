@@ -28,10 +28,10 @@ export default function AiChatScreen() {
     hasSubscriptionAccess,
     hasAiPtAccess,
     trainerUsage,
+    aiConnected,
     watchRewardedAd,
     subscribeMock,
-    sendAiQuickAction,
-    sendAiMessage,
+    sendPtMessage,
   } = useAppData();
 
   const [aiPanelOpened, setAiPanelOpened] = useState(hasAiPtAccess);
@@ -47,7 +47,7 @@ export default function AiChatScreen() {
   };
 
   return (
-    <SubScreen title="AI 상담" accent>
+    <SubScreen title="AI 상담" accent scroll={!aiPanelOpened}>
       {aiPanelOpened ? (
         <AiPtPanel
           accessLabel={
@@ -55,9 +55,9 @@ export default function AiChatScreen() {
               ? '구독 중이라 광고 없이 이용할 수 있어요.'
               : `남은 이용 횟수: ${trainerUsage.rewardedPtUsesRemaining}회`
           }
+          aiConnected={aiConnected}
           initialQuickAction={initialQuickAction}
-          onQuickAction={sendAiQuickAction}
-          onSendMessage={sendAiMessage}
+          onSend={sendPtMessage}
         />
       ) : (
         <>

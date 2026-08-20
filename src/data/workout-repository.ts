@@ -1,6 +1,6 @@
 import { StorageKeys } from '@/services/storage/keys';
 import { readJSON, writeJSON } from '@/services/storage/local-storage';
-import { WorkoutRecord } from '@/types/workout';
+import type { WorkoutRecord } from '@/types/workout';
 import { todayDateString, toDateString } from '@/utils/date';
 import { createId } from '@/utils/id';
 

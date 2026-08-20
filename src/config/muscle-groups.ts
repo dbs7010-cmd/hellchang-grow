@@ -1,4 +1,4 @@
-import { MuscleGroup } from '@/types/exercise';
+import type { MuscleGroup } from '@/types/exercise';
 
 /**
  * 부위 필터/부위별 시작에 노출하는 순서.

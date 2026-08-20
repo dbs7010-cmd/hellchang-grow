@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -18,6 +18,7 @@ import { useAppData } from '@/context/app-data-context';
 import { getTodayRecords } from '@/data/workout-repository';
 import { useTheme } from '@/hooks/use-theme';
 import { AiQuickActionId } from '@/services/trainer/ai-trainer-service';
+import { buildTrainerBrief } from '@/utils/trainer-brief';
 import { getGreetingLine } from '@/utils/trainer-dialogue';
 
 /**
@@ -40,7 +41,7 @@ const HERO_QUICK_ACTIONS: AiQuickActionId[] = ['what_today', 'build_routine', 'a
 export default function TrainerScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const { workoutRecords, streak } = useAppData();
+  const { workoutRecords, streak, ptContext } = useAppData();
   const hasRecordedToday = getTodayRecords(workoutRecords).length > 0;
 
   const [stanleyLine] = useState(
@@ -50,6 +51,12 @@ export default function TrainerScreen() {
         currentStreakDays: streak.currentStreakDays,
       }).text
   );
+
+  /**
+   * 무료 PT 브리핑. AI가 아니라 저장된 기록에서 그대로 계산한 문장이라 로그인만 하면 누구나
+   * 볼 수 있다 — 값이 없으면 없다고 말하고, 없는 숫자를 만들지 않는다.
+   */
+  const brief = useMemo(() => buildTrainerBrief(ptContext), [ptContext]);
 
   const openChat = (action?: AiQuickActionId) => {
     router.push(action ? `/ai-chat?action=${action}` : '/ai-chat');
@@ -77,6 +84,16 @@ export default function TrainerScreen() {
           </ThemedText>
         </View>
       </View>
+
+      <Section title="오늘 상태">
+        <ThemedView type="backgroundElement" style={[styles.briefCard, { borderColor: theme.border }]}>
+          {brief.map((line) => (
+            <ThemedText key={line} type="small">
+              {line}
+            </ThemedText>
+          ))}
+        </ThemedView>
+      </Section>
 
       <PrimaryButton
         label="AI 상담"
@@ -136,6 +153,12 @@ const styles = StyleSheet.create({
   },
   heroLine: {
     marginTop: Spacing.one,
+  },
+  briefCard: {
+    borderWidth: 1,
+    borderRadius: Radius.medium,
+    padding: Spacing.three,
+    gap: Spacing.one,
   },
   quickAction: {
     borderWidth: 1,

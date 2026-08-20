@@ -1,7 +1,8 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { AppConfig } from '@/config/app-config';
+import { Exercises, searchExercises } from '@/config/exercises';
 import { MuscleGroupLabels } from '@/config/muscle-groups';
 import { WorkoutCategoryLabels } from '@/config/workout-labels';
 import {
@@ -43,8 +44,12 @@ import { StorageKeys } from '@/services/storage/keys';
 import { rewardedAdService } from '@/services/ads/mock-rewarded-ad-service';
 import { referralService } from '@/services/referral/mock-referral-service';
 import { subscriptionService } from '@/services/subscription/mock-subscription-service';
-import { aiTrainerService } from '@/services/trainer/mock-ai-trainer-service';
-import { AiQuickActionId, AiTrainerMessage } from '@/services/trainer/ai-trainer-service';
+import { aiTrainerService } from '@/services/trainer';
+import {
+  AiQuickActionId,
+  AiTrainerHistoryEntry,
+  AiTrainerMessage,
+} from '@/services/trainer/ai-trainer-service';
 import { BodyHistoryEntry } from '@/types/body';
 import { OpenEventPassState } from '@/types/event';
 import { MuscleGroup } from '@/types/exercise';
@@ -62,6 +67,8 @@ import { PrEvent, detectPRs } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
 import { addXp, computePassLevelProgress } from '@/utils/pass';
 import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/character-appearance';
+import { buildPtContext, buildPtExerciseBrief, matchExerciseInText, PtContext } from '@/utils/pt-context';
+import { getTodaysScheduledRoutine } from '@/utils/routine';
 import {
   addExerciseToSession as addExerciseToSessionPure,
   addSetToExercise as addSetToExercisePure,
@@ -180,8 +187,19 @@ interface AppDataContextValue extends AppDataState {
   saveRoutine: (input: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateRoutine: (routineId: string, input: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   removeRoutine: (routineId: string) => Promise<void>;
-  sendAiQuickAction: (actionId: AiQuickActionId) => Promise<AiTrainerMessage | null>;
-  sendAiMessage: (text: string) => Promise<AiTrainerMessage | null>;
+  /** PT에게 넘길 압축 컨텍스트. 화면과 서비스가 같은 값을 본다. */
+  ptContext: PtContext;
+  /** 실제 AI 백엔드가 연결돼 있는지. false면 화면이 "AI 연결 전"임을 알린다. */
+  aiConnected: boolean;
+  /**
+   * PT에게 한 마디 보낸다. 접근 권한이 없으면 null, 요청이 실패하면 AiTrainerRequestError를
+   * 던진다 (화면이 대화를 유지한 채 재시도를 안내한다).
+   */
+  sendPtMessage: (input: {
+    text: string;
+    quickActionId?: AiQuickActionId;
+    history: AiTrainerHistoryEntry[];
+  }) => Promise<AiTrainerMessage | null>;
   subscribeMock: (tierId: string) => Promise<void>;
   cancelSubscriptionMock: () => Promise<void>;
   redeemReferralCode: (code: string) => Promise<ReferralRedemptionResult>;
@@ -633,22 +651,45 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     return true;
   }, [isSubscribed, state.trainerUsage.rewardedPtUsesRemaining]);
 
-  const sendAiQuickAction = useCallback<AppDataContextValue['sendAiQuickAction']>(
-    async (actionId) => {
-      const allowed = await consumeAiAccess();
-      if (!allowed) return null;
-      return aiTrainerService.sendQuickAction(actionId);
-    },
-    [consumeAiAccess]
+  /**
+   * PT에게 넘기는 컨텍스트. 실제 저장된 기록만 들어가고, 없는 값은 null이다.
+   * 화면(무료 브리핑)과 AI 요청이 같은 값을 보기 때문에 둘이 서로 다른 숫자를 말할 수 없다.
+   */
+  const ptContext = useMemo(
+    () =>
+      buildPtContext({
+        profile: state.profile,
+        bodyHistory: state.bodyHistory,
+        workoutRecords: state.workoutRecords,
+        streak: state.streak,
+        routines: state.routines,
+        activeSession: state.activeSession,
+        scheduledRoutine: getTodaysScheduledRoutine(state.routines, new Date().getDay()),
+      }),
+    [state.profile, state.bodyHistory, state.workoutRecords, state.streak, state.routines, state.activeSession]
   );
 
-  const sendAiMessage = useCallback<AppDataContextValue['sendAiMessage']>(
-    async (text) => {
+  const sendPtMessage = useCallback<AppDataContextValue['sendPtMessage']>(
+    async ({ text, quickActionId, history }) => {
+      const trimmed = text.trim();
+      if (!trimmed) return null;
       const allowed = await consumeAiAccess();
       if (!allowed) return null;
-      return aiTrainerService.sendMessage(text);
+
+      // 질문에서 앱 운동 DB의 운동이 잡히면 그 운동 데이터(설명/주의/내 기록)도 함께 넘긴다 —
+      // PT가 운동 상세 화면과 다른 설명을 하지 않게 하기 위한 것이다.
+      const matched = matchExerciseInText(trimmed, Exercises, searchExercises);
+      const exercise = matched ? buildPtExerciseBrief(matched, state.workoutRecords) : null;
+
+      return aiTrainerService.send({
+        text: trimmed,
+        quickActionId,
+        context: ptContext,
+        exercise,
+        history: history.slice(-AppConfig.aiHistoryMessageLimit),
+      });
     },
-    [consumeAiAccess]
+    [consumeAiAccess, ptContext, state.workoutRecords]
   );
 
   const subscribeMock = useCallback(async (tierId: string) => {
@@ -738,8 +779,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     saveRoutine,
     updateRoutine,
     removeRoutine,
-    sendAiQuickAction,
-    sendAiMessage,
+    ptContext,
+    aiConnected: aiTrainerService.isAiConnected,
+    sendPtMessage,
     subscribeMock,
     cancelSubscriptionMock,
     redeemReferralCode,
