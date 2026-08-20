@@ -32,6 +32,19 @@ export function sumVolumeKg(records: WorkoutRecord[]): number {
   }, 0);
 }
 
+/**
+ * 기록 하나의 완료 세트 수. setDetails가 있으면 그걸 세고(볼륨과 같은 근거), 없으면 옛 기록의
+ * 요약값(sets)으로 떨어진다 — 두 필드가 어긋난 기록에서 "볼륨은 있는데 0세트"로 보이지 않게 한다.
+ */
+export function countCompletedSets(record: WorkoutRecord): number {
+  return (record.exercises ?? []).reduce((sum, exercise) => {
+    if (exercise.setDetails) {
+      return sum + exercise.setDetails.filter((set) => set.completed).length;
+    }
+    return sum + (exercise.sets ?? 0);
+  }, 0);
+}
+
 /** 1,250 처럼 천 단위 구분 기호를 넣은 볼륨 표기. */
 export function formatVolumeKg(volumeKg: number): string {
   return `${Math.round(volumeKg).toLocaleString('ko-KR')}kg`;

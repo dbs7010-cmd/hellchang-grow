@@ -32,6 +32,11 @@ export interface WorkoutSession {
   /** 휴식 타이머 종료 시각(epoch ms). 없으면 휴식 중이 아님 */
   restUntilMs?: number;
   /**
+   * 이번 휴식으로 고른 전체 길이(초). 원형 타이머가 "얼마나 남았는지"를 실제 고른 값 기준으로
+   * 그리기 위해 필요하다 — 이 값이 없으면 60초를 골라도 링이 2/3만 찬 채로 시작한다.
+   */
+  restTotalSeconds?: number;
+  /**
    * status가 'active'일 때 앱이 마지막으로 살아있었던 시각(epoch ms) — 주기적으로,
    * 그리고 백그라운드 전환 직전에 갱신된다. 앱이 강제 종료돼 activeSince만으로는
    * "언제까지 실제로 운동 중이었는지" 알 수 없을 때 recoverStaleSession()이 이 값을

@@ -214,6 +214,33 @@ export function updateSet(
   }));
 }
 
+/**
+ * 세트 값을 증감으로 바꾼다(+2.5kg, -1회 …). 스테퍼는 절대값이 아니라 증감으로 처리해야 한다 —
+ * 화면에 그려진 값에서 더하면, 빠르게 두 번 누를 때 두 번 다 같은 값에서 계산해 한 번이 씹힌다.
+ * 0 아래로는 내려가지 않는다.
+ */
+export function adjustSet(
+  session: WorkoutSession,
+  exerciseEntryId: string,
+  setId: string,
+  delta: { weightKg?: number; reps?: number }
+): WorkoutSession {
+  return mapExercise(session, exerciseEntryId, (entry) => ({
+    ...entry,
+    sets: entry.sets.map((set) => {
+      if (set.id !== setId) return set;
+      const next = { ...set };
+      if (delta.weightKg !== undefined) {
+        next.weightKg = Math.max(0, (set.weightKg ?? 0) + delta.weightKg);
+      }
+      if (delta.reps !== undefined) {
+        next.reps = Math.max(0, (set.reps ?? 0) + delta.reps);
+      }
+      return next;
+    }),
+  }));
+}
+
 export function completeSet(
   session: WorkoutSession,
   exerciseEntryId: string,
@@ -239,12 +266,22 @@ export function getLastSetValues(
 // ── 휴식 타이머 ────────────────────────────────────────────────────────────
 
 export function startRest(session: WorkoutSession, seconds: number, nowMs: number): WorkoutSession {
-  return { ...session, restUntilMs: nowMs + seconds * 1000 };
+  return { ...session, restUntilMs: nowMs + seconds * 1000, restTotalSeconds: seconds };
 }
 
 export function clearRest(session: WorkoutSession): WorkoutSession {
-  if (session.restUntilMs === undefined) return session;
-  return { ...session, restUntilMs: undefined };
+  if (session.restUntilMs === undefined && session.restTotalSeconds === undefined) return session;
+  return { ...session, restUntilMs: undefined, restTotalSeconds: undefined };
+}
+
+/**
+ * 원형 휴식 타이머가 채워야 할 비율(0~1). 고른 휴식 길이가 기준이라 60초를 고르면 꽉 찬 링에서
+ * 시작하고, 옛 세션처럼 길이 정보가 없으면 남은 시간 자체를 기준으로 안전하게 되돌아간다.
+ */
+export function getRestProgress(session: WorkoutSession, secondsRemaining: number): number {
+  const total = session.restTotalSeconds ?? Math.max(secondsRemaining, 1);
+  if (total <= 0) return 0;
+  return Math.min(1, Math.max(0, secondsRemaining / total));
 }
 
 export function getRestSecondsRemaining(session: WorkoutSession, nowMs: number): number {

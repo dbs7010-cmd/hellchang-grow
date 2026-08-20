@@ -7,6 +7,7 @@ import { addXp, computePassLevelProgress } from '@/utils/pass';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { recommendMuscleGroup } from '@/utils/workout-recommendation';
 import { createSession, addExerciseToSession, addSetToExercise, completeSet } from '@/utils/workout-session';
+import { countCompletedSets, sumVolumeKg } from '@/utils/workout-stats';
 import type { WorkoutRecord } from '@/types/workout';
 import type { Routine } from '@/types/routine';
 
@@ -191,6 +192,72 @@ function record(overrides: Partial<WorkoutRecord>): WorkoutRecord {
   });
   check('addXp accumulates', addXp(80, 30), 110);
   check('addXp never goes negative even with a large negative delta', addXp(10, -100), 0);
+}
+
+// 7b. PR은 "지난번"이 아니라 누적 최고 중량 기준이다 — 100kg를 든 적이 있으면 60kg 다음의
+//     70kg는 PR이 아니다. (EXERCISE DETAIL의 [최고 기록] / HISTORY의 PR 수와 같은 기준)
+{
+  const history: WorkoutRecord[] = [
+    record({
+      id: 'best',
+      date: '2026-08-01',
+      exercises: [{ id: 'e1', exerciseId: 'bench-press', name: '벤치프레스', setDetails: [
+        { id: 's1', weightKg: 100, reps: 3, completed: true },
+      ] }],
+    }),
+    record({
+      id: 'deload',
+      date: '2026-08-10',
+      exercises: [{ id: 'e2', exerciseId: 'bench-press', name: '벤치프레스', setDetails: [
+        { id: 's2', weightKg: 60, reps: 12, completed: true },
+      ] }],
+    }),
+  ];
+
+  let session = createSession('strength', 'pr-session', '2026-08-12T09:00:00.000Z');
+  session = addExerciseToSession(session, { id: 'ex-1', exerciseId: 'bench-press', exerciseName: '벤치프레스' });
+  session = addSetToExercise(session, 'ex-1', 'set-1', { weightKg: 70, reps: 10 });
+  session = completeSet(session, 'ex-1', 'set-1');
+  check('beating only the last session is NOT a PR when an all-time best is higher',
+    detectPRs(session, history).length, 0);
+
+  let record105 = addSetToExercise(session, 'ex-1', 'set-2', { weightKg: 105, reps: 1 });
+  record105 = completeSet(record105, 'ex-1', 'set-2');
+  const prs = detectPRs(record105, history);
+  check('beating the all-time best is a PR', prs.length, 1);
+  check('the PR reports the all-time best as the previous mark', prs[0]?.previousBestWeightKg, 100);
+}
+
+// 8. HISTORY 세트 수는 볼륨과 같은 근거(setDetails)에서 나와야 한다 — 같은 기록을 두고
+//    "볼륨은 있는데 0세트"처럼 화면끼리 모순되는 숫자가 나오면 안 된다.
+{
+  const withDetails = record({
+    exercises: [
+      {
+        id: 'e1',
+        exerciseId: 'bench-press',
+        name: '벤치프레스',
+        setDetails: [
+          { id: 's1', weightKg: 70, reps: 10, completed: true },
+          { id: 's2', weightKg: 70, reps: 8, completed: true },
+          { id: 's3', weightKg: 80, reps: 3, completed: false },
+        ],
+      },
+    ],
+  });
+  check('counts completed sets from setDetails even when the sets summary is missing',
+    countCompletedSets(withDetails), 2);
+  check('the same record still reports the matching volume', sumVolumeKg([withDetails]), 70 * 10 + 70 * 8);
+
+  const legacy = record({
+    exercises: [{ id: 'e1', exerciseId: 'squat', name: '스쿼트', sets: 3, reps: 10, weightKg: 60 }],
+  });
+  check('falls back to the summary count for legacy records without setDetails',
+    countCompletedSets(legacy), 3);
+
+  const manual = record({ title: '러닝', category: 'running' });
+  check('a record with no exercises has no sets', countCompletedSets(manual), 0);
+  check('a non-weight record contributes nothing to kg volume', sumVolumeKg([manual]), 0);
 }
 
 console.log(

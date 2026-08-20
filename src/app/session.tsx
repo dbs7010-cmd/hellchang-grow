@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
@@ -35,6 +35,7 @@ import {
   computeElapsedSeconds,
   formatElapsedTime,
   getLastSetValues,
+  getRestProgress,
   getRestSecondsRemaining,
 } from '@/utils/workout-session';
 
@@ -70,11 +71,23 @@ export default function SessionScreen() {
     setCurrentSessionExercise,
     addSetToExercise,
     updateSessionSet,
+    adjustSessionSet,
     completeSessionSet,
     startSessionRest,
     skipSessionRest,
     endWorkoutSession,
   } = useAppData();
+
+  /**
+   * 세션 화면에서 빠져나가는 유일한 경로. 보통은 눌러서 들어온 화면(홈)으로 되돌아간다.
+   * 알림/딥링크/앱 재시작으로 세션이 첫 화면이 되면 되돌아갈 스택이 없어 back()이 아무 일도
+   * 하지 않으므로 — 기록은 저장됐는데 결과 화면의 [확인]이 먹통이 된다 — 그때는 홈으로
+   * 보낸다 (workout-start의 뒤로가기와 같은 규칙).
+   */
+  const leaveSession = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  }, [router]);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [summary, setSummary] = useState<SessionSummaryWithLine | null>(null);
@@ -131,9 +144,9 @@ export default function SessionScreen() {
   // 이 effect가 끼어들어 홈으로 리다이렉트해버리지 않도록, "종료 처리 중" 여부를 별도로 추적한다.
   useEffect(() => {
     if (!activeSession && !summary && !endingRef.current) {
-      router.back();
+      leaveSession();
     }
-  }, [activeSession, summary, router]);
+  }, [activeSession, summary, leaveSession]);
 
   // 실시간 PR 감지: 세트를 완료할 때마다 activeSession이 바뀌므로, 기존 detectPRs를
   // 세션 종료를 기다리지 않고 그대로 재사용해 "새로 나타난" PR만 축하 연출로 보여준다.
@@ -178,7 +191,7 @@ export default function SessionScreen() {
   }, [activeSession, nowMs]);
 
   if (!activeSession) {
-    return summary ? <ResultScreen summary={summary} onConfirm={() => router.back()} /> : null;
+    return summary ? <ResultScreen summary={summary} onConfirm={leaveSession} /> : null;
   }
 
   const elapsedSeconds = computeElapsedSeconds(activeSession, nowMs);
@@ -223,6 +236,11 @@ export default function SessionScreen() {
     await updateSessionSet(currentExercise.id, setId, patch);
   };
 
+  const handleAdjustSet = async (setId: string, delta: { weightKg?: number; reps?: number }) => {
+    if (!currentExercise) return;
+    await adjustSessionSet(currentExercise.id, setId, delta);
+  };
+
   const handleAddExerciseByName = async (exerciseId: string, exerciseName: string) => {
     await addExerciseToSession({ exerciseId, exerciseName });
     setAddExerciseQuery('');
@@ -250,6 +268,8 @@ export default function SessionScreen() {
   };
 
   const handleEnd = async () => {
+    // 연타/두 손가락 탭으로 종료가 두 번 들어와도 한 번만 처리한다 (기록 중복 저장 방지).
+    if (endingRef.current) return;
     setConfirmEnd(false);
     endingRef.current = true;
     const trainerLine = pickTrainerLine(StanleyTrainer.dialogueSet.sessionEnd).text;
@@ -344,6 +364,7 @@ export default function SessionScreen() {
             <SetHero
               set={pendingSet}
               onChange={(patch) => handleUpdateSet(pendingSet.id, patch)}
+              onAdjust={(delta) => handleAdjustSet(pendingSet.id, delta)}
               onComplete={() => handleCompleteSet(pendingSet.id)}
             />
           ) : (
@@ -703,18 +724,21 @@ function PreviousPerformanceLine({
 function SetHero({
   set,
   onChange,
+  onAdjust,
   onComplete,
 }: {
   set: WorkoutSetEntry;
   onChange: (patch: { weightKg?: number; reps?: number }) => void;
+  /** 스테퍼는 절대값이 아니라 증감으로 보낸다 — 빠르게 두 번 눌러도 한 번이 씹히지 않는다. */
+  onAdjust: (delta: { weightKg?: number; reps?: number }) => void;
   onComplete: () => void;
 }) {
   const theme = useTheme();
   const weight = set.weightKg ?? 0;
   const reps = set.reps ?? 0;
 
-  const stepWeight = (delta: number) => onChange({ weightKg: Math.max(0, weight + delta) });
-  const stepReps = (delta: number) => onChange({ reps: Math.max(0, reps + delta) });
+  const stepWeight = (delta: number) => onAdjust({ weightKg: delta });
+  const stepReps = (delta: number) => onAdjust({ reps: delta });
 
   return (
     <View style={styles.hero}>
@@ -794,7 +818,6 @@ function RestScreen({
 }) {
   const theme = useTheme();
   const urgent = secondsRemaining <= AppConfig.restUrgentThresholdSeconds;
-  const preset = Math.max(secondsRemaining, AppConfig.defaultRestSeconds);
   const ringColor = urgent ? theme.goldBright : theme.gold;
   const nextSetPreview = currentExercise ? getLastSetValues(session, currentExercise.id) : null;
 
@@ -807,7 +830,7 @@ function RestScreen({
       reaction={reaction}>
       <View style={styles.restBlock}>
         <CircularProgressRing
-          progress={secondsRemaining / preset}
+          progress={getRestProgress(session, secondsRemaining)}
           size={220}
           thickness={14}
           color={ringColor}

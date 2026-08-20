@@ -130,13 +130,16 @@ export function detectPRs(session: WorkoutSession, records: WorkoutRecord[]): Pr
     if (completedWeights.length === 0) continue;
 
     const sessionMax = Math.max(...completedWeights);
-    const previous = findPreviousPerformance(exercise.exerciseId, records);
-    if (previous?.maxWeightKg === undefined || sessionMax > previous.maxWeightKg) {
+    // 비교 대상은 "지난번"이 아니라 지금까지의 전체 최고 중량이다. 직전 세션만 보면
+    // 100kg를 든 적이 있어도 60kg 다음의 70kg가 PR로 잡혀, EXERCISE DETAIL의 [최고 기록]과
+    // HISTORY의 PR 수(countPeriodPRs, 누적 최고 기준)와 서로 다른 말을 하게 된다.
+    const previousBest = findAllTimeBestWeight(exercise.exerciseId, records);
+    if (previousBest === undefined || sessionMax > previousBest) {
       prs.push({
         exerciseId: exercise.exerciseId,
         exerciseName: exercise.exerciseName,
         weightKg: sessionMax,
-        previousBestWeightKg: previous?.maxWeightKg,
+        previousBestWeightKg: previousBest,
       });
     }
   }

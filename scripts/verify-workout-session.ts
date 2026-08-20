@@ -3,6 +3,7 @@
 import {
   addExerciseToSession,
   addSetToExercise,
+  adjustSet,
   changeSessionCategory,
   clearRest,
   completeSession,
@@ -13,6 +14,7 @@ import {
   createSession,
   formatElapsedTime,
   getLastSetValues,
+  getRestProgress,
   getRestSecondsRemaining,
   heartbeatSession,
   pauseSession,
@@ -152,8 +154,27 @@ const START_MS = new Date(START_ISO).getTime();
   check('rest timer never goes negative once time is up',
     getRestSecondsRemaining(session, START_MS + 200_000), 0);
 
+  check('rest ring is full right after starting, whatever length was chosen',
+    getRestProgress(session, getRestSecondsRemaining(session, START_MS)), 1);
+  check('rest ring is half way through a 90s rest',
+    getRestProgress(session, getRestSecondsRemaining(session, START_MS + 45_000)), 0.5);
+
+  // 60초를 골라도 링이 꽉 찬 채로 시작해야 한다 (예전에는 기본값 90으로 나눠 2/3에서 시작했다).
+  const short = startRest(createSession('strength', 'session-11b', START_ISO), 60, START_MS);
+  check('a 60s rest also starts from a full ring',
+    getRestProgress(short, getRestSecondsRemaining(short, START_MS)), 1);
+  check('a 60s rest ring is at one third with 20s left',
+    Math.round(getRestProgress(short, 20) * 100) / 100, 0.33);
+  check('rest ring never goes below zero once time is up', getRestProgress(short, 0), 0);
+
+  // 길이 정보가 없는 옛 세션(저장된 restUntilMs만 있는 경우)도 안전하게 그려져야 한다.
+  const legacy = { ...short, restTotalSeconds: undefined };
+  check('a legacy rest without a stored length still yields a drawable ratio',
+    getRestProgress(legacy, 30), 1);
+
   session = clearRest(session);
   check('clearRest removes restUntilMs', session.restUntilMs, undefined);
+  check('clearRest also removes the chosen rest length', session.restTotalSeconds, undefined);
 }
 
 // 9. Completed session aggregates completed sets and total volume correctly
@@ -167,6 +188,32 @@ const START_MS = new Date(START_ISO).getTime();
   session = addSetToExercise(session, 'ex-1', 'set-3', { weightKg: 75, reps: 5 }); // left uncompleted on purpose
 
   check('completed sets count excludes the uncompleted set', computeCompletedSetsCount(session), 2);
+
+  // 스테퍼 연타: 증감이 누적돼야 한다. 화면에 그려진 값에서 계산하면 두 번 눌러도 한 번만 반영됐다.
+  {
+    let stepped = addSetToExercise(session, 'ex-1', 'set-step', { weightKg: 60, reps: 12 });
+    stepped = adjustSet(stepped, 'ex-1', 'set-step', { weightKg: 2.5 });
+    stepped = adjustSet(stepped, 'ex-1', 'set-step', { weightKg: 2.5 });
+    stepped = adjustSet(stepped, 'ex-1', 'set-step', { reps: -1 });
+    stepped = adjustSet(stepped, 'ex-1', 'set-step', { reps: -1 });
+    const set = stepped.exercises[0].sets.find((s) => s.id === 'set-step');
+    check('two +2.5kg taps add up to +5kg', set?.weightKg, 65);
+    check('two -1 rep taps add up to -2 reps', set?.reps, 10);
+
+    const floored = adjustSet(
+      adjustSet(stepped, 'ex-1', 'set-step', { weightKg: -1000 }),
+      'ex-1',
+      'set-step',
+      { reps: -1000 }
+    );
+    const flooredSet = floored.exercises[0].sets.find((s) => s.id === 'set-step');
+    check('stepping down never goes below zero',
+      { weightKg: flooredSet?.weightKg, reps: flooredSet?.reps }, { weightKg: 0, reps: 0 });
+
+    const untouched = adjustSet(stepped, 'ex-1', 'set-step', { weightKg: 5 });
+    const other = untouched.exercises[0].sets.find((s) => s.id === 'set-1');
+    check('adjusting one set never touches the other sets', other?.weightKg, 70);
+  }
   check('total volume only counts completed sets with both weight and reps',
     computeTotalVolumeKg(session), 70 * 10 + 70 * 8);
 

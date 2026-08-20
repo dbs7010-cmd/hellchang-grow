@@ -33,7 +33,7 @@ import { countPeriodPRs } from '@/utils/exercise-history';
 import { buildHistoryDays } from '@/utils/history';
 import { buildRecommendationContext } from '@/utils/recommendation-context';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
-import { buildPeriodChart, formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
+import { buildPeriodChart, countCompletedSets, formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
 
 type Period = 'week' | 'month' | 'year';
 
@@ -506,8 +506,7 @@ export default function HistoryScreen() {
                   )}
                 </View>
                 {day.workouts.map((record) => {
-                  const setCount =
-                    record.exercises?.reduce((sum, exercise) => sum + (exercise.sets ?? 0), 0) ?? 0;
+                  const setCount = countCompletedSets(record);
                   const suspicious = (record.durationMinutes ?? 0) > AppConfig.suspiciousDurationMinutes;
                   return (
                     <View key={record.id}>

@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { AppConfig } from '@/config/app-config';
@@ -65,6 +65,7 @@ import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/cha
 import {
   addExerciseToSession as addExerciseToSessionPure,
   addSetToExercise as addSetToExercisePure,
+  adjustSet as adjustSetPure,
   changeSessionCategory as changeSessionCategoryPure,
   clearRest as clearRestPure,
   completeSession,
@@ -165,6 +166,12 @@ interface AppDataContextValue extends AppDataState {
     setId: string,
     patch: { weightKg?: number; reps?: number }
   ) => Promise<void>;
+  /** 스테퍼(+/-)용 증감 갱신. 절대값이 아니라 증감이라 빠르게 연타해도 한 번도 씹히지 않는다. */
+  adjustSessionSet: (
+    exerciseEntryId: string,
+    setId: string,
+    delta: { weightKg?: number; reps?: number }
+  ) => Promise<void>;
   completeSessionSet: (exerciseEntryId: string, setId: string) => Promise<void>;
   startSessionRest: (seconds: number) => Promise<void>;
   skipSessionRest: () => Promise<void>;
@@ -201,6 +208,39 @@ const initialState: AppDataState = {
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppDataState>(initialState);
+
+  /**
+   * 항상 "가장 최신 세션"을 가리킨다. 세션 종료처럼 한 번만 일어나야 하는 동작이
+   * 렌더 클로저에 잡힌 오래된 세션을 읽어 마지막 세트를 흘리지 않게 한다.
+   */
+  const activeSessionRef = useRef<WorkoutSession | null>(null);
+  /** 세션 종료 처리 중인지. 완료 버튼이 연타돼도 기록이 두 번 저장되지 않게 한다. */
+  const endingSessionRef = useRef(false);
+
+  useEffect(() => {
+    activeSessionRef.current = state.activeSession;
+  }, [state.activeSession]);
+
+  /**
+   * 세션 변경은 반드시 최신 세션에서 출발해야 한다. 스테퍼를 빠르게 두 번 누르는 것처럼
+   * 한 렌더 안에서 연속 호출되면, 클로저에 잡힌 state.activeSession은 직전 변경을 모른 채
+   * 덮어써서 입력이 조용히 사라진다(중량을 넣고 바로 횟수를 바꾸면 중량이 날아갔다).
+   * 함수형 갱신으로 최신값에서 계산하고, 저장도 그 결과로 한다 — heartbeat/AppState 효과가
+   * 이미 쓰던 것과 같은 패턴이다.
+   */
+  const mutateActiveSession = useCallback(
+    (mutate: (session: WorkoutSession) => WorkoutSession) => {
+      setState((prev) => {
+        if (!prev.activeSession) return prev;
+        const updated = mutate(prev.activeSession);
+        if (updated === prev.activeSession) return prev;
+        activeSessionRef.current = updated;
+        saveActiveSession(updated);
+        return { ...prev, activeSession: updated };
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -407,112 +447,90 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const startWorkoutSession = useCallback<AppDataContextValue['startWorkoutSession']>(
     async (category, options) => {
-      if (state.activeSession && state.activeSession.status !== 'completed') return;
+      const current = activeSessionRef.current;
+      if (current && current.status !== 'completed') return;
       const session = createSession(category, createId('session'), new Date().toISOString(), options);
+      activeSessionRef.current = session;
       await saveActiveSession(session);
       setState((prev) => ({ ...prev, activeSession: session }));
     },
-    [state.activeSession]
+    []
   );
 
   const pauseWorkoutSession = useCallback(async () => {
-    if (!state.activeSession) return;
-    const updated = pauseSession(state.activeSession, Date.now());
-    await saveActiveSession(updated);
-    setState((prev) => ({ ...prev, activeSession: updated }));
-  }, [state.activeSession]);
+    mutateActiveSession((session) => pauseSession(session, Date.now()));
+  }, [mutateActiveSession]);
 
   const resumeWorkoutSession = useCallback(async () => {
-    if (!state.activeSession) return;
-    const updated = resumeSession(state.activeSession, new Date().toISOString());
-    await saveActiveSession(updated);
-    setState((prev) => ({ ...prev, activeSession: updated }));
-  }, [state.activeSession]);
+    mutateActiveSession((session) => resumeSession(session, new Date().toISOString()));
+  }, [mutateActiveSession]);
 
   const changeSessionCategory = useCallback<AppDataContextValue['changeSessionCategory']>(
     async (category) => {
-      if (!state.activeSession) return;
-      const updated = changeSessionCategoryPure(state.activeSession, category);
-      await saveActiveSession(updated);
-      setState((prev) => ({ ...prev, activeSession: updated }));
+      mutateActiveSession((session) => changeSessionCategoryPure(session, category));
     },
-    [state.activeSession]
+    [mutateActiveSession]
   );
 
   const addExerciseToSession = useCallback<AppDataContextValue['addExerciseToSession']>(
     async (exercise) => {
-      if (!state.activeSession) return;
-      const updated = addExerciseToSessionPure(state.activeSession, {
-        id: createId('session-ex'),
-        ...exercise,
-      });
-      await saveActiveSession(updated);
-      setState((prev) => ({ ...prev, activeSession: updated }));
+      const id = createId('session-ex');
+      mutateActiveSession((session) => addExerciseToSessionPure(session, { id, ...exercise }));
     },
-    [state.activeSession]
+    [mutateActiveSession]
   );
 
   const setCurrentSessionExercise = useCallback<AppDataContextValue['setCurrentSessionExercise']>(
     async (exerciseEntryId) => {
-      if (!state.activeSession) return;
-      const updated = setCurrentExercisePure(state.activeSession, exerciseEntryId);
-      await saveActiveSession(updated);
-      setState((prev) => ({ ...prev, activeSession: updated }));
+      mutateActiveSession((session) => setCurrentExercisePure(session, exerciseEntryId));
     },
-    [state.activeSession]
+    [mutateActiveSession]
   );
 
   const addSetToExercise = useCallback<AppDataContextValue['addSetToExercise']>(
     async (exerciseEntryId, initial) => {
-      if (!state.activeSession) return;
-      const updated = addSetToExercisePure(state.activeSession, exerciseEntryId, createId('set'), initial);
-      await saveActiveSession(updated);
-      setState((prev) => ({ ...prev, activeSession: updated }));
+      const setId = createId('set');
+      mutateActiveSession((session) => addSetToExercisePure(session, exerciseEntryId, setId, initial));
     },
-    [state.activeSession]
+    [mutateActiveSession]
   );
 
   const updateSessionSet = useCallback<AppDataContextValue['updateSessionSet']>(
     async (exerciseEntryId, setId, patch) => {
-      if (!state.activeSession) return;
-      const updated = updateSetPure(state.activeSession, exerciseEntryId, setId, patch);
-      await saveActiveSession(updated);
-      setState((prev) => ({ ...prev, activeSession: updated }));
+      mutateActiveSession((session) => updateSetPure(session, exerciseEntryId, setId, patch));
     },
-    [state.activeSession]
+    [mutateActiveSession]
+  );
+
+  const adjustSessionSet = useCallback<AppDataContextValue['adjustSessionSet']>(
+    async (exerciseEntryId, setId, delta) => {
+      mutateActiveSession((session) => adjustSetPure(session, exerciseEntryId, setId, delta));
+    },
+    [mutateActiveSession]
   );
 
   const completeSessionSet = useCallback<AppDataContextValue['completeSessionSet']>(
     async (exerciseEntryId, setId) => {
-      if (!state.activeSession) return;
-      const updated = completeSetPure(state.activeSession, exerciseEntryId, setId);
-      await saveActiveSession(updated);
-      setState((prev) => ({ ...prev, activeSession: updated }));
+      mutateActiveSession((session) => completeSetPure(session, exerciseEntryId, setId));
     },
-    [state.activeSession]
+    [mutateActiveSession]
   );
 
   const startSessionRest = useCallback<AppDataContextValue['startSessionRest']>(
     async (seconds) => {
-      if (!state.activeSession) return;
-      const updated = startRestPure(state.activeSession, seconds, Date.now());
-      await saveActiveSession(updated);
-      setState((prev) => ({ ...prev, activeSession: updated }));
+      mutateActiveSession((session) => startRestPure(session, seconds, Date.now()));
     },
-    [state.activeSession]
+    [mutateActiveSession]
   );
 
   const skipSessionRest = useCallback(async () => {
-    if (!state.activeSession) return;
-    const updated = clearRestPure(state.activeSession);
-    await saveActiveSession(updated);
-    setState((prev) => ({ ...prev, activeSession: updated }));
-  }, [state.activeSession]);
+    mutateActiveSession((session) => clearRestPure(session));
+  }, [mutateActiveSession]);
 
-  const endWorkoutSession = useCallback<AppDataContextValue['endWorkoutSession']>(async () => {
-    if (!state.activeSession) return null;
+  /** 세션 하나를 기록/보상으로 확정한다. 호출자는 이 함수가 한 번만 실행되도록 보장해야 한다. */
+  const finishSession = useCallback(async (session: WorkoutSession): Promise<EndSessionSummary> => {
     const nowIso = new Date().toISOString();
-    const completed = completeSession(state.activeSession, nowIso, Date.now());
+    const completed = completeSession(session, nowIso, Date.now());
 
     const prs = detectPRs(completed, state.workoutRecords);
 
@@ -558,7 +576,23 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       passLevel: computePassLevelProgress(newXp).level,
       routineCompleted,
     };
-  }, [state.activeSession, state.workoutRecords, state.routines, state.pass, addWorkoutRecord]);
+  }, [state.workoutRecords, state.routines, state.pass, addWorkoutRecord]);
+
+  const endWorkoutSession = useCallback<AppDataContextValue['endWorkoutSession']>(async () => {
+    // [종료하고 기록]이 연타되거나 두 손가락으로 눌려도 기록은 정확히 한 번만 저장된다.
+    // 세션은 ref에서 읽는다 — 방금 완료한 마지막 세트가 렌더 클로저에는 아직 없을 수 있다.
+    if (endingSessionRef.current) return null;
+    const session = activeSessionRef.current;
+    if (!session) return null;
+    endingSessionRef.current = true;
+    activeSessionRef.current = null;
+
+    try {
+      return await finishSession(session);
+    } finally {
+      endingSessionRef.current = false;
+    }
+  }, [finishSession]);
 
   const saveRoutine = useCallback<AppDataContextValue['saveRoutine']>(async (input) => {
     const routines = await saveRoutineRepo(input);
@@ -695,6 +729,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setCurrentSessionExercise,
     addSetToExercise,
     updateSessionSet,
+    adjustSessionSet,
     completeSessionSet,
     startSessionRest,
     skipSessionRest,
