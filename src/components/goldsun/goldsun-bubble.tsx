@@ -1,11 +1,16 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
+import { ImageSourcePropType, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export interface GoldsunBubbleProps {
-  portrait: string;
+  /**
+   * 실제 포트레이트 이미지, 또는 에셋이 없을 때의 이모지 placeholder 문자열.
+   * 어느 쪽이든 원형(40)의 크기/위치는 같다 — 이미지는 그 안에서 cover로만 채워진다.
+   */
+  portrait: string | ImageSourcePropType;
   name: string;
   text: string;
   onPress?: () => void;
@@ -31,7 +36,11 @@ export function GoldsunBubble({ portrait, name, text, onPress }: GoldsunBubblePr
         </ThemedText>
       </View>
       <View style={[styles.portrait, { borderColor: theme.gold, backgroundColor: theme.backgroundSelected }]}>
-        <ThemedText style={styles.portraitEmoji}>{portrait}</ThemedText>
+        {typeof portrait === 'string' ? (
+          <ThemedText style={styles.portraitEmoji}>{portrait}</ThemedText>
+        ) : (
+          <Image source={portrait} style={styles.portraitImage} contentFit="cover" />
+        )}
       </View>
     </Pressable>
   );
@@ -67,8 +76,14 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+    // 실제 포트레이트가 들어와도 원형 밖으로 새지 않게만 한다. 크기/위치는 그대로다.
+    overflow: 'hidden',
   },
   portraitEmoji: {
     fontSize: 18,
+  },
+  portraitImage: {
+    width: '100%',
+    height: '100%',
   },
 });

@@ -12,6 +12,7 @@ import { PrimaryButton } from '@/components/ui/primary-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { AppConfig } from '@/config/app-config';
+import { StanleyPortraitImage } from '@/config/character-assets';
 import { Exercises, getExerciseById, getExercisesByMuscleGroup } from '@/config/exercises';
 import { MuscleGroups } from '@/config/muscle-groups';
 import { StanleyTrainer } from '@/config/trainers';
@@ -176,7 +177,7 @@ export default function HomeScreen() {
               stage가 작아져도 말풍선이 얼굴/상체를 덮는 일이 구조적으로 없다. */}
           <View style={styles.trainerRow}>
             <GoldsunBubble
-              portrait={StanleyTrainer.portraitPlaceholder}
+              portrait={StanleyPortraitImage ?? StanleyTrainer.portraitPlaceholder}
               name={StanleyTrainer.displayName}
               text={greeting.text}
               onPress={() => router.push('/trainer')}
