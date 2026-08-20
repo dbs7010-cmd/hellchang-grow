@@ -133,6 +133,15 @@ export default function WorkoutStartScreen() {
     setSelectedMuscleGroup(group);
   };
 
+  /**
+   * 뒤로가기. 알림/딥링크로 이 화면에 바로 들어오면 되돌아갈 스택이 없어서 router.back()이
+   * 아무 일도 하지 않는다 — 그때는 홈으로 빠져나갈 안전 경로를 준다.
+   */
+  const handleBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  };
+
   const handleStartCardio = async (category: WorkoutCategory) => {
     await startWorkoutSession(category);
     await goToSession();
@@ -142,7 +151,7 @@ export default function WorkoutStartScreen() {
     <ScreenScroll>
       <View style={styles.headerRow}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={handleBack}
           hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="뒤로가기">
