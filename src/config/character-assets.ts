@@ -47,7 +47,9 @@ export interface PlayerCharacterAssetRegistry {
  *
  * 존재하지 않는 파일을 require하면 번들이 깨지므로, 파일을 실제로 넣은 뒤에만 연결한다.
  */
-export const PlayerCharacterAssets: PlayerCharacterAssetRegistry = {};
+export const PlayerCharacterAssets: PlayerCharacterAssetRegistry = {
+  home: require('@/assets/characters/player/player_main.png'),
+};
 
 /**
  * 화면 슬롯에 맞는 2D 에셋을 고른다. 전용 에셋이 없으면 메인(home) 캐릭터로 떨어지고,
@@ -68,4 +70,4 @@ export function hasPlayerCharacterModel(): boolean {
  * 홈에서는 스탠리 전신을 쓰지 않는다 — 얼굴/상반신 포트레이트만 노출한다.
  * 없으면 TrainerProfile.portraitPlaceholder(중립 이모지)를 그대로 쓴다.
  */
-export const StanleyPortraitImage: ImageSourcePropType | undefined = undefined;
+export const StanleyPortraitImage: ImageSourcePropType | undefined = require('@/assets/characters/trainer/stanley_portrait.png');
