@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 280">
 <g id="danbaek-stage0" fill="#fff" stroke="#111" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
   <g id="head"><path d="M100 38 C111 38 119 46 119 57 C119 68 112 75 100 76 C88 76 81 69 81 57 C81 46 89 38 100 38 Z"/></g>
-  <g id="body-proportions" transform="translate(0 76) scale(1 .92) translate(0 -76)">
+  <g id="body-proportions" transform="translate(0 76) scale(1 .8) translate(0 -76)">
   <g id="torso-base"><path d="M99 76 C90 74 82 77 79 83 C76 95 78 111 80 126 C82 139 81 151 83 160 C84 165 86 168 90 170 C95 172 105 172 111 169 C115 166 116 163 117 159 C119 150 118 139 120 126 C122 111 124 95 121 83 C118 77 110 74 101 76 Z"/></g>
   <g id="arm-left"><path d="M80 86 C74 90 71 102 70 115 C69 128 71 139 69 151 C68 158 70 164 74 168 C77 170 80 168 81 165 C83 157 82 146 84 136 C86 119 86 102 80 86 Z"/></g>
   <g id="arm-right"><path d="M120 86 C126 90 129 102 130 116 C131 128 129 140 131 151 C132 158 130 164 126 168 C123 170 120 168 119 165 C117 157 118 146 116 136 C114 119 114 102 120 86 Z"/></g>
@@ -9,6 +9,6 @@
   <g id="leg-right"><path d="M113 168 C116 181 117 196 115 211 C114 220 116 232 115 244 C115 251 116 254 113 255 C109 256 104 255 102 252 C101 244 103 232 102 220 C100 199 100 181 101 169 Z"/></g>
   </g>
 </g>
-<g id="face" fill="#111"><circle id="eye-left" cx="93" cy="54" r="1.55"/><circle id="eye-right" cx="107" cy="54" r="1.55"/></g>
-<path id="mouth" d="M95 64 Q100 67 105 63" fill="none" stroke="#111" stroke-width="2.5" stroke-linecap="round"/>
+<g id="face" fill="#111"><circle id="eye-left" cx="94" cy="54" r="1.2"/><circle id="eye-right" cx="106" cy="54" r="1.2"/></g>
+<path id="mouth" d="M96.5 64 Q100 65.5 103.5 63.5" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>
 </svg>

@@ -1,5 +1,5 @@
 {
-  "canonVersion": 1,
+  "canonVersion": 2,
   "status": "LOCKED",
   "source": "user-approved Danbaek growth system image",
   "master": "danbaek_growth_system_canon.webp",
@@ -7,9 +7,16 @@
     "redesign": false,
     "reinterpretation": false,
     "faceLockedAcrossGrowth": true,
+    "heightLockedAcrossGrowth": true,
+    "limbLengthLockedAcrossGrowth": true,
+    "centerAxisLockedAcrossGrowth": true,
     "canonicalBody": "white body + black outline",
     "stageCount": 10,
-    "notes": "MASTER image is the highest-priority visual reference. Do not replace it with player_main.png, graphite/geometric silhouettes, 3D, semi-realistic art, or a cleaner mascot redesign."
+    "growthDirection": "Increase horizontal volume in approved shoulder, chest, back, arm, pelvis, thigh, and calf regions; do not increase character height.",
+    "muscleLineProgression": "Muscle lines increase gradually with growth stage and definition and remain minimal at Stage 0.",
+    "styleIdentity": "white body + black hand-drawn outline + simple hands/feet + slightly awkward loose drawing",
+    "stage0Master": "layered/danbaek_stage0_layered_master.svg",
+    "notes": "MASTER image and the user-approved Stage 0 renderer are LOCKED. Do not replace them with player_main.png, graphite/geometric silhouettes, 3D, semi-realistic art, or a cleaner mascot redesign. Stage 1-10 remain reference-only until separately approved for implementation."
   },
   "bodyParametersContract": [
     "chestScale",

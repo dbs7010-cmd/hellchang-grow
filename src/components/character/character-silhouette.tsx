@@ -107,7 +107,7 @@ function CharacterSilhouetteComponent({
             <Circle cx={fixedIdentity.eyes.leftX} cy={fixedIdentity.eyes.y} r={fixedIdentity.eyes.radius} />
             <Circle cx={fixedIdentity.eyes.rightX} cy={fixedIdentity.eyes.y} r={fixedIdentity.eyes.radius} />
           </G>
-          <Path d={fixedIdentity.mouth} fill="none" stroke={stroke.color} strokeWidth={2.5} strokeLinecap="round" />
+          <Path d={fixedIdentity.mouth} fill="none" stroke={stroke.color} strokeWidth={1.8} strokeLinecap="round" />
         </Svg>
         </View>
       </Animated.View>
