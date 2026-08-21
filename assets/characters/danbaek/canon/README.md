@@ -1,19 +1,17 @@
-# DANBAEK CANON — LOCKED
+# Danbaek CANON — LOCKED
 
-이 폴더는 사용자가 확정한 `단백이 성장 시스템 기본 이미지`를 실제 게임 제작 기준으로 보존하는 CANON 에셋 묶음이다.
+이 폴더는 사용자가 확정한 `단백이 성장 시스템 기본 이미지`를 최우선 시각 CANON으로 보존한다.
 
 ## 절대 규칙
-- 캐릭터 외형, 얼굴, 비율, 선화 스타일, Lv.1~Lv.10 성장 방향을 임의로 재설계하지 않는다.
-- WORKOUT CORE / GROWTH ENGINE / Muscle SP / DanbaekBodyState / DanbaekBodyParameters는 이 아트를 변경하는 근거가 아니다.
-- 새 시스템은 이 CANON에 맞춰 연결한다.
-- `waist`, `glute`, `thigh`, `calf`, `fatSoftness`, `definition`처럼 별도 원본 프레임이 없는 값은 기존 실루엣/근육선을 보정하는 렌더링 값으로만 사용하고 새 캐릭터 디자인을 만들지 않는다.
+- 새 캐릭터 디자인으로 재해석하지 않는다.
+- 얼굴, 머리/몸 비율, 어깨/팔/다리 실루엣, 검은 외곽선, 흰색 몸, 약간 엉성한 손그림 느낌을 임의 변경하지 않는다.
+- 3D/반실사/깔끔한 벡터 마스코트로 바꾸지 않는다.
+- 성장 시스템은 기존 WORKOUT CORE / GROWTH ENGINE / BODY STATE ENGINE 계약을 변경하지 않는다.
+- Stage 0 및 이후 성장 시각 구현은 `danbaek_growth_system_canon.png`를 기준으로 맞춘다.
 
-## 파일
-- `danbaek_growth_canon.svg` — Lv.1~Lv.10 전체 성장 기준
-- `danbaek_part_growth_canon.svg` — 부위별 성장 적용 기준
-- `danbaek_animation_canon.svg` — IDLE/WALK/운동/기타/성장 애니메이션 기준
-- `danbaek_renderer_map_canon.svg` — BodyParameters 연결 기준
-- `stages/danbaek_stage_01.svg` ~ `10.svg` — 게임용 단계별 벡터 원본
-- `manifest.json` — 렌더러가 읽을 수 있는 단계/파라미터 매핑
+## 현재 자료
+- `danbaek_growth_system_canon.png`: 사용자가 직접 확정한 MASTER CANON 원본.
+- `manifest.json`: CANON 상태와 구현 규칙.
 
-이 폴더를 수정할 때는 CANON을 '개선'하지 말고 정밀화/분리/렌더링 연결만 한다.
+## 구현 원칙
+이번 커밋은 CANON 원본을 저장소에 영구 보존하기 위한 투입이다. Codex는 이 이미지를 참고해 새 캐릭터를 디자인하는 것이 아니라, 기존 Renderer의 parametric Stage 0가 원본 실루엣을 최대한 재현하도록 맞춰야 한다. CANON과 코드가 충돌하면 임의 변경하지 말고 중단 후 보고한다.
