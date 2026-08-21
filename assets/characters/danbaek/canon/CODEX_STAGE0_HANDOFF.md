@@ -1,6 +1,6 @@
 # Codex handoff — Danbaek Stage 0
 
-1. Read `README.md`, `manifest.json`, and inspect `danbaek_growth_system_canon.png` first.
+1. Read `README.md`, `manifest.json`, and inspect `danbaek_growth_system_canon.webp` first.
 2. Treat the master image as the highest-priority visual CANON.
 3. Preserve existing uncommitted renderer plumbing that is CANON-independent; replace graphite/geometric visual design only.
 4. Do not use `player_main.png` as the Danbaek CANON.

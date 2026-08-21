@@ -2,13 +2,13 @@
 """Derive reference crops from the locked Danbaek MASTER CANON.
 
 This script does not redesign art. It only crops sections from
-`danbaek_growth_system_canon.png` for implementation/reference use.
+`danbaek_growth_system_canon.webp` for implementation/reference use.
 """
 from pathlib import Path
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
-SRC = HERE / "danbaek_growth_system_canon.png"
+SRC = HERE / "danbaek_growth_system_canon.webp"
 img = Image.open(SRC).convert("RGBA")
 
 crops = {
