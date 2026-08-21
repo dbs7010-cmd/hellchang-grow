@@ -11,6 +11,7 @@ import {
   hasReachedDailyPhotoLimit,
 } from '@/data/body-history-repository';
 import { getOpenEventPassState, saveOpenEventPassState } from '@/data/event-repository';
+import { getGrowthState } from '@/data/growth-repository';
 import { getPassState, savePassState } from '@/data/pass-repository';
 import {
   getOnboardingComplete,
@@ -63,7 +64,7 @@ import { TrainerUsageState } from '@/types/ads';
 import { UserProfile } from '@/types/user';
 import { WorkoutCategory, WorkoutRecord } from '@/types/workout';
 import { WorkoutSession } from '@/types/workout-session';
-import { WorkoutSessionResult } from '@/types/growth';
+import { DanbaekGrowthState, GrowthApplicationResult, WorkoutSessionResult } from '@/types/growth';
 import { todayDateString, tomorrowDateString } from '@/utils/date';
 import { PrEvent, detectPRs } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
@@ -72,6 +73,7 @@ import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/cha
 import { buildPtContext, buildPtExerciseBrief, matchExerciseInText, PtContext } from '@/utils/pt-context';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { buildWorkoutSessionResult } from '@/utils/workout-session-result';
+import { createDefaultGrowthState } from '@/utils/growth-state';
 import {
   addExerciseToSession as addExerciseToSessionPure,
   addSetToExercise as addSetToExercisePure,
@@ -112,6 +114,11 @@ interface AppDataState {
   activeSession: WorkoutSession | null;
   routines: Routine[];
   pass: PassState;
+  /**
+   * 실제 운동으로 쌓인 부위별 성장(Muscle SP). PASS XP와 별개의 축이며,
+   * 사용자의 실제 신체 수치와도 무관하다.
+   */
+  growth: DanbaekGrowthState;
 }
 
 export interface EndSessionSummary {
@@ -127,10 +134,16 @@ export interface EndSessionSummary {
   passLevel: number;
   routineCompleted: boolean;
   /**
-   * 다음 단계(GrowthEngine)가 그대로 쓰는 세션 결과. 화면은 위의 요약값을 쓰고,
-   * 이 필드는 성장 계산 입력으로만 존재한다 — 실제 신체 수치는 여기서 나오지 않는다.
+   * GrowthEngine이 쓰는 세션 결과. 화면은 위의 요약값을 쓰고, 이 필드는 성장 계산
+   * 입력으로만 존재한다 — 실제 신체 수치는 여기서 나오지 않는다.
    */
   sessionResult: WorkoutSessionResult;
+  /**
+   * 이번 세션이 부위별 성장에 반영된 결과. 성장할 것이 없었으면(부위를 알 수 없는
+   * 즉석 운동뿐이거나 완료한 세트가 없음) null이다.
+   * 다음 단계의 성장 연출/DanbaekRenderer가 이 값만 보고 화면을 만들 수 있다.
+   */
+  growth: GrowthApplicationResult | null;
 }
 
 interface AppDataContextValue extends AppDataState {
@@ -250,6 +263,7 @@ const initialState: AppDataState = {
   activeSession: null,
   routines: [],
   pass: { xp: 0 },
+  growth: createDefaultGrowthState(new Date(0).toISOString()),
 };
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
@@ -305,6 +319,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         activeSession,
         routines,
         pass,
+        growth,
       ] = await Promise.all([
         getOnboardingComplete(),
         getUserProfile(),
@@ -318,6 +333,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         getActiveSession(),
         getRoutines(),
         getPassState(),
+        getGrowthState(),
       ]);
 
       if (cancelled) return;
@@ -365,6 +381,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         activeSession: recoveredSession,
         routines,
         pass,
+        growth,
       });
     })();
 
@@ -640,11 +657,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
     /**
      * WorkoutSession → WorkoutSessionResult → GrowthEngine 연결 지점.
-     * 현재 구현(noop)은 아무 성장도 적립하지 않는다 — 실제 계산은 다음 작업에서
-     * 이 엔진의 구현만 채우면 되고, 여기 호출부는 바뀌지 않는다.
-     * 엔진이 실패해도 이미 저장된 운동 기록/보상은 되돌리지 않는다.
+     * 엔진이 부위별 SP를 계산해 저장하고, 반영 결과를 돌려준다. PASS XP(위)와는
+     * 완전히 별개의 축이다 — 한 번의 운동으로 둘이 각각 계산된다.
+     * 엔진이 실패해도 이미 저장된 운동 기록/보상은 되돌리지 않는다(성장만 건너뛴다).
      */
-    await growthEngine.applySessionResult(sessionResult).catch(() => null);
+    const growth = await growthEngine.applySessionResult(sessionResult).catch(() => null);
+    // 저장된 성장 상태를 다시 읽어 화면 쪽 state와 어긋나지 않게 맞춘다.
+    if (growth) {
+      const growthState = await getGrowthState();
+      setState((prev) => ({ ...prev, growth: growthState }));
+    }
 
     return {
       durationMinutes: recordInput.durationMinutes ?? 0,
@@ -659,6 +681,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       passLevel: computePassLevelProgress(newXp).level,
       routineCompleted,
       sessionResult,
+      growth,
     };
   }, [state.workoutRecords, state.routines, state.pass, state.bodyHistory, state.profile, addWorkoutRecord]);
 

@@ -1,4 +1,10 @@
-import type { MotionFamily, MuscleGroup, SpDistribution } from '@/types/exercise';
+import type {
+  MotionFamily,
+  MuscleGroup,
+  MuscleGroupDetail,
+  MuscleSpDistribution,
+  SpDistribution,
+} from '@/types/exercise';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -39,6 +45,13 @@ export interface SessionExerciseResult {
   totalReps: number;
   totalVolumeKg: number;
   maxWeightKg?: number;
+  /**
+   * 이 운동의 추정 1RM(kg). 과거 기록과 이번 세션의 완료 세트 중 가장 높은 추정값이며,
+   * 신뢰할 수 없으면(중량 없음/반복수 과다) 비어 있다 — GrowthEngine은 이 값이 없어도
+   * SP를 계산한다(중립 강도 배수를 쓴다). 세션 결과에 담는 이유는 과거 기록을 아는 쪽이
+   * 여기뿐이기 때문이다 (엔진은 저장소를 모른다).
+   */
+  estimatedOneRepMaxKg?: number;
 }
 
 export interface SessionPersonalRecord {
@@ -67,4 +80,86 @@ export interface WorkoutSessionResult {
   bodyWeightKg?: number;
   /** 부위별 볼륨 합계 (spDistribution 적용 후). GrowthEngine의 1차 입력. */
   volumeByMuscleGroup: Partial<Record<MuscleGroup, number>>;
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * GROWTH STATE — 실제 운동으로 쌓이는 부위별 성장 상태 (영속화 대상)
+ *
+ * 세 축을 서로 섞지 않는다:
+ *  - **Account Level (PASS XP)**: 게임 플레이 진행도. `types/pass.ts`가 따로 들고 있다.
+ *  - **Muscle SP**: 아래 상태. 실제 운동 기록에서만 쌓인다.
+ *  - **Fat / Definition**: 식단·체중 추세 축. 아직 계산하지 않는다 (`BodyCompositionState`).
+ *
+ * Muscle SP는 게임 진행도이며 사용자의 실제 체중/체지방률/골격근량이 아니다.
+ * 이 상태가 실제 신체 기록(BodyHistoryEntry)을 만들거나 바꾸는 경로는 존재하지 않는다.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+export interface MuscleGrowthState {
+  /** 지금까지 이 부위에 쌓인 총 SP. stage와 무관하게 계속 누적된다. */
+  totalSp: number;
+  /** totalSp를 threshold에 대입해 얻은 현재 단계 (0~5). 저장하지만 언제나 재계산 가능하다. */
+  currentStage: number;
+  lastGainAt?: string;
+}
+
+/**
+ * 지방/컨디션 축. 이번 단계에서는 **아무도 채우지 않는다** — 다음 FatEngine이 들어올
+ * 자리만 잡아둔다. 근육 SP 계산은 이 값을 절대 읽지 않는다 (두 엔진은 독립적이다).
+ */
+export interface BodyCompositionState {
+  fatStage?: number;
+  definitionStage?: number;
+  nutritionState?: unknown;
+  recoveryState?: unknown;
+}
+
+export interface DanbaekGrowthState {
+  /** 저장 스키마 버전. 필드가 늘어나도 예전 저장값을 그대로 읽기 위한 최소 장치. */
+  version: number;
+  muscles: Record<MuscleGroupDetail, MuscleGrowthState>;
+  totalWorkoutSp: number;
+  /**
+   * 하루 상한(soft cap) 계산용 당일 누적치. 날짜가 바뀌면 통째로 리셋된다 —
+   * 히스토리가 아니라 계산용 임시 집계라서 하루치만 들고 있는다.
+   */
+  daily: {
+    /** YYYY-MM-DD */
+    date: string;
+    spByMuscle: MuscleSpDistribution;
+  };
+  /** 마지막으로 반영한 세션. 같은 세션이 두 번 적립되지 않게 한다. */
+  lastSessionId?: string;
+  updatedAt: string;
+  /** 예약 영역 (FatEngine). 근육 SP와 섞지 않는다. */
+  body?: BodyCompositionState;
+}
+
+// ── 엔진 반환값 ─────────────────────────────────────────────────────────────
+
+export interface MuscleStageChange {
+  muscle: MuscleGroupDetail;
+  /** 화면에서 부위를 묶어 보여줄 때 쓴다 (세부 부위를 그대로 노출하지 않아도 되도록). */
+  group: MuscleGroup;
+  previousStage: number;
+  currentStage: number;
+}
+
+/**
+ * 세션 하나를 성장에 반영한 결과. 다음 단계(운동 종료 성장 연출 / DanbaekRenderer)가
+ * 이 데이터만 보고 화면을 만들 수 있어야 한다.
+ */
+export interface GrowthApplicationResult {
+  sessionId: string;
+  gainedSpByMuscle: MuscleSpDistribution;
+  previousStages: Record<MuscleGroupDetail, number>;
+  currentStages: Record<MuscleGroupDetail, number>;
+  stageChanges: MuscleStageChange[];
+  /**
+   * 이번 세션의 일시적 펌핑. **저장하지 않는다** — 영구 성장(SP)과 다른 값이며,
+   * 결과 화면/캐릭터 연출에서 잠깐 쓰기 위한 것이다.
+   */
+  pumpByMuscle: MuscleSpDistribution;
+  totalSpGained: number;
 }

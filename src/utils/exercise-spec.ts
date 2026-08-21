@@ -1,5 +1,6 @@
 import { AppConfig } from '@/config/app-config';
 import { inferMotionFamily } from '@/config/motion-families';
+import { deriveBodyWeightLoadFactor, deriveMuscleSpDistribution, normalizeMuscleSpDistribution } from '@/utils/muscle-sp';
 import type {
   ExerciseDefinition,
   ExerciseDifficulty,
@@ -108,22 +109,31 @@ export function resolveExercise(
     (group) => group !== exercise.primaryMuscleGroup
   );
   const defaults = deriveDefaults(exercise);
+  const animationFamily =
+    exercise.animationFamily ??
+    inferMotionFamily({
+      primaryMuscleGroup: exercise.primaryMuscleGroup,
+      equipment: exercise.equipment,
+    });
+  const spDistribution =
+    exercise.spDistribution ?? deriveSpDistribution(exercise.primaryMuscleGroup, secondaryMuscles);
 
   return {
     id: exercise.id,
     name: exercise.name,
     category: exercise.category ?? 'strength',
     equipment: exercise.equipment,
-    animationFamily:
-      exercise.animationFamily ??
-      inferMotionFamily({
-        primaryMuscleGroup: exercise.primaryMuscleGroup,
-        equipment: exercise.equipment,
-      }),
+    animationFamily,
     primaryMuscles: [exercise.primaryMuscleGroup],
     secondaryMuscles,
-    spDistribution:
-      exercise.spDistribution ?? deriveSpDistribution(exercise.primaryMuscleGroup, secondaryMuscles),
+    spDistribution,
+    // DB에 손으로 쓴 분배가 있으면 항상 그쪽이 이긴다 (합만 1.0으로 맞춘다).
+    muscleSpDistribution: exercise.muscleSpDistribution
+      ? normalizeMuscleSpDistribution(exercise.muscleSpDistribution)
+      : deriveMuscleSpDistribution({ spDistribution, animationFamily }),
+    bodyWeightLoadFactor:
+      exercise.bodyWeightLoadFactor ??
+      deriveBodyWeightLoadFactor({ equipment: exercise.equipment, animationFamily }),
     usesWeight: exercise.trackingType === 'weight_reps' && WEIGHTED_EQUIPMENT.has(exercise.equipment),
     usesBodyWeight: exercise.equipment === 'bodyweight',
     uses1RM: exercise.trackingType === 'weight_reps' && ONE_RM_EXERCISE_IDS.has(exercise.id),

@@ -11,6 +11,55 @@ export type Equipment =
   | 'smith'
   | 'other';
 
+/**
+ * 성장 계산과 저장에 쓰는 **세부 부위**. 위의 `MuscleGroup`은 사용자에게 보여주는 묶음
+ * (가슴/등/하체/어깨/팔/코어/전신)이고, 이쪽은 그 안에서 실제로 자극이 나뉘는 단위다.
+ *
+ * 두 enum은 중복이 아니라 계층이다 — `MuscleDetailToGroup`이 항상 세부 → 묶음으로
+ * 되돌려 주므로, 화면은 계속 `MuscleGroup`만 쓰고 저장/계산만 세부 부위를 쓴다.
+ * (벤치프레스가 "팔"이 아니라 "삼두"를 키우고, 레그컬이 "하체"가 아니라 "햄스트링"을
+ * 키운다는 걸 표현하려면 저장 단위가 세부여야 한다.)
+ */
+export type MuscleGroupDetail =
+  | 'chest'
+  | 'frontDelts'
+  | 'sideDelts'
+  | 'rearDelts'
+  | 'biceps'
+  | 'triceps'
+  | 'lats'
+  | 'upperBack'
+  | 'abs'
+  | 'glutes'
+  | 'quads'
+  | 'hamstrings'
+  | 'calves';
+
+/** 세부 부위 → 화면에 보여주는 묶음. 세부 부위가 늘어나면 여기에만 추가한다. */
+export const MuscleDetailToGroup: Record<MuscleGroupDetail, MuscleGroup> = {
+  chest: 'chest',
+  frontDelts: 'shoulders',
+  sideDelts: 'shoulders',
+  rearDelts: 'shoulders',
+  biceps: 'arms',
+  triceps: 'arms',
+  lats: 'back',
+  upperBack: 'back',
+  abs: 'core',
+  glutes: 'legs',
+  quads: 'legs',
+  hamstrings: 'legs',
+  calves: 'legs',
+};
+
+/** 저장/계산에서 도는 세부 부위의 정해진 순서. Record 초기화의 유일한 기준이다. */
+export const MuscleGroupDetails: MuscleGroupDetail[] = Object.keys(
+  MuscleDetailToGroup
+) as MuscleGroupDetail[];
+
+/** 세부 부위별 비율 (합 1.0). 성장 계산의 실제 입력이다. */
+export type MuscleSpDistribution = Partial<Record<MuscleGroupDetail, number>>;
+
 export type ExerciseTrackingType = 'weight_reps' | 'reps_only' | 'duration';
 
 export type ExerciseDifficulty = 'beginner' | 'intermediate' | 'advanced';
@@ -70,6 +119,17 @@ export interface ExerciseDefinition {
   animationFamily?: MotionFamily;
   /** 없으면 primary/secondary 근육군에서 유도한다. */
   spDistribution?: SpDistribution;
+  /**
+   * 세부 부위 자극 분배 (성장 계산용). 없으면 spDistribution + animationFamily에서
+   * 유도한다 — 유도로는 구분할 수 없는 대표 운동(벤치/랫풀다운/레그컬 …)만 명시한다.
+   * 게임 밸런스 초기값이며 생체역학 측정값이 아니다.
+   */
+  muscleSpDistribution?: MuscleSpDistribution;
+  /**
+   * 맨몸 운동에서 체중의 몇 배가 실제 부하로 걸리는지 (푸쉬업은 체중 전체가 아니다).
+   * 없으면 동작 패턴에서 유도한다. 추가 중량은 여기에 더해진다(웨이트 딥스/풀업).
+   */
+  bodyWeightLoadFactor?: number;
   defaultSets?: number;
   /** trackingType이 'duration'이면 '회'가 아니라 '초'로 읽는다. */
   defaultReps?: number;
@@ -98,6 +158,10 @@ export interface ResolvedExercise {
   primaryMuscles: MuscleGroup[];
   secondaryMuscles: MuscleGroup[];
   spDistribution: SpDistribution;
+  /** 세부 부위 분배 (합 1.0). GrowthEngine이 실제로 쓰는 값. */
+  muscleSpDistribution: MuscleSpDistribution;
+  /** 맨몸 부하 계수. 중량 운동에서도 값은 있지만 쓰이지 않는다. */
+  bodyWeightLoadFactor: number;
   /** 중량을 기록하는 운동인가 (바벨/덤벨/머신/케이블) */
   usesWeight: boolean;
   /** 체중을 저항으로 쓰는 운동인가 (풀업/딥스/푸쉬업 …) */

@@ -193,6 +193,25 @@ createSession(category, id, nowIso, options?)     → status: 'active', activeSi
 
 **GrowthEngine 경계 (`src/services/growth/`).** 흐름은 `WorkoutSession → WorkoutSessionResult → GrowthEngine → Muscle SP → 캐릭터`다. 현재는 인터페이스와 no-op 구현만 있고(`noopGrowthEngine`), `endWorkoutSession()`이 결과를 넘기는 호출부는 이미 살아 있다 — 다음 작업에서 엔진 구현만 채우면 되고 호출부는 바뀌지 않는다. 엔진이 돌려주는 것은 게임 진행도(부위별 SP)이며, **실제 체중/체지방률/골격근량이나 캐릭터 외형 파라미터를 만들거나 바꾸지 않는다**(2장의 성장 원칙).
 
+## 5.5-C. GrowthEngine (Muscle SP)
+
+**세 축은 서로 독립이다.** Account Level(PASS XP, `types/pass.ts`) / Muscle SP(아래) / Fat·Definition(아직 없음). 한 번의 운동으로 XP와 SP가 **각각** 계산되며, 하나를 다른 하나의 alias로 만들지 않는다. Muscle SP는 게임 진행도이고 사용자의 실제 체중/체지방률/골격근량이 아니다 — 성장 상태가 실제 신체 기록(`BodyHistoryEntry`)을 만들거나 바꾸는 경로는 존재하지 않는다.
+
+**세부 부위 (`MuscleGroupDetail`).** 저장과 계산은 13개 세부 부위(chest / frontDelts / sideDelts / rearDelts / biceps / triceps / lats / upperBack / abs / glutes / quads / hamstrings / calves)를 쓰고, 화면은 계속 기존 `MuscleGroup`(가슴/등/하체/어깨/팔/코어/전신)을 쓴다. 둘은 중복 enum이 아니라 계층이며 `MuscleDetailToGroup`이 항상 세부 → 묶음으로 되돌린다. 벤치프레스가 "팔"이 아니라 삼두를, 레그컬이 "하체"가 아니라 햄스트링을 키운다는 걸 표현하려면 저장 단위가 세부여야 한다.
+
+**자극 분배 (`Exercise.muscleSpDistribution`).** 합이 1.0인 세부 부위 비율이다. DB에 명시된 값이 항상 우선이고(벤치 0.6/0.25/0.15처럼 대표 운동 24종), 없으면 `deriveMuscleSpDistribution()`이 기존 `spDistribution` + `animationFamily`에서 유도한다 — 컬은 이두, 익스텐션은 삼두, 레이즈는 측면 어깨처럼 동작 패턴이 부위를 결정한다. 44개를 전부 손으로 쓰지 않으면서 구분이 필요한 것만 override 하는 구조다.
+
+**SP 계산 (`utils/growth-calculation.ts`, 순수 함수).** 단계별 함수를 순서대로 엮는다: `calculateEffectiveLoad()` → `estimateOneRepMax()` → `calculateIntensityMultiplier()` → `calculateRepStimulus()` → `calculateFatigueMultiplier()` → `calculateSetStimulus()` → `distributeStimulusToMuscles()` → `calculateSessionMuscleSp()`. 원칙은 셋이다.
+- **절대 중량이 아니라 상대 강도**: 부하 ÷ 추정 1RM을 구간(band)으로 나눠 배수를 매긴다. 1RM을 모르면 중립 배수를 쓴다(기록이 없다고 0점이 되지 않는다). 추정 1RM은 과거 기록 + 이번 세션의 완료 세트 중 최고값이며(`estimateExerciseOneRepMax`), 반복수가 신뢰 구간을 넘는 세트는 추정에서 제외한다.
+- **맨몸은 0kg가 아니다**: `체중 × bodyWeightLoadFactor + 추가 중량`. 계수는 동작 패턴에서 유도하고(풀업 1.0, 푸쉬업 0.65 …) 필요한 종목만 DB에서 override 한다. 체중을 모르면 config의 가정값을 쓰며 이 값은 신체 기록에 저장되지 않는다.
+- **어떤 입력도 SP를 폭증시키지 못한다**: 반복수는 포화하고(1kg×1000회 ≪ 정상 1세트), 강도 배수는 상한이 있고, 같은 부위를 계속 때리면 피로도가 누적된다(부위별 가중 세트 수 기준이라 운동만 바꿔도 이어진다). 하루 상한은 끊지 않고 초과분의 효율만 떨어뜨린다.
+
+**상태와 단계 (`utils/growth-state.ts`, `data/growth-repository.ts`).** `DanbaekGrowthState`는 부위별 `{ totalSp, currentStage, lastGainAt }` + 총합 + 당일 집계 + 마지막 반영 세션 ID를 들고, 기존 repository와 같은 AsyncStorage+JSON 방식으로 저장된다(성장 전용 저장 기술 없음). stage는 저장하되 **항상 threshold에서 다시 계산**하므로 밸런스를 조정하면 기존 사용자도 즉시 재평가된다. 한 세션에 올라갈 수 있는 단계는 1이고, 넘친 SP는 사라지지 않고 다음 세션에 반영된다. 저장값이 없거나 필드가 빠져 있으면 `migrateGrowthState()`가 채운다.
+
+**밸런스 숫자는 전부 `config/growth-config.ts`에 있다** — 1RM 추정 계수, 강도 구간, 반복 포화, 피로도, 하루 상한, stage threshold, 맨몸 부하 계수. 계산 코드에는 숫자를 쓰지 않는다.
+
+**연결점.** `endWorkoutSession()`이 `growthEngine.applySessionResult(sessionResult)`를 호출하고, 결과(`GrowthApplicationResult`: gainedSpByMuscle / previousStages / currentStages / stageChanges / pumpByMuscle / totalSpGained)를 `EndSessionSummary.growth`에 실어 화면으로 돌려준다. `pump`는 저장하지 않는 세션 한정 값이다(영구 성장과 다르다). 다음 단계(성장 연출 / DanbaekRenderer)는 이 값만 보면 된다.
+
 ## 6. 화면 구조 / 네비게이션
 
 루트 `_layout.tsx`는 `AppDataProvider`로 감싼 뒤, `onboardingComplete` 값에 따라 `Stack.Protected`로 `(onboarding)`과 `(tabs)+session` 중 하나만 마운트한다 (expo-router SDK 53+ Protected Routes 패턴). `session`은 `(tabs)`와 같은 guard 아래 있는 형제 `Stack.Screen`이라 온보딩 완료 후에만 접근 가능하지만, 탭 네비게이터 밖에 있어 탭바 없이 전체화면으로 뜬다.

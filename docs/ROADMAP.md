@@ -106,6 +106,26 @@ WEIGHT CORE로 잠근 구조(activeSince 타이머 / Exercise DB / Routine / 세
 
 WORKOUT CORE에서도 실제 애니메이션 클립, LLM API, 광고 SDK, 인앱결제, 1RM 계산, 성장(SP) 계산은 연결/구현하지 않는다.
 
+## GROWTH ENGINE — 실제 운동 기록 → 부위별 SP → 성장 상태
+
+WORKOUT CORE에서 만든 `growthEngine.applySessionResult(sessionResult)` 연결점을 그대로 쓰고, 그 안을 채웠다. 운동 시작 UX / 세션 UI / Exercise 모델 / MotionFamily / 홈 / 단백이 디자인은 건드리지 않았다.
+
+- [x] 세부 부위 도입 — `MuscleGroupDetail` 13종 + `MuscleDetailToGroup` 매핑. 기존 `MuscleGroup`(UI 묶음)을 대체하지 않고 계층으로 확장했다. 저장/계산은 세부, 화면은 묶음
+- [x] `Exercise.muscleSpDistribution` — 합 1.0의 세부 부위 분배. 대표 운동 24종은 명시(벤치 0.6/0.25/0.15 등), 나머지는 `spDistribution` + `animationFamily`에서 유도(컬=이두, 익스텐션=삼두, 레이즈=측면 어깨…)
+- [x] SP 계산(`utils/growth-calculation.ts`) — 유효 부하 → 추정 1RM → 상대 강도 구간 → 반복 포화 → 부위별 피로도 → 세트 자극 → 부위 분배. 단계별 순수 함수로 분리했고 거대 함수를 만들지 않았다
+- [x] 상대 강도 우선 — 절대 중량이 아니라 부하÷1RM 구간으로 판정. 1RM은 과거 기록 + 이번 세션에서 추정하며, 없으면 중립 배수로 계산해 0점이 되지 않는다
+- [x] 맨몸 운동 — `체중 × bodyWeightLoadFactor + 추가 중량`. 계수는 동작 패턴에서 유도하고 필요한 종목만 override(풀업 1.0 / 딥스 0.95 / 푸쉬업 0.65 …). 웨이트 딥스/풀업도 그대로 계산된다
+- [x] 악용 방지 — 반복수 포화(1kg×1000회 ≪ 정상 1세트), 중량 sanity clamp, 부위별 세트 diminishing return(운동을 바꿔도 이어짐), 하루 soft cap(끊지 않고 초과분 효율만 감소)
+- [x] 성장 상태(`types/growth.ts`, `utils/growth-state.ts`, `data/growth-repository.ts`) — 부위별 `{totalSp, currentStage, lastGainAt}` + 총합 + 당일 집계 + 마지막 반영 세션. 기존 AsyncStorage repository 패턴 그대로이며 새 저장 기술을 도입하지 않았다. 없거나 낡은 저장값은 `migrateGrowthState()`가 채운다
+- [x] stage threshold를 config로 분리 — 0~5, 비선형(초반 빠르게 → 후반 장기 목표). stage는 항상 threshold에서 재계산되고, 한 세션에 한 단계까지만 오른다(넘친 SP는 다음 세션으로 이월)
+- [x] pump 분리 — 세션 한정 일시값으로 결과에만 실어 보내고 저장하지 않는다 (다음 단계 연출용)
+- [x] `GrowthApplicationResult` 반환 — gainedSpByMuscle / previousStages / currentStages / stageChanges / pumpByMuscle / totalSpGained. `EndSessionSummary.growth`로 화면까지 연결됐다
+- [x] 밸런스 상수 일원화(`config/growth-config.ts`) — 1RM 계수 / 강도 구간 / 반복 포화 / 피로도 / 하루 상한 / stage threshold / 맨몸 부하 계수. 계산 코드에 magic number 없음
+- [x] `scripts/verify-growth-engine.ts`(`npm run verify:growth`) — 68개 시나리오. 상대 강도 차이, 1RM이 다른 두 사용자, 부위 분배, 맨몸 0 SP 금지, 체중별 부하 차이, 반복/세트 악용 방지, threshold 통과, 단일 세션 다단계 점프 금지, 저장 왕복/migration까지 검증. 기존 verify 스크립트 4종도 계속 통과
+- [x] 실기기 대신 웹에서 전체 흐름 확인 — 운동 시작 → 세트 완료 → 종료 → SP 저장 → 새로고침 후 유지 → 두 번째 세션 누적
+
+GROWTH ENGINE에서도 지방/식단 계산, 단백이 외형 변환(Visual Body), 실제 애니메이션, LLM/광고/결제는 구현하지 않는다. Fat 축은 `DanbaekGrowthState.body` 자리만 비워 뒀고 근육 SP 계산과 섞이지 않는다.
+
 ## M3 — 다음 단계 (아직 착수하지 않음)
 
 - 실제 캐릭터/트레이너 아트 자산 반영 (이모지 → 실제 이미지, `TrainerProfile.portraitPlaceholder` 대체), 세트 완료/PR 연출에 실제 애니메이션 추가

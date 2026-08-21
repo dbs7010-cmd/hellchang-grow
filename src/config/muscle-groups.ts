@@ -1,4 +1,4 @@
-import type { MuscleGroup } from '@/types/exercise';
+import type { MuscleGroup, MuscleGroupDetail } from '@/types/exercise';
 
 /**
  * 부위 필터/부위별 시작에 노출하는 순서.
@@ -28,4 +28,25 @@ export const MuscleGroupLabels: Record<MuscleGroup, string> = {
   arms: '팔',
   fullBody: '전신',
   core: '코어',
+};
+
+/**
+ * 세부 부위 표시 이름. 저장/계산은 `MuscleGroupDetail`을 쓰고, 사람에게 보여줄 일이
+ * 생기면(성장 리포트 등) 이 라벨만 쓴다 — 화면 코드에 부위 이름을 문자열로 박지 않는다.
+ * 묶어서 보여주고 싶으면 `MuscleDetailToGroup` + 위의 `MuscleGroupLabels`를 쓴다.
+ */
+export const MuscleGroupDetailLabels: Record<MuscleGroupDetail, string> = {
+  chest: '가슴',
+  frontDelts: '전면 어깨',
+  sideDelts: '측면 어깨',
+  rearDelts: '후면 어깨',
+  biceps: '이두',
+  triceps: '삼두',
+  lats: '광배',
+  upperBack: '상부 등',
+  abs: '복근',
+  glutes: '둔근',
+  quads: '대퇴사두',
+  hamstrings: '햄스트링',
+  calves: '종아리',
 };

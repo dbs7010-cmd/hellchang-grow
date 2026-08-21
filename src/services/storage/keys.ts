@@ -6,6 +6,7 @@ export const StorageKeys = {
   activeWorkoutSession: 'hellchang.activeWorkoutSession.v1',
   routines: 'hellchang.routines.v1',
   passState: 'hellchang.passState.v1',
+  growthState: 'hellchang.growthState.v1',
   streakState: 'hellchang.streakState.v1',
   subscriptionState: 'hellchang.subscriptionState.v1',
   trainerUsageState: 'hellchang.trainerUsageState.v1',
