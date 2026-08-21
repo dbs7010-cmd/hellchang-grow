@@ -37,6 +37,22 @@ export const AppConfig = {
   restTimerPresetsSeconds: [60, 90, 120],
   /** 휴식 타이머 기본값(초) */
   defaultRestSeconds: 90,
+  /**
+   * Exercise DB에 defaultSets/defaultReps/defaultRestSeconds가 지정되지 않은 운동의 기본값.
+   * 복합 관절(compound)은 무겁게 적게, 고립(isolation)은 가볍게 많이, 맨몸은 그 중간이라는
+   * 일반적인 기준을 한 곳에 모아둔다 — 화면이나 Exercise DB에 숫자를 흩뿌리지 않는다.
+   */
+  exerciseDefaults: {
+    compound: { sets: 5, reps: 5, restSeconds: 180 },
+    isolation: { sets: 3, reps: 12, restSeconds: 60 },
+    bodyweight: { sets: 3, reps: 12, restSeconds: 90 },
+    /** trackingType이 'duration'인 운동은 reps를 '초'로 읽는다. */
+    duration: { sets: 3, reps: 45, restSeconds: 60 },
+  },
+  /** [오늘 추천]으로 한 번에 담아주는 운동 개수 */
+  recommendedExerciseCount: 4,
+  /** 대체 운동(alternativeExerciseIds)을 유도할 때 최대 몇 개까지 제안할지 */
+  alternativeExerciseLimit: 3,
   /** 세트 중량 +/- 스테퍼 증감 단위(kg) */
   setWeightStepKg: 2.5,
   /** 세트 횟수 +/- 스테퍼 증감 단위(회) */

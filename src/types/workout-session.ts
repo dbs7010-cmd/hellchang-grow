@@ -8,6 +8,14 @@ export interface SessionExerciseEntry {
   /** Exercise DB ID, 또는 [직접 운동 추가]로 만든 즉석 ID */
   exerciseId: string;
   exerciseName: string;
+  /**
+   * 이번 세션에서 목표로 하는 세트 수 — 세션 화면의 "2 / 4 세트" 표시에 쓴다.
+   * Exercise DB의 defaultSets에서 채워지며, 없으면(옛 세션/즉석 운동) 표시만 생략된다.
+   * 목표를 채우지 않아도 세션은 언제든 끝낼 수 있다 — 강제가 아니라 안내다.
+   */
+  targetSets?: number;
+  /** 이 운동의 세트 사이 기본 휴식(초). 세트 완료 시 자동으로 이 길이의 휴식이 시작된다. */
+  defaultRestSeconds?: number;
   sets: WorkoutSetEntry[];
 }
 

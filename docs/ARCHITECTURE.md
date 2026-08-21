@@ -162,12 +162,17 @@ createSession(category, id, nowIso, options?)     → status: 'active', activeSi
 
 ## 5.5-A. Exercise DB / 세션 진입 경로 / 이전 기록 / PR / PASS
 
+**Exercise 공통 데이터 규격 (`src/types/exercise.ts`, `src/utils/exercise-spec.ts`).** 프리웨이트/머신/케이블/맨몸을 별도 시스템으로 나누지 않는다 — 전부 하나의 `ExerciseDefinition`이고 `equipment` 값만 다르다. 화면과 GrowthEngine이 소비하는 것은 원본이 아니라 `resolveExercise(exercise, db)`가 만든 **`ResolvedExercise`**(optional이 하나도 없는 형태)다: `id / name / category / equipment / animationFamily / primaryMuscles / secondaryMuscles / spDistribution / usesWeight / usesBodyWeight / uses1RM / defaultSets / defaultReps / defaultRestSeconds / difficulty / guideId / alternativeExerciseIds`. DB에 적혀 있지 않은 필드는 기존 필드(equipment/trackingType/근육군)에서 **결정론적으로 유도**한다 — 44개 항목을 다시 쓰지 않기 위해서다. 유도 규칙이 맞지 않는 운동만 DB에서 개별적으로 덮어쓴다. 세트/횟수/휴식의 기본 숫자는 `AppConfig.exerciseDefaults` 한 곳에만 있다. `spDistribution`은 **게임 진행도(부위별 SP) 분배 비율**이며 실제 체성분과 무관하다.
+
+**Motion Family (`src/types/exercise.ts`, `src/config/motion-families.ts`).** 종목마다 애니메이션을 만들지 않는다. 캐릭터가 재생하는 모션은 15개 공통 family(`horizontal_press` … `cardio`)가 전부이고, Exercise는 `animationFamily`로 그중 하나를 가리킨다. 세션 화면은 종목 이름이 아니라 이 값만 보고 모션을 고른다(`CharacterMotionStage`). V1의 모션은 실제 클립이 아니라 축/진폭/반복 길이 **파라미터**이며, 실제 스프라이트가 준비되면 바꿀 곳은 motion family registry와 character asset registry 두 곳뿐이다.
+
 **Exercise DB (`src/config/exercises.ts`).** 정적 `ExerciseDefinition[]`로 서버 DB 없이 관리한다. `getExerciseById`, `getExercisesByMuscleGroup`, `searchExercises`(이름/별칭 기준)를 통해서만 조회하고, 화면 컴포넌트에 운동 목록을 하드코딩하지 않는다. DB에 없는 운동은 `workout-start.tsx`/`session.tsx`의 [직접 운동 추가]로 `exerciseId`를 `custom-exercise-*` 형태로 즉석 생성해 보완한다.
 
-**세 가지 세션 진입 경로 (`src/app/workout-start.tsx`).** 모두 같은 `startWorkoutSession()` 호출로 수렴한다.
-- **계획형**: `getTodaysScheduledRoutine(routines, dayOfWeek)`가 오늘 예약된 루틴을 찾으면 "오늘 · {이름}" 카드를 보여주고 [이 루틴으로 시작]이 `routineId` + `initialExercises`를 채운 세션을 시작한다. [오늘은 다르게]로 언제든 즉흥형으로 전환 가능.
-- **즉흥형**: 부위 Chip 선택 → `Exercises`에서 해당 부위 후보를 보여주고, `findMostRecentRecordForMuscleGroup()`로 "지난번 그대로 갈까?" 단축 경로도 함께 제공한다.
-- **추천형**: [오늘 뭐 하지?]가 `recommendMuscleGroup()`(가장 오래 안 한 부위 우선, `src/utils/workout-recommendation.ts`)으로 부위를 결정론적으로 골라준다. 실제 LLM 없이도 동작하며, 나중에 AI PT가 이 자리를 대체할 수 있도록 순수 함수로 분리돼 있다.
+**세 가지 세션 진입 경로 (`src/app/workout-start.tsx`).** 후보 계산은 전부 `buildQuickStartPlan()`(`src/utils/workout-start.ts`, 순수 함수)이 하고 화면은 그 결과를 한 줄씩 그리기만 한다. 세 경로 모두 같은 `startWorkoutSession()` 호출로 수렴한다.
+- **1) 지난 루틴 계속하기 (계획형)**: 오늘 예약된 루틴(`getTodaysScheduledRoutine`) → 마지막으로 수행한 루틴(기록 제목 = 루틴 이름 매칭) → 지난 세션 그대로(가장 최근 기록의 운동 구성) 순으로 하나만 고른다. 누르면 곧바로 세션이 시작된다 — 중간 화면이 없다.
+- **2) 오늘 추천 (추천형)**: `recommendMuscleGroup()`(가장 오래 안 한 부위 우선)으로 부위를 정하고, 그 부위에서 **사용자가 실제로 해본 운동을 먼저** 채워 `AppConfig.recommendedExerciseCount`개를 담아 바로 시작한다. 실제 LLM 없이 동작하며, 나중에 AI PT가 이 자리를 대체할 수 있도록 순수 함수로 분리돼 있다.
+- **3) 직접 선택 (즉흥형)**: 부위 Chip → 운동 다중 선택(+ DB에 없는 운동 직접 추가) → [N개로 시작]. 루틴이 없는 사용자의 기본 경로이며, 아무것도 고르지 않고도 시작할 수 있다.
+- 어떤 경로로 담기든 운동에는 Exercise DB의 `defaultSets`/`defaultRestSeconds`가 함께 실린다(`SessionExerciseInput`) — 세션 화면이 "3 / 5 세트"와 자동 휴식을 그 값으로 처리한다.
 - 웨이트가 아닌 운동은 "[+ 유산소 추가]" 섹션(`CARDIO_CATEGORIES`)에서 카테고리만 골라 바로 세션을 시작한다 — 러닝/걷기/자전거/스포츠/기타는 부위 선택 없이 진입한다.
 
 **이전 기록 조회 (`src/utils/exercise-history.ts`).** `findPreviousPerformance(exerciseId, records)`가 Exercise ID 기준으로 가장 최근 세션의 날짜/세트 구성/최고 중량을 반환한다. `setDetails`가 없는 과거(legacy) 기록은 요약 필드(`sets`/`reps`/`weightKg`)로부터 단일 세트를 근사해 fallback한다 — 데이터 마이그레이션 없이 과거 기록도 그대로 조회된다. `session.tsx`의 `PreviousPerformanceLine`과 `workout.tsx`의 운동 상세 패널이 이 함수 하나를 공유한다.
@@ -175,6 +180,18 @@ createSession(category, id, nowIso, options?)     → status: 'active', activeSi
 **PR 판정.** `detectPRs(session, records)`는 완료된 세트만 대상으로, 같은 `exerciseId`의 과거 최고 중량보다 **엄격히 높은** 중량을 기록한 경우만 PR로 판정한다(동률은 PR 아님, 1RM 계산 없음). `endWorkoutSession()`이 세션 종료 시 한 번 호출하고, 결과(`PrEvent[]`)가 종료 요약 화면에 "NEW PR" 카드로 노출된다.
 
 **PASS 진행도 (`src/utils/pass.ts`, `src/types/pass.ts`).** `PassState`는 누적 XP(`xp`)만 저장하고, 레벨/진행률은 항상 `computePassLevelProgress(xp)`(`level = floor(xp / passXpPerLevel) + 1`)로 계산해 저장하지 않는다. `endWorkoutSession()`이 세션 완료 시 `passXpPerSession` + (PR 개수 × `passXpPerPr`) + (루틴 완료 시 `passXpPerRoutineCompletion`)을 더해 저장한다. 홈 화면 상단의 작은 진행 바(`ProgressBar` + "HELL PASS Lv.N")가 유일한 노출 지점이며, **PASS XP는 실제 사용자의 체중/체형 파라미터를 직접 변경하지 않는다** — 2장의 성장 원칙을 PASS에도 동일하게 적용한다.
+
+## 5.5-B. 세션 조작 규칙 / WorkoutSessionResult / GrowthEngine 경계
+
+**세션 중 사용자가 하는 일은 세 가지뿐이다** — 중량 확인/수정 → 횟수 확인/수정 → [세트 완료]. 이를 위해:
+- `ensurePendingSet()`이 "지금 채울 세트"를 항상 하나 유지한다. 세트를 끝낼 때마다 [+ 세트 시작]을 다시 누르지 않는다. 기본값은 이번 세션의 직전 세트 → 지난번 같은 운동의 마지막 세트(`findPreviousPerformance`) 순이다.
+- `completeSetAndStartRest()`이 기록과 휴식 시작을 **한 번의 상태 변경**으로 처리한다. 확인 팝업은 없다. 휴식 길이는 `getAutoRestSeconds()`가 운동별 `defaultRestSeconds` → `AppConfig.defaultRestSeconds` 순으로 고른다.
+- 휴식이 끝나면 대기 세트가 이미 준비된 ACTIVE 화면으로 돌아온다. 휴식 중 [다음 세트 시작]은 남은 휴식을 건너뛴다.
+- 화면에 항상 보이는 정보: 현재 운동명 · `getSetProgress()`의 "N / M 세트" · 중량 · 횟수 · 지난 기록 한 줄 · 휴식 상태 · 다음 운동 · [운동 종료].
+
+**WorkoutSessionResult (`src/types/growth.ts`, `src/utils/workout-session-result.ts`).** 세션과 성장 계산 사이의 **유일한 계약**이다. `buildWorkoutSessionResult()`는 순수 함수이며 완료된 세트만 담는다: `sessionId / startedAt / endedAt / activeSeconds / exercises(세트 상세·부위·SP 비율 포함) / totalSets / totalReps / totalVolumeKg / personalRecords / bodyWeightKg / volumeByMuscleGroup`. PR 판정 기준은 기존 `detectPRs`와 같은 누적 최고 중량이며, **이번 세션이 기록으로 저장되기 전에** 계산한다. `bodyWeightKg`는 실제 입력된 값(최근 신체 기록 → 프로필)만 읽어 넘기고 없으면 비운다 — 결과가 실제 신체 수치를 만들지 않는다.
+
+**GrowthEngine 경계 (`src/services/growth/`).** 흐름은 `WorkoutSession → WorkoutSessionResult → GrowthEngine → Muscle SP → 캐릭터`다. 현재는 인터페이스와 no-op 구현만 있고(`noopGrowthEngine`), `endWorkoutSession()`이 결과를 넘기는 호출부는 이미 살아 있다 — 다음 작업에서 엔진 구현만 채우면 되고 호출부는 바뀌지 않는다. 엔진이 돌려주는 것은 게임 진행도(부위별 SP)이며, **실제 체중/체지방률/골격근량이나 캐릭터 외형 파라미터를 만들거나 바꾸지 않는다**(2장의 성장 원칙).
 
 ## 6. 화면 구조 / 네비게이션
 

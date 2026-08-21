@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
+import { CharacterMotionStage } from '@/components/character/character-motion-stage';
 import { PlayerCharacter } from '@/components/character/player-character';
 import { GoldsunReaction } from '@/components/goldsun/goldsun-reaction';
 import { ThemedText } from '@/components/themed-text';
@@ -19,7 +20,7 @@ import { PrimaryButton } from '@/components/ui/primary-button';
 import { Section } from '@/components/ui/section';
 import { TextField } from '@/components/ui/text-field';
 import { AppConfig } from '@/config/app-config';
-import { searchExercises } from '@/config/exercises';
+import { getResolvedExerciseById, searchExercises } from '@/config/exercises';
 import { StanleyTrainer } from '@/config/trainers';
 import { WorkoutCategories, WorkoutCategoryLabels } from '@/config/workout-labels';
 import { Layout, Motion, Radius, Spacing } from '@/constants/theme';
@@ -34,9 +35,13 @@ import { formatVolumeKg } from '@/utils/workout-stats';
 import {
   computeElapsedSeconds,
   formatElapsedTime,
+  getAutoRestSeconds,
+  getCurrentExercise,
   getLastSetValues,
+  getNextExercise,
   getRestProgress,
   getRestSecondsRemaining,
+  getSetProgress,
 } from '@/utils/workout-session';
 
 interface SessionSummaryWithLine extends EndSessionSummary {
@@ -64,6 +69,7 @@ export default function SessionScreen() {
   const {
     activeSession,
     workoutRecords,
+    characterAppearance,
     pauseWorkoutSession,
     resumeWorkoutSession,
     changeSessionCategory,
@@ -73,6 +79,7 @@ export default function SessionScreen() {
     updateSessionSet,
     adjustSessionSet,
     completeSessionSet,
+    ensureSessionPendingSet,
     startSessionRest,
     skipSessionRest,
     endWorkoutSession,
@@ -190,6 +197,23 @@ export default function SessionScreen() {
     }
   }, [activeSession, nowMs]);
 
+  /**
+   * "지금 채울 세트"를 항상 하나 띄워 둔다 — 세트를 완료할 때마다 [+ 세트 시작]을 다시
+   * 누르게 하지 않는다. 기본값은 이번 세션의 직전 세트, 그것도 없으면 지난번 같은 운동의
+   * 마지막 세트다 (같은 값을 다시 입력시키지 않는다).
+   */
+  useEffect(() => {
+    if (!activeSession || activeSession.status === 'completed') return;
+    const current = getCurrentExercise(activeSession);
+    if (!current || current.sets.some((set) => !set.completed)) return;
+    const previous = findPreviousPerformance(current.exerciseId, workoutRecords);
+    const lastSet = previous?.sets[previous.sets.length - 1];
+    ensureSessionPendingSet(
+      current.id,
+      lastSet ? { weightKg: lastSet.weightKg, reps: lastSet.reps } : undefined
+    );
+  }, [activeSession, workoutRecords, ensureSessionPendingSet]);
+
   if (!activeSession) {
     return summary ? <ResultScreen summary={summary} onConfirm={leaveSession} /> : null;
   }
@@ -199,16 +223,27 @@ export default function SessionScreen() {
   const restSecondsRemaining = getRestSecondsRemaining(activeSession, nowMs);
   const isResting = restSecondsRemaining > 0;
 
-  const currentExercise =
-    activeSession.exercises.find((e) => e.id === activeSession.currentExerciseId) ??
-    activeSession.exercises[0];
+  const currentExercise = getCurrentExercise(activeSession);
   const currentIndex = currentExercise
     ? activeSession.exercises.findIndex((e) => e.id === currentExercise.id)
     : -1;
-  const nextExercise = currentIndex >= 0 ? activeSession.exercises[currentIndex + 1] : undefined;
+  const nextExercise = getNextExercise(activeSession);
   const previousExercise = currentIndex > 0 ? activeSession.exercises[currentIndex - 1] : undefined;
   const pendingSet = currentExercise?.sets.find((set) => !set.completed);
   const completedSets = currentExercise?.sets.filter((set) => set.completed) ?? [];
+  const setProgress = currentExercise
+    ? getSetProgress(activeSession, currentExercise.id)
+    : { completed: 0, target: undefined };
+  /**
+   * 캐릭터 모션은 종목이 아니라 motion family로 고른다 — 종목별 애니메이션을 만들지 않는다.
+   * 같은 조회로 "이 운동이 중량을 쓰는가"도 함께 읽는다 (풀업에 0kg를 입력시키지 않기 위해).
+   */
+  const resolvedCurrent = currentExercise
+    ? getResolvedExerciseById(currentExercise.exerciseId)
+    : undefined;
+  const motionFamily = resolvedCurrent?.animationFamily;
+  // DB에 없는 [직접 추가] 운동은 판단할 근거가 없으므로 중량 입력을 그대로 열어 둔다.
+  const usesWeight = resolvedCurrent ? resolvedCurrent.usesWeight : true;
 
   const handlePauseToggle = async () => {
     if (isPaused) {
@@ -226,9 +261,15 @@ export default function SessionScreen() {
     await addSetToExercise(currentExercise.id, defaults ?? undefined);
   };
 
+  /**
+   * 세트 완료 = 게임 입력. 확인창 없이 곧바로 기록되고, 그대로 휴식으로 넘어간다.
+   * 휴식 길이는 운동별 기본값(Exercise DB) → 앱 기본값 순으로 정해진다.
+   */
   const handleCompleteSet = async (setId: string) => {
     if (!currentExercise) return;
-    await completeSessionSet(currentExercise.id, setId);
+    await completeSessionSet(currentExercise.id, setId, {
+      restSeconds: getAutoRestSeconds(activeSession, currentExercise.id, AppConfig.defaultRestSeconds),
+    });
   };
 
   const handleUpdateSet = async (setId: string, patch: { weightKg?: number; reps?: number }) => {
@@ -242,7 +283,13 @@ export default function SessionScreen() {
   };
 
   const handleAddExerciseByName = async (exerciseId: string, exerciseName: string) => {
-    await addExerciseToSession({ exerciseId, exerciseName });
+    const resolved = getResolvedExerciseById(exerciseId);
+    await addExerciseToSession({
+      exerciseId,
+      exerciseName,
+      targetSets: resolved?.defaultSets,
+      defaultRestSeconds: resolved?.defaultRestSeconds,
+    });
     setAddExerciseQuery('');
     setShowAddExercise(false);
   };
@@ -298,6 +345,7 @@ export default function SessionScreen() {
         secondsRemaining={restSecondsRemaining}
         elapsedSeconds={elapsedSeconds}
         currentExercise={currentExercise}
+        nextExercise={nextExercise}
         reaction={reaction}
         onPauseToggle={handlePauseToggle}
         onSkip={skipSessionRest}
@@ -312,7 +360,7 @@ export default function SessionScreen() {
       onPauseToggle={handlePauseToggle}
       statusLabel={
         currentExercise
-          ? `${completedSets.length}세트 완료 · 운동 ${currentIndex + 1}/${activeSession.exercises.length}`
+          ? `운동 ${currentIndex + 1}/${activeSession.exercises.length}`
           : undefined
       }
       reaction={reaction}>
@@ -342,8 +390,10 @@ export default function SessionScreen() {
               <ThemedText type="heading" numberOfLines={1}>
                 {currentExercise.exerciseName}
               </ThemedText>
-              <ThemedText type="caption" themeColor="textSecondary">
-                지금 {completedSets.length + 1}세트째
+              <ThemedText type="captionBold" themeColor="textSecondary">
+                {setProgress.target
+                  ? `${setProgress.completed} / ${setProgress.target} 세트`
+                  : `${setProgress.completed + 1}세트째`}
               </ThemedText>
             </View>
             <View style={styles.exerciseNav}>
@@ -360,9 +410,28 @@ export default function SessionScreen() {
             </View>
           </View>
 
+          {/*
+            단백이 자리. 캐릭터는 홈/결과와 같은 공통 렌더러이고, 여기서 더해지는 건
+            현재 운동의 animationFamily로 도는 공통 모션뿐이다 (종목별 애니메이션 없음).
+            운동 조작을 가리지 않도록 높이를 고정해 둔다.
+          */}
+          <CharacterMotionStage
+            appearance={characterAppearance}
+            family={motionFamily}
+            active={!isPaused}
+            height={SESSION_CHARACTER_HEIGHT}
+          />
+
+          {/* 지난번 같은 운동의 값 — 중량을 정하기 전에 보여야 하므로 조작 바로 위에 둔다. */}
+          <PreviousPerformanceLine
+            exerciseId={currentExercise.exerciseId}
+            records={workoutRecords}
+          />
+
           {pendingSet ? (
             <SetHero
               set={pendingSet}
+              usesWeight={usesWeight}
               onChange={(patch) => handleUpdateSet(pendingSet.id, patch)}
               onAdjust={(delta) => handleAdjustSet(pendingSet.id, delta)}
               onComplete={() => handleCompleteSet(pendingSet.id)}
@@ -376,13 +445,27 @@ export default function SessionScreen() {
             style={styles.logScroll}
             contentContainerStyle={styles.logContent}
             showsVerticalScrollIndicator={false}>
-            <PreviousPerformanceLine exerciseId={currentExercise.exerciseId} records={workoutRecords} />
             {completedSets.map((set, index) => (
               <ThemedText key={set.id} type="caption" themeColor="textSecondary">
                 {index + 1}. {set.weightKg ?? '-'}kg × {set.reps ?? '-'}회 ✓
               </ThemedText>
             ))}
           </ScrollView>
+
+          {nextExercise && (
+            <Pressable
+              onPress={() => setCurrentSessionExercise(nextExercise.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`다음 운동 ${nextExercise.exerciseName}로 이동`}
+              style={styles.nextExerciseRow}>
+              <ThemedText type="caption" themeColor="textSecondary">
+                다음 · {nextExercise.exerciseName}
+              </ThemedText>
+              <ThemedText type="captionBold" themeColor="textSecondary">
+                넘어가기 ›
+              </ThemedText>
+            </Pressable>
+          )}
 
           {activeSession.exercises.length > 1 && (
             <ChipRow bleed>
@@ -559,6 +642,12 @@ function SessionShell({
   );
 }
 
+/**
+ * 세션 화면의 단백이 높이. 세로 공간이 늘 부족한 화면이라(412x915 기준) 캐릭터가
+ * 세트 조작을 밀어내지 않도록 고정한다 — 주인공은 [세트 완료]다.
+ */
+const SESSION_CHARACTER_HEIGHT = 104;
+
 /** 상태줄(약 40px) 바로 아래에 골드썬 반응이 겹치도록 하는 오프셋. */
 const REACTION_TOP_OFFSET = 52;
 
@@ -723,11 +812,17 @@ function PreviousPerformanceLine({
 /** 다음에 완료할 세트 하나를 크게 보여주는 stepper. 완료된 세트는 아래 목록에서 압축 표시한다. */
 function SetHero({
   set,
+  usesWeight,
   onChange,
   onAdjust,
   onComplete,
 }: {
   set: WorkoutSetEntry;
+  /**
+   * 이 운동이 중량을 쓰는가(Exercise DB 기준). 풀업/푸쉬업처럼 맨몸 운동이면 중량 줄을
+   * 접어 두고 [+ 중량]으로 열 수 있게 한다 — 중량을 다는 사람도 있으므로 없애지는 않는다.
+   */
+  usesWeight: boolean;
   onChange: (patch: { weightKg?: number; reps?: number }) => void;
   /** 스테퍼는 절대값이 아니라 증감으로 보낸다 — 빠르게 두 번 눌러도 한 번이 씹히지 않는다. */
   onAdjust: (delta: { weightKg?: number; reps?: number }) => void;
@@ -736,12 +831,22 @@ function SetHero({
   const theme = useTheme();
   const weight = set.weightKg ?? 0;
   const reps = set.reps ?? 0;
+  const [weightOpen, setWeightOpen] = useState(false);
+  const showWeight = usesWeight || weightOpen || weight > 0;
 
   const stepWeight = (delta: number) => onAdjust({ weightKg: delta });
   const stepReps = (delta: number) => onAdjust({ reps: delta });
 
   return (
     <View style={styles.hero}>
+      {!showWeight && (
+        <Pressable onPress={() => setWeightOpen(true)} hitSlop={8}>
+          <ThemedText type="captionBold" themeColor="textSecondary">
+            + 중량 추가
+          </ThemedText>
+        </Pressable>
+      )}
+      {showWeight && (
       <View style={styles.heroRow}>
         <StepperButton label="−" onPress={() => stepWeight(-AppConfig.setWeightStepKg)} />
         <View style={styles.heroValue}>
@@ -757,6 +862,7 @@ function SetHero({
         </View>
         <StepperButton label="+" onPress={() => stepWeight(AppConfig.setWeightStepKg)} />
       </View>
+      )}
       <View style={styles.heroRow}>
         <StepperButton label="−" onPress={() => stepReps(-AppConfig.setRepsStep)} />
         <View style={styles.heroValue}>
@@ -804,6 +910,7 @@ function RestScreen({
   secondsRemaining,
   elapsedSeconds,
   currentExercise,
+  nextExercise,
   reaction,
   onPauseToggle,
   onSkip,
@@ -812,6 +919,7 @@ function RestScreen({
   secondsRemaining: number;
   elapsedSeconds: number;
   currentExercise?: SessionExerciseEntry;
+  nextExercise?: SessionExerciseEntry;
   reaction: React.ReactNode;
   onPauseToggle: () => void;
   onSkip: () => void;
@@ -819,7 +927,14 @@ function RestScreen({
   const theme = useTheme();
   const urgent = secondsRemaining <= AppConfig.restUrgentThresholdSeconds;
   const ringColor = urgent ? theme.goldBright : theme.gold;
-  const nextSetPreview = currentExercise ? getLastSetValues(session, currentExercise.id) : null;
+  // 휴식이 끝나면 곧바로 채울 세트 — 자동으로 준비된 대기 세트가 있으면 그 값이 정답이다.
+  const pendingSet = currentExercise?.sets.find((set) => !set.completed);
+  const nextSetPreview = pendingSet
+    ? { weightKg: pendingSet.weightKg, reps: pendingSet.reps }
+    : currentExercise
+      ? getLastSetValues(session, currentExercise.id)
+      : null;
+  const setProgress = currentExercise ? getSetProgress(session, currentExercise.id) : null;
 
   return (
     <SessionShell
@@ -848,16 +963,22 @@ function RestScreen({
           <View style={styles.nextSetPreview}>
             <ThemedText type="caption" themeColor="textSecondary">
               다음 세트
+              {setProgress?.target ? ` · ${setProgress.completed + 1} / ${setProgress.target}` : ''}
             </ThemedText>
             <ThemedText type="smallBold">
               {currentExercise.exerciseName} · {nextSetPreview.weightKg ?? '-'}KG ×{' '}
               {nextSetPreview.reps ?? '-'}회
             </ThemedText>
+            {nextExercise && (
+              <ThemedText type="caption" themeColor="textSecondary">
+                이 운동 다음 · {nextExercise.exerciseName}
+              </ThemedText>
+            )}
           </View>
         )}
       </View>
 
-      <PrimaryButton label="휴식 건너뛰기" variant="gold" size="large" onPress={onSkip} />
+      <PrimaryButton label="다음 세트 시작" variant="gold" size="large" onPress={onSkip} />
     </SessionShell>
   );
 }
@@ -970,6 +1091,14 @@ const styles = StyleSheet.create({
   navArrowDisabled: {
     opacity: 0.35,
   },
+  /** 다음 운동 안내는 카드가 아니라 한 줄이다 — 화면을 세로로 더 쓰지 않는다. */
+  nextExerciseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    paddingVertical: Spacing.one,
+  },
   logScroll: {
     flex: 1,
   },
@@ -1004,9 +1133,10 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     ...(Platform.OS === 'web' ? { outlineWidth: 0 } : {}),
   },
+  /** 한 손 조작 전제 — 운동 중에 정확히 누를 수 있어야 하므로 작게 만들지 않는다. */
   stepperButton: {
-    width: 48,
-    height: 48,
+    width: 56,
+    height: 56,
     borderRadius: Radius.medium,
     alignItems: 'center',
     justifyContent: 'center',

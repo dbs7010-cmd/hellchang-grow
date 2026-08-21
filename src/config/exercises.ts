@@ -1,4 +1,5 @@
-import type { ExerciseDefinition } from '@/types/exercise';
+import type { ExerciseDefinition, ResolvedExercise } from '@/types/exercise';
+import { resolveExercise } from '@/utils/exercise-spec';
 
 /**
  * V1 Exercise DB. 수백~수천 개를 무리하게 넣지 않고, 실제 헬스장에서 자주 쓰는 부위별 대표 운동만
@@ -11,6 +12,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'bench-press',
     name: '벤치프레스',
+    animationFamily: 'horizontal_press',
     aliases: ['바벨 벤치프레스'],
     primaryMuscleGroup: 'chest',
     secondaryMuscleGroups: ['arms', 'shoulders'],
@@ -23,6 +25,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'incline-bench-press',
     name: '인클라인 벤치프레스',
+    animationFamily: 'horizontal_press',
     primaryMuscleGroup: 'chest',
     secondaryMuscleGroups: ['shoulders', 'arms'],
     equipment: 'barbell',
@@ -32,6 +35,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'dumbbell-bench-press',
     name: '덤벨 벤치프레스',
+    animationFamily: 'horizontal_press',
     primaryMuscleGroup: 'chest',
     secondaryMuscleGroups: ['arms', 'shoulders'],
     equipment: 'dumbbell',
@@ -41,6 +45,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'incline-dumbbell-press',
     name: '인클라인 덤벨프레스',
+    animationFamily: 'horizontal_press',
     primaryMuscleGroup: 'chest',
     secondaryMuscleGroups: ['shoulders'],
     equipment: 'dumbbell',
@@ -49,6 +54,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'chest-press-machine',
     name: '체스트프레스',
+    animationFamily: 'horizontal_press',
     primaryMuscleGroup: 'chest',
     secondaryMuscleGroups: ['arms'],
     equipment: 'machine',
@@ -58,6 +64,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'pec-deck-fly',
     name: '펙덱 플라이',
+    animationFamily: 'fly',
     primaryMuscleGroup: 'chest',
     equipment: 'machine',
     trackingType: 'weight_reps',
@@ -65,6 +72,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'cable-fly',
     name: '케이블 플라이',
+    animationFamily: 'fly',
     primaryMuscleGroup: 'chest',
     equipment: 'cable',
     trackingType: 'weight_reps',
@@ -72,6 +80,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'dips',
     name: '딥스',
+    animationFamily: 'vertical_press',
     primaryMuscleGroup: 'chest',
     secondaryMuscleGroups: ['arms'],
     equipment: 'bodyweight',
@@ -81,6 +90,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'push-up',
     name: '푸쉬업',
+    animationFamily: 'horizontal_press',
     primaryMuscleGroup: 'chest',
     secondaryMuscleGroups: ['arms', 'core'],
     equipment: 'bodyweight',
@@ -91,6 +101,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'lat-pulldown',
     name: '랫풀다운',
+    animationFamily: 'vertical_pull',
     primaryMuscleGroup: 'back',
     secondaryMuscleGroups: ['arms'],
     equipment: 'cable',
@@ -100,6 +111,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'pull-up',
     name: '풀업',
+    animationFamily: 'vertical_pull',
     primaryMuscleGroup: 'back',
     secondaryMuscleGroups: ['arms'],
     equipment: 'bodyweight',
@@ -108,6 +120,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'barbell-row',
     name: '바벨로우',
+    animationFamily: 'horizontal_pull',
     primaryMuscleGroup: 'back',
     secondaryMuscleGroups: ['arms'],
     equipment: 'barbell',
@@ -117,6 +130,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'dumbbell-row',
     name: '덤벨로우',
+    animationFamily: 'horizontal_pull',
     primaryMuscleGroup: 'back',
     secondaryMuscleGroups: ['arms'],
     equipment: 'dumbbell',
@@ -125,6 +139,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'seated-cable-row',
     name: '시티드 케이블로우',
+    animationFamily: 'horizontal_pull',
     primaryMuscleGroup: 'back',
     equipment: 'cable',
     trackingType: 'weight_reps',
@@ -132,6 +147,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'machine-row',
     name: '머신로우',
+    animationFamily: 'horizontal_pull',
     primaryMuscleGroup: 'back',
     equipment: 'machine',
     trackingType: 'weight_reps',
@@ -139,6 +155,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 't-bar-row',
     name: '티바로우',
+    animationFamily: 'horizontal_pull',
     primaryMuscleGroup: 'back',
     equipment: 'machine',
     trackingType: 'weight_reps',
@@ -146,6 +163,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'straight-arm-pulldown',
     name: '스트레이트암 풀다운',
+    animationFamily: 'vertical_pull',
     primaryMuscleGroup: 'back',
     equipment: 'cable',
     trackingType: 'weight_reps',
@@ -155,6 +173,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'squat',
     name: '스쿼트',
+    animationFamily: 'squat',
     primaryMuscleGroup: 'legs',
     secondaryMuscleGroups: ['core'],
     equipment: 'barbell',
@@ -166,6 +185,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'leg-press',
     name: '레그프레스',
+    animationFamily: 'leg_press',
     primaryMuscleGroup: 'legs',
     equipment: 'machine',
     trackingType: 'weight_reps',
@@ -173,6 +193,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'hack-squat',
     name: '핵스쿼트',
+    animationFamily: 'squat',
     primaryMuscleGroup: 'legs',
     equipment: 'machine',
     trackingType: 'weight_reps',
@@ -180,6 +201,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'leg-extension',
     name: '레그익스텐션',
+    animationFamily: 'leg_isolation',
     primaryMuscleGroup: 'legs',
     equipment: 'machine',
     trackingType: 'weight_reps',
@@ -187,6 +209,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'leg-curl',
     name: '레그컬',
+    animationFamily: 'leg_isolation',
     primaryMuscleGroup: 'legs',
     equipment: 'machine',
     trackingType: 'weight_reps',
@@ -194,6 +217,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'romanian-deadlift',
     name: '루마니안 데드리프트',
+    animationFamily: 'hip_hinge',
     primaryMuscleGroup: 'legs',
     secondaryMuscleGroups: ['back'],
     equipment: 'barbell',
@@ -203,6 +227,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'lunge',
     name: '런지',
+    animationFamily: 'squat',
     primaryMuscleGroup: 'legs',
     equipment: 'dumbbell',
     trackingType: 'weight_reps',
@@ -210,6 +235,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'hip-thrust',
     name: '힙쓰러스트',
+    animationFamily: 'hip_hinge',
     primaryMuscleGroup: 'legs',
     equipment: 'barbell',
     trackingType: 'weight_reps',
@@ -217,6 +243,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'calf-raise',
     name: '카프레이즈',
+    animationFamily: 'calf',
     primaryMuscleGroup: 'legs',
     equipment: 'machine',
     trackingType: 'weight_reps',
@@ -226,6 +253,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'overhead-press',
     name: '오버헤드프레스',
+    animationFamily: 'vertical_press',
     primaryMuscleGroup: 'shoulders',
     secondaryMuscleGroups: ['arms'],
     equipment: 'barbell',
@@ -235,6 +263,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'dumbbell-shoulder-press',
     name: '덤벨 숄더프레스',
+    animationFamily: 'vertical_press',
     primaryMuscleGroup: 'shoulders',
     secondaryMuscleGroups: ['arms'],
     equipment: 'dumbbell',
@@ -243,6 +272,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'machine-shoulder-press',
     name: '머신 숄더프레스',
+    animationFamily: 'vertical_press',
     primaryMuscleGroup: 'shoulders',
     equipment: 'machine',
     trackingType: 'weight_reps',
@@ -250,6 +280,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'side-lateral-raise',
     name: '사이드 레터럴레이즈',
+    animationFamily: 'raise',
     primaryMuscleGroup: 'shoulders',
     equipment: 'dumbbell',
     trackingType: 'weight_reps',
@@ -258,6 +289,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'rear-delt-fly',
     name: '리어델트 플라이',
+    animationFamily: 'fly',
     primaryMuscleGroup: 'shoulders',
     equipment: 'dumbbell',
     trackingType: 'weight_reps',
@@ -265,6 +297,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'face-pull',
     name: '페이스풀',
+    animationFamily: 'horizontal_pull',
     primaryMuscleGroup: 'shoulders',
     secondaryMuscleGroups: ['back'],
     equipment: 'cable',
@@ -275,6 +308,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'barbell-curl',
     name: '바벨컬',
+    animationFamily: 'curl',
     primaryMuscleGroup: 'arms',
     equipment: 'barbell',
     trackingType: 'weight_reps',
@@ -282,6 +316,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'dumbbell-curl',
     name: '덤벨컬',
+    animationFamily: 'curl',
     primaryMuscleGroup: 'arms',
     equipment: 'dumbbell',
     trackingType: 'weight_reps',
@@ -289,6 +324,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'hammer-curl',
     name: '해머컬',
+    animationFamily: 'curl',
     primaryMuscleGroup: 'arms',
     equipment: 'dumbbell',
     trackingType: 'weight_reps',
@@ -296,6 +332,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'cable-curl',
     name: '케이블컬',
+    animationFamily: 'curl',
     primaryMuscleGroup: 'arms',
     equipment: 'cable',
     trackingType: 'weight_reps',
@@ -303,6 +340,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'triceps-pushdown',
     name: '트라이셉스 푸시다운',
+    animationFamily: 'extension',
     primaryMuscleGroup: 'arms',
     equipment: 'cable',
     trackingType: 'weight_reps',
@@ -310,6 +348,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'overhead-triceps-extension',
     name: '오버헤드 트라이셉스 익스텐션',
+    animationFamily: 'extension',
     primaryMuscleGroup: 'arms',
     equipment: 'dumbbell',
     trackingType: 'weight_reps',
@@ -317,6 +356,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'skull-crusher',
     name: '스컬크러셔',
+    animationFamily: 'extension',
     primaryMuscleGroup: 'arms',
     equipment: 'barbell',
     trackingType: 'weight_reps',
@@ -327,6 +367,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'deadlift',
     name: '데드리프트',
+    animationFamily: 'hip_hinge',
     primaryMuscleGroup: 'fullBody',
     secondaryMuscleGroups: ['back', 'legs'],
     equipment: 'barbell',
@@ -338,6 +379,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'burpee',
     name: '버피',
+    animationFamily: 'cardio',
     primaryMuscleGroup: 'fullBody',
     equipment: 'bodyweight',
     trackingType: 'reps_only',
@@ -345,6 +387,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'plank',
     name: '플랭크',
+    animationFamily: 'core',
     primaryMuscleGroup: 'core',
     equipment: 'bodyweight',
     trackingType: 'duration',
@@ -352,6 +395,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'crunch',
     name: '크런치',
+    animationFamily: 'core',
     primaryMuscleGroup: 'core',
     equipment: 'bodyweight',
     trackingType: 'reps_only',
@@ -359,6 +403,7 @@ export const Exercises: ExerciseDefinition[] = [
   {
     id: 'hanging-leg-raise',
     name: '행잉레그레이즈',
+    animationFamily: 'core',
     primaryMuscleGroup: 'core',
     equipment: 'bodyweight',
     trackingType: 'reps_only',
@@ -381,4 +426,18 @@ export function searchExercises(query: string): ExerciseDefinition[] {
       exercise.name.toLowerCase().includes(normalized) ||
       exercise.aliases?.some((alias) => alias.toLowerCase().includes(normalized))
   );
+}
+
+/**
+ * 유도값까지 전부 채워진 Exercise를 돌려준다 — 화면/세션/GrowthEngine은 원본이 아니라
+ * 이 형태를 소비한다. 규칙 자체는 `utils/exercise-spec.ts`(순수 함수)에 있고, 여기서는
+ * 실제 DB를 물려주기만 한다.
+ */
+export function getResolvedExerciseById(id: string): ResolvedExercise | undefined {
+  const exercise = getExerciseById(id);
+  return exercise ? resolveExercise(exercise, Exercises) : undefined;
+}
+
+export function getResolvedExercises(): ResolvedExercise[] {
+  return Exercises.map((exercise) => resolveExercise(exercise, Exercises));
 }

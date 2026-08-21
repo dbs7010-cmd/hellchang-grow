@@ -19,7 +19,7 @@ import { ImageSourcePropType } from 'react-native';
  */
 
 /** 2D 캐릭터가 쓰이는 자리. 슬롯이 늘어도 화면 코드는 이 유니온만 본다. */
-export type CharacterAssetSlot = 'home' | 'history' | 'result';
+export type CharacterAssetSlot = 'home' | 'history' | 'result' | 'session';
 
 export interface PlayerCharacterAssetRegistry {
   /** 메인 전신 2D. 나머지 슬롯의 기본값이기도 하다. */
@@ -32,6 +32,12 @@ export interface PlayerCharacterAssetRegistry {
    * RESULT 화면 레이아웃은 그대로 둔다. V1은 기본 캐릭터 하나로 충분하다.
    */
   result?: ImageSourcePropType;
+  /**
+   * 운동 세션 화면. 비우면 home을 쓴다.
+   * TODO(character-motion): motion family별 스프라이트가 생기면 이 슬롯을 family 키로
+   * 확장한다 — 그때도 화면 코드는 `animationFamily`만 넘기고 파일 경로는 모른다.
+   */
+  session?: ImageSourcePropType;
   /**
    * CHARACTER 360용 3D 모델(.glb / .gltf). 단계 구분 없이 하나다.
    *

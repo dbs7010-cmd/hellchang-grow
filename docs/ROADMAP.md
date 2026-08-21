@@ -90,6 +90,22 @@ Realtime Core에서도 실제 LLM API, 광고 SDK, 인앱결제, 추천 서버�
 
 WEIGHT CORE에서도 실제 LLM API, 광고 SDK, 인앱결제, 추천 서버, 실제 1RM 계산은 연결/구현하지 않는다. 최종 아트도 여전히 없다 — 세트 완료 피드백은 텍스트/이모지 placeholder 수준이며, 구조만 최종 아트 교체가 쉽게 준비돼 있다.
 
+## WORKOUT CORE — 실제 헬스장 사용성 기준으로 운동 흐름 재정비
+
+WEIGHT CORE로 잠근 구조(activeSince 타이머 / Exercise DB / Routine / 세트 기록 / PR / PASS)는 그대로 두고 그 위에 올린 작업이다. 새 캐릭터/새 디자인 시스템/새 저장소를 만들지 않았다.
+
+- [x] Exercise 공통 데이터 규격 확정 — `ResolvedExercise`(category / animationFamily / primaryMuscles / secondaryMuscles / spDistribution / usesWeight / usesBodyWeight / uses1RM / defaultSets / defaultReps / defaultRestSeconds / difficulty / guideId / alternativeExerciseIds)와 `resolveExercise()` 유도 규칙 추가. 기존 44개 항목은 `animationFamily`만 명시하고 나머지는 유도값이라 재작성하지 않았다. 프리웨이트/머신/케이블/맨몸은 여전히 같은 모델 하나를 쓴다
+- [x] Motion Family 도입(`config/motion-families.ts`) — 15개 공통 모션 파라미터, `Exercise.animationFamily`로 연결. 종목별 애니메이션은 만들지 않았고, 세션 화면이 family만 보고 캐릭터 모션을 돌리는 구조까지만 준비
+- [x] `CharacterMotionStage` 추가 — 공통 `PlayerCharacter` 렌더러를 그대로 쓰고 모션 레이어만 덧입힌다(화면마다 캐릭터를 다시 그리지 않는 규칙 유지). 새 캐릭터 이미지 없음, `character-assets.ts`에 `session` 슬롯만 추가(비우면 home으로 fallback)
+- [x] `workout-start.tsx` 재구성 — [지난 루틴 계속하기] / [오늘 추천] / [직접 선택] 세 줄이 화면 순서 그대로 우선순위다. 후보 계산은 `buildQuickStartPlan()`(순수 함수)으로 분리했고, 루틴이 있는 사용자는 한 번의 터치로 세션에 진입한다
+- [x] 세션 조작 단순화 — `ensurePendingSet()`으로 "지금 채울 세트"를 항상 유지(= [+ 세트 시작] 탭 제거), `completeSetAndStartRest()`로 세트 완료 → 자동 휴식을 한 번의 상태 변경으로 처리(팝업 없음). 스테퍼 버튼 48 → 56px
+- [x] 세션 화면 정보 정리 — 현재 운동명 / "N / M 세트"(`getSetProgress`) / 중량 / 횟수 / 지난 기록 / 휴식 / 다음 운동 / 운동 종료. 지난 기록 줄을 스크롤 안쪽에서 세트 조작 바로 위로 올렸다
+- [x] `WorkoutSessionResult` 도메인 추가(`types/growth.ts`, `utils/workout-session-result.ts`) — 총 시간/세트/반복/볼륨/운동별 기록/PR/부위별 볼륨(spDistribution 적용)/체중. 완료된 세트만 포함하며 PR 판정은 기존 `detectPRs`와 같은 기준
+- [x] GrowthEngine 서비스 경계 추가(`services/growth/`) — 인터페이스 + no-op 구현까지만. `endWorkoutSession()`이 결과를 넘기는 호출부는 이미 연결돼 있고, 실제 성장 계산은 다음 작업에서 구현한다
+- [x] `scripts/verify-workout-core.ts`(`npm run verify:workout-core`) 추가 — Exercise 규격 유도/DB 불변식, 세트 자동 준비와 세트 완료→휴식 전이, WorkoutSessionResult 집계와 PR 일치, 빠른 시작 후보 우선순위 등 46개 시나리오. 기존 `verify:streak`/`verify:session`/`verify:weight-core`/`verify:pt`도 계속 통과
+
+WORKOUT CORE에서도 실제 애니메이션 클립, LLM API, 광고 SDK, 인앱결제, 1RM 계산, 성장(SP) 계산은 연결/구현하지 않는다.
+
 ## M3 — 다음 단계 (아직 착수하지 않음)
 
 - 실제 캐릭터/트레이너 아트 자산 반영 (이모지 → 실제 이미지, `TrainerProfile.portraitPlaceholder` 대체), 세트 완료/PR 연출에 실제 애니메이션 추가

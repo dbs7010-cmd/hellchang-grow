@@ -46,6 +46,7 @@
     "verify:streak": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-streak.ts",
     "verify:session": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-workout-session.ts",
     "verify:weight-core": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-weight-core.ts",
+    "verify:workout-core": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-workout-core.ts",
     "verify:pt": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-pt-context.ts"
   },
   "private": true

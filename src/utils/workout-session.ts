@@ -9,6 +9,17 @@ import { toDateString } from '@/utils/date';
  * scripts/verify-workout-session.ts가 경과시간/일시정지/재개/세트 기록 시나리오를 검증한다.
  */
 
+/**
+ * 세션에 운동을 넣을 때 화면이 넘기는 최소 정보. targetSets/defaultRestSeconds는
+ * Exercise DB(defaultSets/defaultRestSeconds)에서 채워 넘긴다 — 이 순수 함수는 DB를 모른다.
+ */
+export interface SessionExerciseInput {
+  exerciseId: string;
+  exerciseName: string;
+  targetSets?: number;
+  defaultRestSeconds?: number;
+}
+
 export function createSession(
   category: WorkoutCategory,
   id: string,
@@ -17,13 +28,15 @@ export function createSession(
     primaryMuscleGroup?: MuscleGroup;
     routineId?: string;
     routineName?: string;
-    initialExercises?: { exerciseId: string; exerciseName: string }[];
+    initialExercises?: SessionExerciseInput[];
   }
 ): WorkoutSession {
   const exercises: SessionExerciseEntry[] = (options?.initialExercises ?? []).map((entry, index) => ({
     id: `${id}-ex-${index}`,
     exerciseId: entry.exerciseId,
     exerciseName: entry.exerciseName,
+    targetSets: entry.targetSets,
+    defaultRestSeconds: entry.defaultRestSeconds,
     sets: [],
   }));
 
@@ -155,12 +168,14 @@ export function completeSession(session: WorkoutSession, nowIso: string, nowMs: 
 
 export function addExerciseToSession(
   session: WorkoutSession,
-  exercise: { id: string; exerciseId: string; exerciseName: string }
+  exercise: SessionExerciseInput & { id: string }
 ): WorkoutSession {
   const entry: SessionExerciseEntry = {
     id: exercise.id,
     exerciseId: exercise.exerciseId,
     exerciseName: exercise.exerciseName,
+    targetSets: exercise.targetSets,
+    defaultRestSeconds: exercise.defaultRestSeconds,
     sets: [],
   };
   return {
@@ -263,6 +278,85 @@ export function getLastSetValues(
   const lastSet = entry?.sets[entry.sets.length - 1];
   if (!lastSet) return null;
   return { weightKg: lastSet.weightKg, reps: lastSet.reps };
+}
+
+/**
+ * 지금 조작할 세트(= 아직 완료하지 않은 첫 세트)를 항상 하나 보장한다.
+ *
+ * 세트를 완료할 때마다 [+ 세트 시작]을 다시 눌러야 했던 단계를 없앤다 — 헬스장에서
+ * 사용자가 하는 일은 "중량 확인 → 횟수 확인 → 세트 완료" 세 가지뿐이어야 한다.
+ * 기본값 우선순위: 이번 세션의 직전 세트 → 넘겨받은 지난 기록(defaults) → 빈 값.
+ * 이미 대기 중인 세트가 있으면 세션을 그대로(같은 참조로) 돌려준다.
+ */
+export function ensurePendingSet(
+  session: WorkoutSession,
+  exerciseEntryId: string,
+  setId: string,
+  defaults?: { weightKg?: number; reps?: number }
+): WorkoutSession {
+  const entry = session.exercises.find((e) => e.id === exerciseEntryId);
+  if (!entry) return session;
+  if (entry.sets.some((set) => !set.completed)) return session;
+  const initial = getLastSetValues(session, exerciseEntryId) ?? defaults;
+  return addSetToExercise(session, exerciseEntryId, setId, initial);
+}
+
+/**
+ * 세트 완료 → 휴식 자동 시작을 한 번의 상태 변경으로 처리한다.
+ * 두 번 나눠 부르면 저장이 두 번 일어나고, 그 사이 렌더에서 "휴식 없는 완료" 상태가
+ * 한 프레임 보인다. 확인 팝업 없이 곧바로 휴식으로 넘어가는 것이 이 흐름의 핵심이다.
+ * restSeconds가 0 이하면 휴식을 시작하지 않는다 (사용자가 휴식을 끈 경우).
+ */
+export function completeSetAndStartRest(
+  session: WorkoutSession,
+  exerciseEntryId: string,
+  setId: string,
+  restSeconds: number,
+  nowMs: number
+): WorkoutSession {
+  const completed = completeSet(session, exerciseEntryId, setId);
+  if (completed === session || restSeconds <= 0) return completed;
+  return startRest(completed, restSeconds, nowMs);
+}
+
+/** "3 / 5 세트" 표시용. target이 없으면(옛 세션/즉석 운동) 완료 수만 돌려준다. */
+export function getSetProgress(
+  session: WorkoutSession,
+  exerciseEntryId: string
+): { completed: number; target?: number } {
+  const entry = session.exercises.find((e) => e.id === exerciseEntryId);
+  return {
+    completed: entry?.sets.filter((set) => set.completed).length ?? 0,
+    target: entry?.targetSets,
+  };
+}
+
+/** 현재 포커스된 운동. currentExerciseId가 비었거나 사라졌으면 첫 운동으로 떨어진다. */
+export function getCurrentExercise(session: WorkoutSession): SessionExerciseEntry | undefined {
+  return (
+    session.exercises.find((entry) => entry.id === session.currentExerciseId) ?? session.exercises[0]
+  );
+}
+
+/** 세션 목록 순서상 다음 운동. 마지막 운동이면 undefined. */
+export function getNextExercise(session: WorkoutSession): SessionExerciseEntry | undefined {
+  const current = getCurrentExercise(session);
+  if (!current) return undefined;
+  const index = session.exercises.findIndex((entry) => entry.id === current.id);
+  return index >= 0 ? session.exercises[index + 1] : undefined;
+}
+
+/**
+ * 세트 완료 후 자동으로 시작할 휴식 길이(초). 운동별 기본값 → 앱 기본값 순서로 떨어진다.
+ * 화면이 아니라 여기서 정해야 종목을 바꿔도 규칙이 하나로 유지된다.
+ */
+export function getAutoRestSeconds(
+  session: WorkoutSession,
+  exerciseEntryId: string,
+  fallbackSeconds: number
+): number {
+  const entry = session.exercises.find((e) => e.id === exerciseEntryId);
+  return entry?.defaultRestSeconds ?? fallbackSeconds;
 }
 
 // ── 휴식 타이머 ────────────────────────────────────────────────────────────

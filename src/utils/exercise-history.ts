@@ -31,6 +31,10 @@ export function findPreviousPerformance(
         ? [{ id: `${match.id}-legacy`, weightKg: match.weightKg, reps: match.reps, completed: true }]
         : []);
 
+    // 세션에 담기만 하고 한 세트도 채우지 않은 운동은 기록으로 남아도 "지난번 값"이 없다.
+    // 이런 항목에서 멈춰버리면 그 위의 진짜 마지막 수행 기록을 놓친다 (화면에는 빈 줄이 뜬다).
+    if (sets.length === 0) continue;
+
     const maxWeightKg = sets.reduce<number | undefined>(
       (max, set) => (set.weightKg !== undefined && set.weightKg > (max ?? 0) ? set.weightKg : max),
       undefined

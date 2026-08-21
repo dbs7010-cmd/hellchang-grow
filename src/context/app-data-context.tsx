@@ -44,6 +44,7 @@ import { StorageKeys } from '@/services/storage/keys';
 import { rewardedAdService } from '@/services/ads/mock-rewarded-ad-service';
 import { referralService } from '@/services/referral/mock-referral-service';
 import { subscriptionService } from '@/services/subscription/mock-subscription-service';
+import { growthEngine } from '@/services/growth';
 import { aiTrainerService } from '@/services/trainer';
 import {
   AiQuickActionId,
@@ -62,6 +63,7 @@ import { TrainerUsageState } from '@/types/ads';
 import { UserProfile } from '@/types/user';
 import { WorkoutCategory, WorkoutRecord } from '@/types/workout';
 import { WorkoutSession } from '@/types/workout-session';
+import { WorkoutSessionResult } from '@/types/growth';
 import { todayDateString, tomorrowDateString } from '@/utils/date';
 import { PrEvent, detectPRs } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
@@ -69,6 +71,7 @@ import { addXp, computePassLevelProgress } from '@/utils/pass';
 import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/character-appearance';
 import { buildPtContext, buildPtExerciseBrief, matchExerciseInText, PtContext } from '@/utils/pt-context';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
+import { buildWorkoutSessionResult } from '@/utils/workout-session-result';
 import {
   addExerciseToSession as addExerciseToSessionPure,
   addSetToExercise as addSetToExercisePure,
@@ -77,9 +80,11 @@ import {
   clearRest as clearRestPure,
   completeSession,
   completeSet as completeSetPure,
+  completeSetAndStartRest as completeSetAndStartRestPure,
   computeCompletedSetsCount,
   computeTotalVolumeKg,
   createSession,
+  ensurePendingSet as ensurePendingSetPure,
   heartbeatSession,
   pauseSession,
   pauseSessionForBackground,
@@ -87,6 +92,7 @@ import {
   resumeIfRecentBackground,
   resumeSession,
   sessionToWorkoutRecordInput,
+  SessionExerciseInput,
   setCurrentExercise as setCurrentExercisePure,
   startRest as startRestPure,
   updateSet as updateSetPure,
@@ -120,6 +126,11 @@ export interface EndSessionSummary {
   xpAwarded: number;
   passLevel: number;
   routineCompleted: boolean;
+  /**
+   * 다음 단계(GrowthEngine)가 그대로 쓰는 세션 결과. 화면은 위의 요약값을 쓰고,
+   * 이 필드는 성장 계산 입력으로만 존재한다 — 실제 신체 수치는 여기서 나오지 않는다.
+   */
+  sessionResult: WorkoutSessionResult;
 }
 
 interface AppDataContextValue extends AppDataState {
@@ -157,13 +168,13 @@ interface AppDataContextValue extends AppDataState {
       primaryMuscleGroup?: MuscleGroup;
       routineId?: string;
       routineName?: string;
-      initialExercises?: { exerciseId: string; exerciseName: string }[];
+      initialExercises?: SessionExerciseInput[];
     }
   ) => Promise<void>;
   pauseWorkoutSession: () => Promise<void>;
   resumeWorkoutSession: () => Promise<void>;
   changeSessionCategory: (category: WorkoutCategory) => Promise<void>;
-  addExerciseToSession: (exercise: { exerciseId: string; exerciseName: string }) => Promise<void>;
+  addExerciseToSession: (exercise: SessionExerciseInput) => Promise<void>;
   setCurrentSessionExercise: (exerciseEntryId: string) => Promise<void>;
   addSetToExercise: (
     exerciseEntryId: string,
@@ -180,7 +191,23 @@ interface AppDataContextValue extends AppDataState {
     setId: string,
     delta: { weightKg?: number; reps?: number }
   ) => Promise<void>;
-  completeSessionSet: (exerciseEntryId: string, setId: string) => Promise<void>;
+  /**
+   * 세트 완료. restSeconds를 주면 같은 변경 안에서 휴식까지 바로 시작한다
+   * (확인 팝업 없이 "완료 → 휴식 → 다음 세트"로 이어지는 흐름의 한 걸음).
+   */
+  completeSessionSet: (
+    exerciseEntryId: string,
+    setId: string,
+    options?: { restSeconds?: number }
+  ) => Promise<void>;
+  /**
+   * 지금 조작할 세트를 하나 보장한다 — 이미 있으면 아무 일도 하지 않는다.
+   * 세션 화면이 "세트 시작" 탭을 요구하지 않기 위해 부르는 진입점이다.
+   */
+  ensureSessionPendingSet: (
+    exerciseEntryId: string,
+    defaults?: { weightKg?: number; reps?: number }
+  ) => Promise<void>;
   startSessionRest: (seconds: number) => Promise<void>;
   skipSessionRest: () => Promise<void>;
   endWorkoutSession: () => Promise<EndSessionSummary | null>;
@@ -529,8 +556,21 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   );
 
   const completeSessionSet = useCallback<AppDataContextValue['completeSessionSet']>(
-    async (exerciseEntryId, setId) => {
-      mutateActiveSession((session) => completeSetPure(session, exerciseEntryId, setId));
+    async (exerciseEntryId, setId, options) => {
+      const restSeconds = options?.restSeconds ?? 0;
+      mutateActiveSession((session) =>
+        restSeconds > 0
+          ? completeSetAndStartRestPure(session, exerciseEntryId, setId, restSeconds, Date.now())
+          : completeSetPure(session, exerciseEntryId, setId)
+      );
+    },
+    [mutateActiveSession]
+  );
+
+  const ensureSessionPendingSet = useCallback<AppDataContextValue['ensureSessionPendingSet']>(
+    async (exerciseEntryId, defaults) => {
+      const setId = createId('set');
+      mutateActiveSession((session) => ensurePendingSetPure(session, exerciseEntryId, setId, defaults));
     },
     [mutateActiveSession]
   );
@@ -552,6 +592,22 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const completed = completeSession(session, nowIso, Date.now());
 
     const prs = detectPRs(completed, state.workoutRecords);
+
+    /**
+     * 다음 단계 GrowthEngine이 쓸 결과. **이번 세션이 기록으로 저장되기 전에** 만든다 —
+     * PR 판정 기준이 "이번 세션 이전까지의 최고 중량"이어야 하기 때문이다.
+     * 체중은 실제로 입력된 값(최근 신체 기록 > 프로필)만 넘기고, 없으면 넘기지 않는다.
+     */
+    const latestBodyWeightKg = state.bodyHistory.reduce<BodyHistoryEntry | undefined>(
+      (latest, entry) => (!latest || entry.date > latest.date ? entry : latest),
+      undefined
+    )?.weightKg;
+    const sessionResult = buildWorkoutSessionResult({
+      session: completed,
+      exerciseDb: Exercises,
+      records: state.workoutRecords,
+      bodyWeightKg: latestBodyWeightKg ?? state.profile?.weightKg,
+    });
 
     const titleLabel = completed.primaryMuscleGroup
       ? MuscleGroupLabels[completed.primaryMuscleGroup]
@@ -582,6 +638,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     await clearActiveSession();
     setState((prev) => ({ ...prev, activeSession: null, pass: { xp: newXp } }));
 
+    /**
+     * WorkoutSession → WorkoutSessionResult → GrowthEngine 연결 지점.
+     * 현재 구현(noop)은 아무 성장도 적립하지 않는다 — 실제 계산은 다음 작업에서
+     * 이 엔진의 구현만 채우면 되고, 여기 호출부는 바뀌지 않는다.
+     * 엔진이 실패해도 이미 저장된 운동 기록/보상은 되돌리지 않는다.
+     */
+    await growthEngine.applySessionResult(sessionResult).catch(() => null);
+
     return {
       durationMinutes: recordInput.durationMinutes ?? 0,
       category: completed.primaryCategory,
@@ -594,8 +658,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       xpAwarded,
       passLevel: computePassLevelProgress(newXp).level,
       routineCompleted,
+      sessionResult,
     };
-  }, [state.workoutRecords, state.routines, state.pass, addWorkoutRecord]);
+  }, [state.workoutRecords, state.routines, state.pass, state.bodyHistory, state.profile, addWorkoutRecord]);
 
   const endWorkoutSession = useCallback<AppDataContextValue['endWorkoutSession']>(async () => {
     // [종료하고 기록]이 연타되거나 두 손가락으로 눌려도 기록은 정확히 한 번만 저장된다.
@@ -773,6 +838,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     updateSessionSet,
     adjustSessionSet,
     completeSessionSet,
+    ensureSessionPendingSet,
     startSessionRest,
     skipSessionRest,
     endWorkoutSession,
