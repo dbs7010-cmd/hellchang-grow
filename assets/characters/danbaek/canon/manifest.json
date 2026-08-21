@@ -1,34 +1,29 @@
 {
-  "canonLocked": true,
-  "version": "1.0.0",
-  "stageCount": 10,
-  "stageAssets": [
-    "./stages/danbaek_stage_01.svg",
-    "./stages/danbaek_stage_02.svg",
-    "./stages/danbaek_stage_03.svg",
-    "./stages/danbaek_stage_04.svg",
-    "./stages/danbaek_stage_05.svg",
-    "./stages/danbaek_stage_06.svg",
-    "./stages/danbaek_stage_07.svg",
-    "./stages/danbaek_stage_08.svg",
-    "./stages/danbaek_stage_09.svg",
-    "./stages/danbaek_stage_10.svg"
-  ],
-  "stageNames": ["멸치 단백이","초보 단백이","적응 단백이","변화 단백이","강화 단백이","성장 단백이","벌크업 단백이","괴물 단백이","최강 단백이","전설 단백이"],
-  "canonicalPartGroups": ["chest","shoulder","arm","back","abs","lowerBody"],
-  "bodyParameterPolicy": {
-    "chest":"canonical-part-growth",
-    "shoulder":"canonical-part-growth",
-    "arm":"canonical-part-growth",
-    "back":"canonical-part-growth",
-    "waist":"silhouette-adjustment-only",
-    "abs":"canonical-part-growth",
-    "glute":"lower-body-adjustment-only",
-    "thigh":"lower-body-adjustment-only",
-    "calf":"lower-body-adjustment-only",
-    "overallMass":"canonical-stage-volume",
-    "fatSoftness":"softness-modifier-only",
-    "definition":"line-definition-modifier-only"
+  "canonVersion": 1,
+  "status": "LOCKED",
+  "source": "user-approved Danbaek growth system image",
+  "master": "danbaek_growth_system_canon.webp",
+  "rules": {
+    "redesign": false,
+    "reinterpretation": false,
+    "faceLockedAcrossGrowth": true,
+    "canonicalBody": "white body + black outline",
+    "stageCount": 10,
+    "notes": "MASTER image is the highest-priority visual reference. Do not replace it with player_main.png, graphite/geometric silhouettes, 3D, semi-realistic art, or a cleaner mascot redesign."
   },
-  "rule":"Never redesign CANON from BodyParameters. Renderer must adapt to CANON."
+  "bodyParametersContract": [
+    "chestScale",
+    "shoulderScale",
+    "armScale",
+    "backWidth",
+    "backThickness",
+    "waistScale",
+    "abdomenDefinition",
+    "gluteScale",
+    "thighScale",
+    "calfScale",
+    "overallMass",
+    "fatSoftness",
+    "definition"
+  ]
 }
