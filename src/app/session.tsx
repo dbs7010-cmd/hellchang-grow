@@ -1,8 +1,8 @@
 import { useRootNavigationState, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
 import { CharacterMotionStage } from '@/components/character/character-motion-stage';
@@ -30,6 +30,7 @@ import { WorkoutRecord, WorkoutSetEntry } from '@/types/workout';
 import { SessionExerciseEntry, WorkoutSession } from '@/types/workout-session';
 import { detectPRs, findPreviousPerformance, PrEvent } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
+import { buildGrowthRevealMuscles, hasPermanentBodyChange } from '@/utils/growth-reveal';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import { formatVolumeKg } from '@/utils/workout-stats';
 import {
@@ -722,7 +723,59 @@ function getTodayRecordCount(records: WorkoutRecord[]): number {
 function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine; onConfirm: () => void }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { characterAppearance } = useAppData();
+  const { characterAppearance, growth: growthAfter } = useAppData();
+  const reducedMotion = useReducedMotion();
+  const permanentChanged = hasPermanentBodyChange(
+    summary.bodyParametersBefore,
+    summary.bodyParametersAfter
+  );
+  const muscles = useMemo(
+    () => buildGrowthRevealMuscles({ growth: summary.growth, growthAfter }),
+    [summary.growth, growthAfter]
+  );
+  const stageChanges = muscles.filter((muscle) => muscle.stageChanged);
+  const [revealPhase, setRevealPhase] = useState<'pump' | 'before' | 'after'>(
+    permanentChanged && reducedMotion ? 'after' : 'pump'
+  );
+  const revealScale = useSharedValue(1);
+  const revealOpacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (!permanentChanged || reducedMotion) return;
+    const beforeTimer = setTimeout(() => setRevealPhase('before'), 650);
+    const afterTimer = setTimeout(() => setRevealPhase('after'), 1050);
+    return () => {
+      clearTimeout(beforeTimer);
+      clearTimeout(afterTimer);
+    };
+  }, [permanentChanged, reducedMotion]);
+
+  useEffect(() => {
+    if (revealPhase !== 'after' || reducedMotion) return;
+    revealOpacity.set(withSequence(withTiming(0.72, { duration: 100 }), withTiming(1, { duration: 180 })));
+    revealScale.set(withSequence(withTiming(1.035, { duration: 120 }), withTiming(1, { duration: 180 })));
+  }, [revealPhase, reducedMotion, revealOpacity, revealScale]);
+
+  const revealStyle = useAnimatedStyle(() => ({
+    opacity: revealOpacity.get(),
+    transform: [{ scale: revealScale.get() }],
+  }));
+  const displayedBody =
+    revealPhase === 'pump'
+      ? summary.bodyParametersWithPump
+      : revealPhase === 'before'
+        ? summary.bodyParametersBefore
+        : summary.bodyParametersAfter;
+  const revealTitle =
+    revealPhase === 'pump'
+      ? '운동 직후 펌핑'
+      : revealPhase === 'before'
+        ? '운동 전 단백이'
+        : stageChanges.length > 0
+          ? '오늘의 성장 반영 완료!'
+          : '오늘의 성장 반영';
+
+  const skipReveal = () => setRevealPhase('after');
 
   return (
     <ThemedView style={[styles.root, { paddingTop: insets.top + Spacing.three, paddingBottom: insets.bottom + Spacing.three }]}>
@@ -737,21 +790,84 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
             TODO(growth-celebration): summary.growth.stageChanges가 있으면 이 자리에서
             "이전 → 지금" 바디를 비교해 보여줄 수 있다. 이번 단계에서는 연결점만 둔다.
           */}
-          <View style={styles.resultCharacter}>
+          <Animated.View style={[styles.resultCharacter, revealStyle]}>
             <PlayerCharacter
               appearance={characterAppearance}
               slot="result"
               height={RESULT_CHARACTER_HEIGHT}
-              bodyParameters={summary.bodyParametersWithPump}
+              bodyParameters={displayedBody}
             />
-          </View>
+          </Animated.View>
           <ThemedText type="subtitle" style={[styles.centered, { color: theme.gold }]}>
-            🏆 WORKOUT COMPLETE
+            🏆 운동 완료
           </ThemedText>
+          <ThemedText type="captionBold" style={[styles.centered, { color: theme.gold }]}>
+            {revealTitle}
+          </ThemedText>
+          {permanentChanged && revealPhase !== 'after' && (
+            <Pressable onPress={skipReveal} hitSlop={12} accessibilityRole="button">
+              <ThemedText type="caption" themeColor="textSecondary">바로 보기</ThemedText>
+            </Pressable>
+          )}
           <ThemedText type="small" themeColor="textSecondary" style={styles.centered}>
             {StanleyTrainer.portraitPlaceholder} {summary.trainerLine}
           </ThemedText>
         </View>
+
+        {muscles.length > 0 && (
+          <Section title="오늘 자극된 부위">
+            <ThemedView type="backgroundElement" style={styles.stimulusCard}>
+              {muscles.map((muscle) => (
+                <View key={muscle.muscle} style={styles.stimulusRow}>
+                  <View style={styles.flexItem}>
+                    <ThemedText type="smallBold">{muscle.label}</ThemedText>
+                    {muscle.stageChanged ? (
+                      <ThemedText type="captionBold" style={{ color: theme.gold }}>
+                        Stage {muscle.previousStage} → {muscle.currentStage} 성장!
+                      </ThemedText>
+                    ) : (
+                      <ThemedText type="caption" themeColor="textSecondary">
+                        Stage {muscle.currentStage} · {muscle.isMaxStage
+                          ? 'MAX'
+                          : `${Math.round(muscle.progressBefore * 100)}% → ${Math.round(muscle.progressAfter * 100)}%`}
+                      </ThemedText>
+                    )}
+                  </View>
+                  <ThemedText type="smallBold" style={[styles.spGain, { color: theme.gold }]}>
+                    +{formatSp(muscle.gainedSp)} SP
+                  </ThemedText>
+                </View>
+              ))}
+              <View style={[styles.rewardRow, styles.stimulusTotal, { borderTopColor: theme.border }]}>
+                <ThemedText type="captionBold">총 Muscle SP</ThemedText>
+                <ThemedText type="metric" style={{ color: theme.gold }}>
+                  +{formatSp(summary.growth?.totalSpGained ?? 0)}
+                </ThemedText>
+              </View>
+            </ThemedView>
+          </Section>
+        )}
+
+        {permanentChanged && revealPhase === 'after' && (
+          <Section title={stageChanges.length > 0 ? '실제 성장' : '영구 성장 변화'}>
+            <View style={styles.bodyComparisonRow}>
+              <BodyComparison
+                label="BEFORE"
+                appearance={characterAppearance}
+                bodyParameters={summary.bodyParametersBefore}
+              />
+              <ThemedText type="subtitle" style={{ color: theme.gold }}>→</ThemedText>
+              <BodyComparison
+                label="AFTER"
+                appearance={characterAppearance}
+                bodyParameters={summary.bodyParametersAfter}
+              />
+            </View>
+            <ThemedText type="caption" themeColor="textSecondary" style={styles.centered}>
+              펌핑이 아닌 오늘의 영구 성장만 비교했어요.
+            </ThemedText>
+          </Section>
+        )}
 
         <Section title="오늘의 성과">
           <MetricGrid>
@@ -807,7 +923,30 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
   );
 }
 
+function BodyComparison({ label, appearance, bodyParameters }: {
+  label: string;
+  appearance: ReturnType<typeof useAppData>['characterAppearance'];
+  bodyParameters: EndSessionSummary['bodyParametersAfter'];
+}) {
+  return (
+    <View style={styles.bodyComparisonItem}>
+      <ThemedText type="captionBold" themeColor="textSecondary">{label}</ThemedText>
+      <PlayerCharacter
+        appearance={appearance}
+        slot="result"
+        height={RESULT_COMPARISON_HEIGHT}
+        bodyParameters={bodyParameters}
+      />
+    </View>
+  );
+}
+
+function formatSp(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 const RESULT_CHARACTER_HEIGHT = 150;
+const RESULT_COMPARISON_HEIGHT = 105;
 
 function PreviousPerformanceLine({
   exerciseId,
@@ -1230,6 +1369,36 @@ const styles = StyleSheet.create({
   },
   resultFooter: {
     paddingTop: Spacing.two,
+  },
+  stimulusCard: {
+    borderRadius: Radius.large,
+    padding: Layout.cardPadding,
+    gap: Spacing.two,
+  },
+  stimulusRow: {
+    minHeight: Layout.compactRowHeight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  stimulusTotal: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Spacing.two,
+  },
+  spGain: {
+    fontVariant: ['tabular-nums'],
+  },
+  bodyComparisonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+  },
+  bodyComparisonItem: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    gap: Spacing.one,
   },
   rewardCard: {
     borderRadius: Radius.large,

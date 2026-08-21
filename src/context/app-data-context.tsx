@@ -152,6 +152,10 @@ export interface EndSessionSummary {
    * 다음 단계의 성장 연출/DanbaekRenderer가 이 값만 보고 화면을 만들 수 있다.
    */
   growth: GrowthApplicationResult | null;
+  /** GrowthEngine 적용 직전의 영구 외형. Result 비교용 스냅샷이며 저장하지 않는다. */
+  bodyParametersBefore: DanbaekBodyParameters;
+  /** GrowthEngine 적용 직후의 영구 외형. HOME이 다시 계산해 보여주는 값과 같은 입력이다. */
+  bodyParametersAfter: DanbaekBodyParameters;
   /**
    * 세션 직후의 단백이 렌더링 파라미터에 이번 운동의 펌핑을 얹은 값.
    * **일시값이다** — 저장되지 않고, 다음에 앱을 켜면 홈의 영구 상태로 돌아간다.
@@ -678,6 +682,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const finishSession = useCallback(async (session: WorkoutSession): Promise<EndSessionSummary> => {
     const nowIso = new Date().toISOString();
     const completed = completeSession(session, nowIso, Date.now());
+    const bodyParametersBefore = toDanbaekBodyParameters(
+      buildDanbaekBodyState({
+        growth: state.growth,
+        bodyHistory: state.bodyHistory,
+        nowIso,
+      })
+    );
 
     const prs = detectPRs(completed, state.workoutRecords);
 
@@ -761,14 +772,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
      * 결과 화면이 쓸 "방금 운동한 몸". 영구 파라미터 위에 이번 세션의 펌핑만 얹은
      * 일시값이며 저장하지 않는다 — 앱을 다시 켜면 펌핑 없는 상태로 돌아간다.
      */
+    const bodyParametersAfter = toDanbaekBodyParameters(
+      buildDanbaekBodyState({
+        growth: growthAfter,
+        bodyHistory: state.bodyHistory,
+        nowIso,
+      })
+    );
     const bodyParametersWithPump = applyPumpToBodyParameters(
-      toDanbaekBodyParameters(
-        buildDanbaekBodyState({
-          growth: growthAfter,
-          bodyHistory: state.bodyHistory,
-          nowIso,
-        })
-      ),
+      bodyParametersAfter,
       growth?.pumpByMuscle ?? {}
     );
 
@@ -786,6 +798,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       routineCompleted,
       sessionResult,
       growth,
+      bodyParametersBefore,
+      bodyParametersAfter,
       bodyParametersWithPump,
     };
   }, [state.workoutRecords, state.routines, state.pass, state.bodyHistory, state.profile, state.growth, addWorkoutRecord]);
