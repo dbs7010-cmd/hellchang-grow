@@ -41,3 +41,5 @@ example
 # generated native folders
 /ios
 /android
+platform-tools-latest-windows.zip
+platform-tools-latest-windows/

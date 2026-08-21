@@ -28,7 +28,7 @@ same('approved regions match the LOCKED layer contract', CharacterBodyConfig.reg
   glute: { x: 74, y: 154, width: 52, height: 30 }, thigh: { x: 68, y: 168, width: 64, height: 52 },
   calf: { x: 76, y: 214, width: 48, height: 44 },
 });
-expect('Stage 0 uses the layered master torso path verbatim', CharacterBodyConfig.basePaths.torso.startsWith('M78 78 Q81.5 96'));
+expect('Stage 0 uses the restored layered master torso path verbatim', CharacterBodyConfig.basePaths.torso.startsWith('M99 76 C90 74'));
 expect('neutral body adds no local overlay', geometry().overlays.length === 0);
 expect('neutral body has no invented detail lines', geometry().detailOpacity === 0 && geometry().abdomenLineOpacity === 0);
 

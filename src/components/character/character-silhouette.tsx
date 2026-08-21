@@ -45,7 +45,8 @@ function CharacterSilhouetteComponent({
   }, [idle, breatheY]);
   const breatheStyle = useAnimatedStyle(() => ({ transform: [{ translateY: breatheY.value }] }));
   const geometry = buildCharacterBodyGeometry({ bodyParameters });
-  const { basePaths, regions, stroke } = CharacterBodyConfig;
+  const { basePaths, fixedIdentity, regions, stage0BodyProportion, stroke } = CharacterBodyConfig;
+  const bodyProportionTransform = `translate(0 ${stage0BodyProportion.anchorY}) scale(1 ${stage0BodyProportion.scaleY}) translate(0 -${stage0BodyProportion.anchorY})`;
   const bodyTransform = `translate(100 78) scale(${geometry.massScale}) translate(-100 -78)`;
 
   return (
@@ -66,7 +67,7 @@ function CharacterSilhouetteComponent({
             ))}
           </Defs>
 
-          <G transform={bodyTransform} fill={stroke.fill} stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round">
+          <G transform={`${bodyProportionTransform} ${bodyTransform}`} fill={stroke.fill} stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round">
             <Path d={basePaths.torso} />
             <Path d={basePaths.armLeft} />
             <Path d={basePaths.armRight} />
@@ -100,13 +101,13 @@ function CharacterSilhouetteComponent({
           </G>
 
           <G fill={stroke.fill} stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round">
-            <Rect x={77} y={18} width={46} height={44} rx={20} />
+            <Path d={fixedIdentity.headPath} />
           </G>
           <G fill={stroke.color}>
-            <Circle cx={91} cy={38} r={2.2} />
-            <Circle cx={109} cy={38} r={2.2} />
+            <Circle cx={fixedIdentity.eyes.leftX} cy={fixedIdentity.eyes.y} r={fixedIdentity.eyes.radius} />
+            <Circle cx={fixedIdentity.eyes.rightX} cy={fixedIdentity.eyes.y} r={fixedIdentity.eyes.radius} />
           </G>
-          <Path d="M94 48 Q100 53 106 48" fill="none" stroke={stroke.color} strokeWidth={2.5} strokeLinecap="round" />
+          <Path d={fixedIdentity.mouth} fill="none" stroke={stroke.color} strokeWidth={2.5} strokeLinecap="round" />
         </Svg>
         </View>
       </Animated.View>

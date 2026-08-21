@@ -32,46 +32,50 @@ function torsoPath(input: { shoulder?: number; chest?: number; back?: number; wa
   const d = CharacterBodyConfig.maxDelta;
   const shoulder = input.shoulder ?? 0, chest = input.chest ?? 0, back = input.back ?? 0;
   const waist = input.waist ?? 0, glute = input.glute ?? 0;
-  return `M78 78 Q${n(81.5 - shoulder * d.shoulder)} 96 ${n(87 - chest * d.chest - back * d.back)} 136 ` +
-    `Q${n(85 - waist * d.waist)} 154 ${n(85 - glute * d.glute)} 172 ` +
-    `L${n(115 + glute * d.glute)} 172 Q${n(115 + waist * d.waist)} 154 ${n(113 + chest * d.chest + back * d.back)} 136 ` +
-    `Q${n(118.5 + shoulder * d.shoulder)} 96 122 78 Z`;
+  return `M99 76 C${n(90 - shoulder * d.shoulder)} 74 ${n(82 - shoulder * d.shoulder)} 77 ${n(79 - shoulder * d.shoulder)} 83 ` +
+    `C${n(76 - chest * d.chest - back * d.back)} 95 ${n(78 - chest * d.chest - back * d.back)} 111 ${n(80 - chest * d.chest - back * d.back)} 126 ` +
+    `C${n(82 - waist * d.waist)} 139 ${n(81 - waist * d.waist)} 151 83 160 C84 165 ${n(86 - glute * d.glute)} 168 ${n(90 - glute * d.glute)} 170 ` +
+    `C95 172 105 172 ${n(111 + glute * d.glute)} 169 C${n(115 + glute * d.glute)} 166 116 163 ${n(117 + waist * d.waist)} 159 ` +
+    `C${n(119 + waist * d.waist)} 150 ${n(118 + chest * d.chest + back * d.back)} 139 ${n(120 + chest * d.chest + back * d.back)} 126 ` +
+    `C${n(122 + chest * d.chest + back * d.back)} 111 ${n(124 + shoulder * d.shoulder)} 95 ${n(121 + shoulder * d.shoulder)} 83 C${n(118 + shoulder * d.shoulder)} 77 ${n(110 + shoulder * d.shoulder)} 74 101 76 Z`;
 }
 
 function torsoOutline(input: { shoulder?: number; chest?: number; back?: number; waist?: number; glute?: number }): string {
   const d = CharacterBodyConfig.maxDelta;
   const shoulder = input.shoulder ?? 0, chest = input.chest ?? 0, back = input.back ?? 0;
   const waist = input.waist ?? 0, glute = input.glute ?? 0;
-  return `M78 78 Q${n(81.5 - shoulder * d.shoulder)} 96 ${n(87 - chest * d.chest - back * d.back)} 136 Q${n(85 - waist * d.waist)} 154 ${n(85 - glute * d.glute)} 172 ` +
-    `M115 172 Q${n(115 + waist * d.waist)} 154 ${n(113 + chest * d.chest + back * d.back)} 136 Q${n(118.5 + shoulder * d.shoulder)} 96 122 78`;
+  return `M99 76 C${n(90 - shoulder * d.shoulder)} 74 ${n(82 - shoulder * d.shoulder)} 77 ${n(79 - shoulder * d.shoulder)} 83 C${n(76 - chest * d.chest - back * d.back)} 95 ${n(78 - chest * d.chest - back * d.back)} 111 ${n(80 - chest * d.chest - back * d.back)} 126 ` +
+    `C${n(82 - waist * d.waist)} 139 ${n(81 - waist * d.waist)} 151 83 160 C84 165 ${n(86 - glute * d.glute)} 168 ${n(90 - glute * d.glute)} 170 ` +
+    `M${n(111 + glute * d.glute)} 169 C${n(115 + glute * d.glute)} 166 116 163 ${n(117 + waist * d.waist)} 159 C${n(119 + waist * d.waist)} 150 ${n(118 + chest * d.chest + back * d.back)} 139 ${n(120 + chest * d.chest + back * d.back)} 126 ` +
+    `C${n(122 + chest * d.chest + back * d.back)} 111 ${n(124 + shoulder * d.shoulder)} 95 ${n(121 + shoulder * d.shoulder)} 83`;
 }
 
 function armPath(side: 'left' | 'right', value: number): string {
   const delta = value * CharacterBodyConfig.maxDelta.arm;
   return side === 'left'
-    ? `M80 86 Q${n(71 - delta)} 110 ${n(73.1 - delta)} 145 Q${n(74.8 - delta * 0.7)} 168 81 167 Q86 145 85 113 Q85 96 80 86 Z`
-    : `M120 86 Q${n(129 + delta)} 110 ${n(126.9 + delta)} 145 Q${n(125.2 + delta * 0.7)} 168 119 167 Q114 145 115 113 Q115 96 120 86 Z`;
+    ? `M80 86 C${n(74 - delta * 0.3)} 90 ${n(71 - delta)} 102 ${n(70 - delta)} 115 C${n(69 - delta)} 128 ${n(71 - delta * 0.65)} 139 ${n(69 - delta * 0.7)} 151 C68 158 70 164 74 168 C77 170 80 168 81 165 C83 157 82 146 84 136 C86 119 86 102 80 86 Z`
+    : `M120 86 C${n(126 + delta * 0.3)} 90 ${n(129 + delta)} 102 ${n(130 + delta)} 116 C${n(131 + delta)} 128 ${n(129 + delta * 0.65)} 140 ${n(131 + delta * 0.7)} 151 C132 158 130 164 126 168 C123 170 120 168 119 165 C117 157 118 146 116 136 C114 119 114 102 120 86 Z`;
 }
 
 function armOutline(side: 'left' | 'right', value: number): string {
   const delta = value * CharacterBodyConfig.maxDelta.arm;
   return side === 'left'
-    ? `M80 86 Q${n(71 - delta)} 110 ${n(73.1 - delta)} 145 Q${n(74.8 - delta * 0.7)} 168 81 167`
-    : `M120 86 Q${n(129 + delta)} 110 ${n(126.9 + delta)} 145 Q${n(125.2 + delta * 0.7)} 168 119 167`;
+    ? `M80 86 C${n(74 - delta * 0.3)} 90 ${n(71 - delta)} 102 ${n(70 - delta)} 115 C${n(69 - delta)} 128 ${n(71 - delta * 0.65)} 139 ${n(69 - delta * 0.7)} 151 C68 158 70 164 74 168 C77 170 80 168 81 165`
+    : `M120 86 C${n(126 + delta * 0.3)} 90 ${n(129 + delta)} 102 ${n(130 + delta)} 116 C${n(131 + delta)} 128 ${n(129 + delta * 0.65)} 140 ${n(131 + delta * 0.7)} 151 C132 158 130 164 126 168 C123 170 120 168 119 165`;
 }
 
 function legPath(side: 'left' | 'right', thigh: number, calf: number): string {
   const td = thigh * CharacterBodyConfig.maxDelta.thigh, cd = calf * CharacterBodyConfig.maxDelta.calf;
   return side === 'left'
-    ? `M87 168 Q${n(84.5 - td)} 192 ${n(89.5 - cd)} 234 L${n(90.5 - cd)} 258 Q92 264 101.5 258 L97.5 234 Q100 192 98 170 Z`
-    : `M113 168 Q${n(115.5 + td)} 192 ${n(110.5 + cd)} 234 L${n(109.5 + cd)} 258 Q108 264 98.5 258 L102.5 234 Q100 192 102 170 Z`;
+    ? `M87 168 C${n(84 - td)} 181 ${n(83 - td)} 196 ${n(85 - td * 0.4)} 211 C${n(86 - cd * 0.3)} 220 ${n(84 - cd)} 232 ${n(85 - cd)} 244 C85 251 84 254 87 255 C91 256 96 255 98 252 C99 244 97 232 98 220 C100 199 100 181 99 169 Z`
+    : `M113 168 C${n(116 + td)} 181 ${n(117 + td)} 196 ${n(115 + td * 0.4)} 211 C${n(114 + cd * 0.3)} 220 ${n(116 + cd)} 232 ${n(115 + cd)} 244 C115 251 116 254 113 255 C109 256 104 255 102 252 C101 244 103 232 102 220 C100 199 100 181 101 169 Z`;
 }
 
 function legOutline(side: 'left' | 'right', thigh: number, calf: number): string {
   const td = thigh * CharacterBodyConfig.maxDelta.thigh, cd = calf * CharacterBodyConfig.maxDelta.calf;
   return side === 'left'
-    ? `M87 168 Q${n(84.5 - td)} 192 ${n(89.5 - cd)} 234 L${n(90.5 - cd)} 258 Q92 264 101.5 258`
-    : `M113 168 Q${n(115.5 + td)} 192 ${n(110.5 + cd)} 234 L${n(109.5 + cd)} 258 Q108 264 98.5 258`;
+    ? `M87 168 C${n(84 - td)} 181 ${n(83 - td)} 196 ${n(85 - td * 0.4)} 211 C${n(86 - cd * 0.3)} 220 ${n(84 - cd)} 232 ${n(85 - cd)} 244 C85 251 84 254 87 255 C91 256 96 255 98 252`
+    : `M113 168 C${n(116 + td)} 181 ${n(117 + td)} 196 ${n(115 + td * 0.4)} 211 C${n(114 + cd * 0.3)} 220 ${n(116 + cd)} 232 ${n(115 + cd)} 244 C115 251 116 254 113 255 C109 256 104 255 102 252`;
 }
 
 /** Pure adapter: normalized BodyParameters -> approved, clipped CANON overlays. */
