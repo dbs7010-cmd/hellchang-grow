@@ -1,15 +1,24 @@
 {
-  "canonVersion": 1,
+  "canonVersion": 2,
   "status": "LOCKED",
   "source": "user-approved Danbaek growth system image",
   "master": "danbaek_growth_system_canon.png",
+  "layered": {
+    "stage0Master": "layered/danbaek_stage0_layered_master.svg",
+    "contract": "layered/layer_contract.json",
+    "pathSpec": "layered/PART_PATH_SPEC.md",
+    "purpose": "approved independent body-part renderer mapping without redesign"
+  },
   "rules": {
     "redesign": false,
     "reinterpretation": false,
     "faceLockedAcrossGrowth": true,
     "canonicalBody": "white body + black outline",
     "stageCount": 10,
-    "notes": "MASTER image is the highest-priority visual reference. Do not replace it with player_main.png, graphite/geometric silhouettes, 3D, semi-realistic art, or a cleaner mascot redesign."
+    "fullBodyStagesAreValidationReferences": true,
+    "singlePartFullBodyFallbackAllowed": false,
+    "approvedLocalPathSeparation": true,
+    "notes": "MASTER image remains highest-priority visual reference. layered/ defines the exact regions and seam anchors Codex is explicitly allowed to split/transform for independent body-part growth."
   },
   "bodyParametersContract": [
     "chestScale",
