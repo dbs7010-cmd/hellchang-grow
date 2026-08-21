@@ -52,6 +52,7 @@
     "verify:body": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-body-state.ts",
     "verify:character-body": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-character-body.ts",
     "verify:growth-reveal": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-growth-reveal.ts",
+    "verify:workout-character-motion": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-workout-character-motion.ts",
     "verify:pt": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-pt-context.ts"
   },
   "private": true

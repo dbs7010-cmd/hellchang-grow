@@ -29,6 +29,35 @@ export interface MotionFamilyDescriptor {
   repDurationMs: number;
 }
 
+export interface MotionFamilyTransform {
+  translateX: number;
+  translateY: number;
+  rotateDeg: number;
+  scaleXDelta: number;
+  scaleYDelta: number;
+  durationMs: number;
+  repeats: boolean;
+}
+
+/** Session-only transform profiles. They never alter the CANON paths or workout calculations. */
+export const MotionFamilyTransforms: Record<MotionFamily, MotionFamilyTransform> = {
+  horizontal_press: { translateX: 5, translateY: 0, rotateDeg: 0, scaleXDelta: .02, scaleYDelta: 0, durationMs: 1100, repeats: true },
+  vertical_press: { translateX: 0, translateY: -5, rotateDeg: 0, scaleXDelta: .01, scaleYDelta: .015, durationMs: 1200, repeats: true },
+  fly: { translateX: 0, translateY: 0, rotateDeg: 0, scaleXDelta: -.025, scaleYDelta: 0, durationMs: 1300, repeats: true },
+  horizontal_pull: { translateX: -4, translateY: 0, rotateDeg: 0, scaleXDelta: -.02, scaleYDelta: .01, durationMs: 1150, repeats: true },
+  vertical_pull: { translateX: 0, translateY: 4, rotateDeg: 0, scaleXDelta: -.015, scaleYDelta: 0, durationMs: 1250, repeats: true },
+  curl: { translateX: 0, translateY: -2, rotateDeg: -2, scaleXDelta: .012, scaleYDelta: 0, durationMs: 950, repeats: true },
+  extension: { translateX: 0, translateY: 2, rotateDeg: 2, scaleXDelta: .01, scaleYDelta: 0, durationMs: 1000, repeats: true },
+  raise: { translateX: 0, translateY: -5, rotateDeg: 0, scaleXDelta: .02, scaleYDelta: 0, durationMs: 1100, repeats: true },
+  squat: { translateX: 0, translateY: 7, rotateDeg: 0, scaleXDelta: .02, scaleYDelta: -.03, durationMs: 1450, repeats: true },
+  hip_hinge: { translateX: 0, translateY: 2, rotateDeg: 3, scaleXDelta: .01, scaleYDelta: -.015, durationMs: 1400, repeats: true },
+  leg_press: { translateX: 4, translateY: 2, rotateDeg: 0, scaleXDelta: .015, scaleYDelta: -.02, durationMs: 1350, repeats: true },
+  leg_isolation: { translateX: 0, translateY: 4, rotateDeg: 1, scaleXDelta: 0, scaleYDelta: -.015, durationMs: 1150, repeats: true },
+  calf: { translateX: 0, translateY: -3, rotateDeg: 0, scaleXDelta: 0, scaleYDelta: .015, durationMs: 900, repeats: true },
+  core: { translateX: 0, translateY: 0, rotateDeg: 0, scaleXDelta: .015, scaleYDelta: -.025, durationMs: 1300, repeats: true },
+  cardio: { translateX: 0, translateY: -5, rotateDeg: 1.5, scaleXDelta: 0, scaleYDelta: 0, durationMs: 900, repeats: true },
+};
+
 export const MotionFamilyDescriptors: Record<MotionFamily, MotionFamilyDescriptor> = {
   horizontal_press: { id: 'horizontal_press', label: '수평 밀기', axis: 'horizontal', amplitude: 6, repDurationMs: 2000 },
   vertical_press: { id: 'vertical_press', label: '수직 밀기', axis: 'vertical', amplitude: 8, repDurationMs: 2000 },

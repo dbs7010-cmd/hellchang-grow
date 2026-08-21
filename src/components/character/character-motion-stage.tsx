@@ -3,6 +3,7 @@ import { StyleSheet, View, ViewStyle } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
+  useReducedMotion,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -11,17 +12,17 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { PlayerCharacter } from '@/components/character/player-character';
-import { getMotionFamilyDescriptor } from '@/config/motion-families';
 import type { DanbaekBodyParameters } from '@/types/body-state';
 import type { MotionFamily } from '@/types/exercise';
 import { CharacterAppearance } from '@/utils/character-appearance';
+import { getCharacterMotionProfile, type WorkoutCharacterState } from '@/utils/workout-character-motion';
 
 export interface CharacterMotionStageProps {
   appearance: CharacterAppearance;
   /** 현재 운동의 `animationFamily`. 없으면 캐릭터는 가만히 서 있는다. */
   family?: MotionFamily;
-  /** 실제로 운동 중일 때만 모션을 돌린다 (휴식/일시정지 중에는 정지). */
-  active: boolean;
+  /** 세션 도메인 상태를 표현 계층으로만 매핑한 값. */
+  state: WorkoutCharacterState;
   /** 성장 상태. 홈과 같은 바디를 그대로 쓴다 — 모션만 이 컴포넌트가 얹는다. */
   bodyParameters?: DanbaekBodyParameters | null;
   height: number;
@@ -43,42 +44,47 @@ export interface CharacterMotionStageProps {
 export function CharacterMotionStage({
   appearance,
   family,
-  active,
+  state,
   bodyParameters,
   height,
   style,
 }: CharacterMotionStageProps) {
   const progress = useSharedValue(0);
-  const descriptor = family ? getMotionFamilyDescriptor(family) : undefined;
-  const repDurationMs = descriptor?.repDurationMs ?? 0;
+  const reducedMotion = useReducedMotion();
+  const profile = getCharacterMotionProfile(state, family, reducedMotion);
+  const durationMs = profile.durationMs;
 
   useEffect(() => {
-    if (!descriptor || !active) {
-      cancelAnimation(progress);
-      progress.value = withTiming(0, { duration: 200 });
+    cancelAnimation(progress);
+    if (reducedMotion || durationMs <= 0) {
+      progress.set(withTiming(0, { duration: 150 }));
       return;
     }
-    // 한 반복 = 내려가고(절반) 올라오기(절반). 무한 반복이라 세트 사이에 다시 시작하지 않는다.
-    progress.value = 0;
-    progress.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: repDurationMs / 2, easing: Easing.inOut(Easing.quad) }),
-        withTiming(0, { duration: repDurationMs / 2, easing: Easing.inOut(Easing.quad) })
-      ),
-      -1,
-      false
+    progress.set(0);
+    const motion = withSequence(
+      withTiming(1, { duration: durationMs / 2, easing: Easing.bezier(0.77, 0, 0.175, 1) }),
+      withTiming(0, { duration: durationMs / 2, easing: Easing.bezier(0.77, 0, 0.175, 1) })
     );
-    return () => cancelAnimation(progress);
-  }, [descriptor, active, repDurationMs, progress]);
+    if (!profile.repeats) {
+      progress.set(motion);
+      return () => cancelAnimation(progress);
+    }
+    progress.set(withRepeat(motion, -1, false));
+    return () => {
+      cancelAnimation(progress);
+      progress.set(0);
+    };
+  }, [durationMs, profile.repeats, progress, reducedMotion, state, family]);
 
-  const axis = descriptor?.axis ?? 'vertical';
-  const amplitude = descriptor?.amplitude ?? 0;
-
-  const animatedStyle = useAnimatedStyle(() => {
-    if (axis === 'scale') return { transform: [{ scale: 1 - progress.value * amplitude }] };
-    if (axis === 'horizontal') return { transform: [{ translateX: progress.value * amplitude }] };
-    return { transform: [{ translateY: progress.value * amplitude }] };
-  });
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: progress.get() * profile.translateX },
+      { translateY: progress.get() * profile.translateY },
+      { rotateZ: `${progress.get() * profile.rotateDeg}deg` },
+      { scaleX: 1 + progress.get() * profile.scaleXDelta },
+      { scaleY: 1 + progress.get() * profile.scaleYDelta },
+    ],
+  }));
 
   if (height <= 0) return null;
 
@@ -90,7 +96,7 @@ export function CharacterMotionStage({
           slot="session"
           height={height}
           bodyParameters={bodyParameters}
-          idle={!active}
+          idle={reducedMotion || state === 'idle' || state === 'ready' || state === 'resting'}
         />
       </Animated.View>
     </View>

@@ -21,6 +21,7 @@ import { Section } from '@/components/ui/section';
 import { TextField } from '@/components/ui/text-field';
 import { AppConfig } from '@/config/app-config';
 import { getResolvedExerciseById, searchExercises } from '@/config/exercises';
+import { inferMotionFamily } from '@/config/motion-families';
 import { StanleyTrainer } from '@/config/trainers';
 import { WorkoutCategories, WorkoutCategoryLabels } from '@/config/workout-labels';
 import { Layout, Motion, Radius, Spacing } from '@/constants/theme';
@@ -33,6 +34,7 @@ import { createId } from '@/utils/id';
 import { buildGrowthRevealMuscles, hasPermanentBodyChange } from '@/utils/growth-reveal';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import { formatVolumeKg } from '@/utils/workout-stats';
+import { deriveWorkoutCharacterState } from '@/utils/workout-character-motion';
 import {
   computeElapsedSeconds,
   formatElapsedTime,
@@ -267,7 +269,21 @@ export default function SessionScreen() {
   const resolvedCurrent = currentExercise
     ? getResolvedExerciseById(currentExercise.exerciseId)
     : undefined;
-  const motionFamily = resolvedCurrent?.animationFamily;
+  const motionFamily = resolvedCurrent?.animationFamily ?? (currentExercise
+    ? ['running', 'walking', 'cycling', 'sports'].includes(activeSession.primaryCategory)
+      ? 'cardio'
+      : inferMotionFamily({
+          primaryMuscleGroup: activeSession.primaryMuscleGroup ?? 'fullBody',
+          equipment: 'other',
+        })
+    : undefined);
+  const characterState = deriveWorkoutCharacterState({
+    ending,
+    paused: isPaused,
+    resting: isResting,
+    hasExercise: Boolean(currentExercise),
+    hasPendingSet: Boolean(pendingSet),
+  });
   // DB에 없는 [직접 추가] 운동은 판단할 근거가 없으므로 중량 입력을 그대로 열어 둔다.
   const usesWeight = resolvedCurrent ? resolvedCurrent.usesWeight : true;
 
@@ -374,6 +390,10 @@ export default function SessionScreen() {
         elapsedSeconds={elapsedSeconds}
         currentExercise={currentExercise}
         nextExercise={nextExercise}
+        appearance={characterAppearance}
+        family={motionFamily}
+        bodyParameters={bodyParameters}
+        characterState={characterState}
         reaction={reaction}
         onPauseToggle={handlePauseToggle}
         onSkip={skipSessionRest}
@@ -446,7 +466,7 @@ export default function SessionScreen() {
           <CharacterMotionStage
             appearance={characterAppearance}
             family={motionFamily}
-            active={!isPaused}
+            state={characterState}
             bodyParameters={bodyParameters}
             height={SESSION_CHARACTER_HEIGHT}
           />
@@ -676,6 +696,7 @@ function SessionShell({
  * 세트 조작을 밀어내지 않도록 고정한다 — 주인공은 [세트 완료]다.
  */
 const SESSION_CHARACTER_HEIGHT = 104;
+const REST_CHARACTER_HEIGHT = 70;
 
 /** 상태줄(약 40px) 바로 아래에 골드썬 반응이 겹치도록 하는 오프셋. */
 const REACTION_TOP_OFFSET = 52;
@@ -1084,6 +1105,10 @@ function RestScreen({
   elapsedSeconds,
   currentExercise,
   nextExercise,
+  appearance,
+  family,
+  bodyParameters,
+  characterState,
   reaction,
   onPauseToggle,
   onSkip,
@@ -1093,6 +1118,10 @@ function RestScreen({
   elapsedSeconds: number;
   currentExercise?: SessionExerciseEntry;
   nextExercise?: SessionExerciseEntry;
+  appearance: ReturnType<typeof useAppData>['characterAppearance'];
+  family?: Parameters<typeof CharacterMotionStage>[0]['family'];
+  bodyParameters: Parameters<typeof CharacterMotionStage>[0]['bodyParameters'];
+  characterState: Parameters<typeof CharacterMotionStage>[0]['state'];
   reaction: React.ReactNode;
   onPauseToggle: () => void;
   onSkip: () => void;
@@ -1124,6 +1153,13 @@ function RestScreen({
           color={ringColor}
           trackColor={theme.backgroundSelected}
           holeColor={theme.background}>
+          <CharacterMotionStage
+            appearance={appearance}
+            family={family}
+            state={characterState}
+            bodyParameters={bodyParameters}
+            height={REST_CHARACTER_HEIGHT}
+          />
           <ThemedText type="caption" themeColor="textSecondary">
             남은 시간
           </ThemedText>
