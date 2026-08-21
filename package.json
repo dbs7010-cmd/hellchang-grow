@@ -27,6 +27,7 @@
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
+    "react-native-svg": "15.15.4",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.10.1"
   },
@@ -49,6 +50,7 @@
     "verify:workout-core": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-workout-core.ts",
     "verify:growth": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-growth-engine.ts",
     "verify:body": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-body-state.ts",
+    "verify:character-body": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-character-body.ts",
     "verify:pt": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-pt-context.ts"
   },
   "private": true

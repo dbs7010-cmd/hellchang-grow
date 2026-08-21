@@ -1,63 +1,36 @@
-import { useEffect } from 'react';
+import { memo, useEffect, useId } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Svg, { Circle, ClipPath, Defs, G, Path, Rect } from 'react-native-svg';
 
-import { useTheme } from '@/hooks/use-theme';
-import { GenderExpression } from '@/types/user';
+import { CharacterBodyConfig, type DanbaekApprovedRegion } from '@/config/character-body-config';
+import type { DanbaekBodyParameters } from '@/types/body-state';
+import type { GenderExpression } from '@/types/user';
+import { buildCharacterBodyGeometry } from '@/utils/character-body-geometry';
 
 export interface CharacterSilhouetteProps {
   genderExpression: GenderExpression;
-  /** 0-100, 체형 전체 볼륨 보정값 */
   size: number;
-  /** 0-100, 근육 톤/선명도 보정값 */
   tone: number;
-  /**
-   * Y축 회전 각도(도). 0 = 정면. CHARACTER 360이 좌우 드래그로 이 값을 연속으로 바꾼다.
-   * 이산적인 "방향 슬롯"이 아니라 연속값 하나다 — 최종 3D 뷰어와 같은 회전 표현이다.
-   */
+  bodyParameters?: DanbaekBodyParameters | null;
   rotationYDeg?: number;
-  /** 미세한 breathing idle 애니메이션 (60 ALIVE). 360 뷰어 등에서는 꺼둘 수 있다. */
   idle?: boolean;
-  /**
-   * 히스토리 미니 프리뷰처럼 작은 고정 박스 안에 넣을 때 쓰는 축소 배율.
-   * 내부 도형은 고정 픽셀 크기라, scale 없이 작은 박스에 넣으면 카드/인접 콘텐츠를 침범한다.
-   */
   scale?: number;
 }
 
-/**
- * 도형 placeholder rig의 고유 높이(px).
- * head 56 + neck 10 + torso 160 + armRow(오버랩 후 10) + legRow(4+150) + shoeRow(2+16) = 408.
- * 홈처럼 남는 세로 공간에 캐릭터를 꽉 채워야 하는 화면이 이 값을 기준으로 scale을 계산한다 —
- * 화면 코드가 408을 하드코딩하지 않게 하려고 여기서 내보낸다.
- */
-export const CharacterIntrinsicHeight = 408;
+export const CharacterIntrinsicHeight = CharacterBodyConfig.viewBox.height;
 
-/**
- * 실제 캐릭터 에셋이 없을 때 쓰는 중립 전신 실루엣 placeholder (도형 rig).
- *
- * 화면이 이걸 직접 부르지 않는다 — 2D는 PlayerCharacter가, 360은 CharacterViewer가 감싼다.
- * 여기서 에셋 존재 여부를 판단하지 않는다 (그 판단은 config/character-assets.ts 한 곳).
- * 캐릭터 전체를 gold로 두르지 않는다 — gold는 어깨/팔 쪽 rim light로만 쓴다.
- */
-export function CharacterSilhouette({
-  genderExpression,
-  size,
-  tone,
+/** LOCKED layered Danbaek CANON renderer. It only draws paths approved by PART_PATH_SPEC.md. */
+function CharacterSilhouetteComponent({
+  bodyParameters,
   rotationYDeg = 0,
   idle = true,
   scale = 1,
 }: CharacterSilhouetteProps) {
-  const theme = useTheme();
   const breatheY = useSharedValue(0);
-
+  const rendererId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const clipId = (region: DanbaekApprovedRegion) => `danbaek-${rendererId}-${region}-clip`;
+  const fillClipId = (region: DanbaekApprovedRegion) => `danbaek-${rendererId}-${region}-fill-clip`;
   useEffect(() => {
     if (!idle) {
       breatheY.value = 0;
@@ -67,166 +40,83 @@ export function CharacterSilhouette({
       withSequence(
         withTiming(-1, { duration: 2200, easing: Easing.inOut(Easing.sin) }),
         withTiming(0, { duration: 2200, easing: Easing.inOut(Easing.sin) })
-      ),
-      -1,
-      false
+      ), -1, false
     );
   }, [idle, breatheY]);
-
-  const breatheStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: breatheY.value }],
-  }));
-
-  const shoulderWidth = 90 + (size / 100) * 60;
-  const waistWidth = 46 + (size / 100) * 30;
-  const definition = 1 + (tone / 100) * 3;
-  const rotateDeg = rotationYDeg;
-  const rimAccent = genderExpression === 'female' ? '#F0B8D9' : theme.goldBright;
-  const bodyLine = theme.border;
+  const breatheStyle = useAnimatedStyle(() => ({ transform: [{ translateY: breatheY.value }] }));
+  const geometry = buildCharacterBodyGeometry({ bodyParameters });
+  const { basePaths, regions, stroke } = CharacterBodyConfig;
+  const bodyTransform = `translate(100 78) scale(${geometry.massScale}) translate(-100 -78)`;
 
   return (
-    // scale이 있을 때(작은 고정 박스에 넣는 경우)는 wrapper 스스로도 그 박스 높이(100%)를 꽉
-    // 채워야 내부 콘텐츠가 "박스 중앙"을 기준으로 축소된다. 그렇지 않으면 wrapper가 원본
-    // 크기(약 400px)로 커진 뒤 그 중앙을 기준으로 줄어들어, 보이는 영역 밖으로 밀려난다.
-    <View style={[styles.wrapper, scale !== 1 && styles.wrapperFitted]}>
-      <View style={[styles.scaleGroup, scale !== 1 && { transform: [{ scale }] }]}>
-        {/* graphite gym backdrop + 은은한 warm ceiling light */}
-        <View style={[styles.backdropGlow, { backgroundColor: theme.gold, opacity: 0.06 }]} />
-        <View style={[styles.contactShadow, { backgroundColor: theme.backgroundDeep }]} />
+    <View style={[styles.wrapper, scale !== 1 && styles.fitted]}>
+      <Animated.View style={breatheStyle}>
+        <View style={{ transform: [{ perspective: 900 }, { rotateY: `${rotationYDeg}deg` }, { scale }] }}>
+        <Svg width={200} height={280} viewBox="0 0 200 280" accessibilityLabel="단백이 캐릭터">
+          <Defs>
+            {(Object.entries(regions) as [DanbaekApprovedRegion, (typeof regions)[DanbaekApprovedRegion]][]).map(([name, region]) => (
+              <ClipPath id={clipId(name)} key={name}>
+                <Rect x={region.x} y={region.y} width={region.width} height={region.height} />
+              </ClipPath>
+            ))}
+            {(Object.entries(regions) as [DanbaekApprovedRegion, (typeof regions)[DanbaekApprovedRegion]][]).map(([name, region]) => (
+              <ClipPath id={fillClipId(name)} key={`fill-${name}`}>
+                <Rect x={region.x} y={region.y + stroke.width} width={region.width} height={region.height - stroke.width * 2} />
+              </ClipPath>
+            ))}
+          </Defs>
 
-        <Animated.View
-          style={[
-            styles.rig,
-            breatheStyle,
-            { transform: [{ perspective: 900 }, { rotateY: `${rotateDeg}deg` }] },
-          ]}>
-          <View style={[styles.head, { borderColor: rimAccent, backgroundColor: theme.backgroundSelected }]} />
-          <View style={[styles.neck, { backgroundColor: theme.backgroundSelected }]} />
-          <View
-            style={[
-              styles.torso,
-              {
-                width: shoulderWidth,
-                borderWidth: definition,
-                borderColor: bodyLine,
-                backgroundColor: theme.backgroundSelected,
-              },
-            ]}>
-            {/* 어깨 rim light — 캐릭터 전체가 아니라 상단 어깨 라인에만 */}
-            <View style={[styles.shoulderRim, { backgroundColor: rimAccent, width: shoulderWidth * 0.9 }]} />
-            <View
-              style={[
-                styles.waist,
-                { width: waistWidth, borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected },
-              ]}
-            />
-          </View>
-          <View style={styles.armRow}>
-            <View style={[styles.arm, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
-            <View style={{ width: shoulderWidth * 0.55 }} />
-            <View style={[styles.arm, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
-          </View>
-          <View style={styles.legRow}>
-            <View style={[styles.leg, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
-            <View style={[styles.leg, { borderColor: bodyLine, borderWidth: definition, backgroundColor: theme.backgroundSelected }]} />
-          </View>
-          <View style={styles.shoeRow}>
-            <View style={[styles.shoe, { backgroundColor: theme.gold }]} />
-            <View style={[styles.shoe, { backgroundColor: theme.gold }]} />
-          </View>
-        </Animated.View>
-      </View>
+          <G transform={bodyTransform} fill={stroke.fill} stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round">
+            <Path d={basePaths.torso} />
+            <Path d={basePaths.armLeft} />
+            <Path d={basePaths.armRight} />
+            <Path d={basePaths.legLeft} />
+            <Path d={basePaths.legRight} />
+            {geometry.overlays.map((overlay, index) => (
+              <G key={`${overlay.region}-${index}`} opacity={overlay.opacity} clipPath={`url(#${fillClipId(overlay.region)})`}>
+                <Path d={overlay.path} stroke="none" />
+              </G>
+            ))}
+            {geometry.overlays.map((overlay, index) => (
+              <Path key={`outline-${overlay.region}-${index}`} d={overlay.outline} fill="none" opacity={overlay.opacity} clipPath={`url(#${clipId(overlay.region)})`} />
+            ))}
+
+            <G fill="none" opacity={geometry.chestLineOpacity} clipPath={`url(#${clipId('chest')})`}>
+              <Path d="M86 101 Q100 109 114 101" strokeWidth={2} />
+            </G>
+            <G fill="none" opacity={geometry.backLineOpacity} clipPath={`url(#${clipId('back')})`}>
+              <Path d="M76 104 Q68 118 75 139 M124 104 Q132 118 125 139" strokeWidth={2} />
+            </G>
+            <G fill="none" opacity={geometry.abdomenLineOpacity} clipPath={`url(#${clipId('abs')})`} strokeWidth={1.7}>
+              <Path d="M100 108 L100 158" />
+              <Path d="M90 119 Q95 122 99 119 M101 119 Q105 122 110 119 M90 132 Q95 135 99 132 M101 132 Q105 135 110 132 M90 145 Q95 148 99 145 M101 145 Q105 148 110 145" />
+            </G>
+            <G fill="none" opacity={geometry.armLineOpacity} clipPath={`url(#${clipId('arm')})`} strokeWidth={1.8}>
+              <Path d="M63 93 Q54 105 62 118 M137 93 Q146 105 138 118" />
+            </G>
+            <G fill="none" opacity={geometry.legLineOpacity} clipPath={`url(#${clipId('thigh')})`} strokeWidth={2}>
+              <Path d="M82 178 Q88 196 92 210 M118 178 Q112 196 108 210" />
+            </G>
+          </G>
+
+          <G fill={stroke.fill} stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round">
+            <Rect x={77} y={18} width={46} height={44} rx={20} />
+          </G>
+          <G fill={stroke.color}>
+            <Circle cx={91} cy={38} r={2.2} />
+            <Circle cx={109} cy={38} r={2.2} />
+          </G>
+          <Path d="M94 48 Q100 53 106 48" fill="none" stroke={stroke.color} strokeWidth={2.5} strokeLinecap="round" />
+        </Svg>
+        </View>
+      </Animated.View>
     </View>
   );
 }
 
+export const CharacterSilhouette = memo(CharacterSilhouetteComponent);
+
 const styles = StyleSheet.create({
-  wrapper: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  wrapperFitted: {
-    height: '100%',
-  },
-  scaleGroup: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backdropGlow: {
-    position: 'absolute',
-    top: -40,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-  },
-  contactShadow: {
-    position: 'absolute',
-    bottom: 4,
-    width: 140,
-    height: 18,
-    borderRadius: 70,
-    opacity: 0.5,
-  },
-  rig: {
-    alignItems: 'center',
-  },
-  head: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 3,
-  },
-  neck: {
-    width: 20,
-    height: 10,
-  },
-  torso: {
-    height: 160,
-    borderRadius: 28,
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  shoulderRim: {
-    position: 'absolute',
-    top: 0,
-    height: 4,
-    borderRadius: 2,
-    opacity: 0.8,
-  },
-  waist: {
-    position: 'absolute',
-    bottom: -6,
-    height: 40,
-    borderRadius: 18,
-  },
-  armRow: {
-    flexDirection: 'row',
-    marginTop: -120,
-  },
-  arm: {
-    width: 26,
-    height: 130,
-    borderRadius: 14,
-  },
-  legRow: {
-    flexDirection: 'row',
-    gap: 14,
-    marginTop: 4,
-  },
-  leg: {
-    width: 40,
-    height: 150,
-    borderRadius: 18,
-  },
-  shoeRow: {
-    flexDirection: 'row',
-    gap: 14,
-    marginTop: 2,
-  },
-  shoe: {
-    width: 46,
-    height: 16,
-    borderRadius: 8,
-  },
+  wrapper: { width: '100%', alignItems: 'center', justifyContent: 'center' },
+  fitted: { height: '100%' },
 });

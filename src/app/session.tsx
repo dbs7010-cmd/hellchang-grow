@@ -71,6 +71,7 @@ export default function SessionScreen() {
     loading,
     workoutRecords,
     characterAppearance,
+    bodyParameters,
     pauseWorkoutSession,
     resumeWorkoutSession,
     changeSessionCategory,
@@ -445,6 +446,7 @@ export default function SessionScreen() {
             appearance={characterAppearance}
             family={motionFamily}
             active={!isPaused}
+            bodyParameters={bodyParameters}
             height={SESSION_CHARACTER_HEIGHT}
           />
 
@@ -729,12 +731,18 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
         contentContainerStyle={styles.resultContent}
         showsVerticalScrollIndicator={false}>
         <View style={styles.resultHero}>
-          {/* 홈과 같은 캐릭터. 승리/회복 포즈가 생기면 registry의 result 슬롯만 채우면 된다. */}
+          {/*
+            홈과 같은 캐릭터 렌더러. 다만 여기서만 **펌핑이 얹힌** 일시 파라미터를 쓴다 —
+            저장되지 않으므로 홈으로 돌아가면 영구 상태로 돌아간다.
+            TODO(growth-celebration): summary.growth.stageChanges가 있으면 이 자리에서
+            "이전 → 지금" 바디를 비교해 보여줄 수 있다. 이번 단계에서는 연결점만 둔다.
+          */}
           <View style={styles.resultCharacter}>
             <PlayerCharacter
               appearance={characterAppearance}
               slot="result"
               height={RESULT_CHARACTER_HEIGHT}
+              bodyParameters={summary.bodyParametersWithPump}
             />
           </View>
           <ThemedText type="subtitle" style={[styles.centered, { color: theme.gold }]}>

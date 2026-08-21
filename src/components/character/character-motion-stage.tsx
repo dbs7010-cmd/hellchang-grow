@@ -12,6 +12,7 @@ import Animated, {
 
 import { PlayerCharacter } from '@/components/character/player-character';
 import { getMotionFamilyDescriptor } from '@/config/motion-families';
+import type { DanbaekBodyParameters } from '@/types/body-state';
 import type { MotionFamily } from '@/types/exercise';
 import { CharacterAppearance } from '@/utils/character-appearance';
 
@@ -21,6 +22,8 @@ export interface CharacterMotionStageProps {
   family?: MotionFamily;
   /** 실제로 운동 중일 때만 모션을 돌린다 (휴식/일시정지 중에는 정지). */
   active: boolean;
+  /** 성장 상태. 홈과 같은 바디를 그대로 쓴다 — 모션만 이 컴포넌트가 얹는다. */
+  bodyParameters?: DanbaekBodyParameters | null;
   height: number;
   style?: ViewStyle;
 }
@@ -41,6 +44,7 @@ export function CharacterMotionStage({
   appearance,
   family,
   active,
+  bodyParameters,
   height,
   style,
 }: CharacterMotionStageProps) {
@@ -81,7 +85,13 @@ export function CharacterMotionStage({
   return (
     <View style={[styles.stage, { height }, style]} pointerEvents="none">
       <Animated.View style={animatedStyle}>
-        <PlayerCharacter appearance={appearance} slot="session" height={height} idle={!active} />
+        <PlayerCharacter
+          appearance={appearance}
+          slot="session"
+          height={height}
+          bodyParameters={bodyParameters}
+          idle={!active}
+        />
       </Animated.View>
     </View>
   );

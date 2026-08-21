@@ -63,6 +63,7 @@ export default function HomeScreen() {
     routines,
     passProgress,
     characterAppearance,
+    bodyParameters,
   } = useAppData();
 
   const windowHeight = Dimensions.get('window').height;
@@ -171,7 +172,15 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <View style={[styles.content, { paddingBottom: BottomTabInset + insets.bottom + Spacing.two }]}>
+      {/*
+        하단 여백에 insets.bottom을 더하지 않는다.
+        이 화면은 NativeTabs 안이라 탭바가 아래에 자리를 차지하고 시스템 내비 inset도 탭바가
+        흡수한다. 여기서 insets.bottom을 또 더하면 Android에서만 약 48dp가 이중으로 잡히고,
+        stage가 유일한 flex:1이라 그 손해를 캐릭터가 전부 뒤집어쓴다.
+        (웹은 insets.bottom이 0이라 이 버그가 보이지 않아 실기기에서만 캐릭터가 작았다.)
+        플랫폼별 탭바 여유는 BottomTabInset 하나로만 관리한다.
+      */}
+      <View style={[styles.content, { paddingBottom: BottomTabInset + Spacing.two }]}>
         <View style={[styles.progressBlock, { borderColor: theme.border }]}>
           <GrowthHud
             passLevel={passProgress.level}
@@ -199,7 +208,11 @@ export default function HomeScreen() {
             />
           </View>
 
-          {/* 캐릭터가 실제로 쓰는 영역. 이 박스를 직접 재서 그 높이만 PlayerCharacter에 넘긴다. */}
+          {/*
+            캐릭터가 실제로 쓰는 영역. 실제 에셋은 fill 모드라 이 박스를 그대로 꽉 채운다 —
+            JS 측정값이 개입하지 않아서 Android와 웹이 같은 크기로 나온다.
+            height(측정값)는 에셋이 없을 때의 도형 placeholder에만 쓰인다.
+          */}
           <View style={styles.characterArea}>
             <Pressable
               onPress={canView360 ? () => setViewerOpen(true) : undefined}
@@ -207,7 +220,19 @@ export default function HomeScreen() {
               style={styles.characterFill}
               accessibilityRole={canView360 ? 'button' : undefined}
               accessibilityLabel={canView360 ? '캐릭터 360도로 보기' : undefined}>
-              <PlayerCharacter appearance={characterAppearance} slot="home" height={characterHeight} idle />
+              {/*
+                bodyParameters를 넘기면 성장 상태가 보이는 파라메트릭 바디로 그려진다.
+                홈은 **영구** 상태다 — 펌핑은 운동 종료 화면에서만 얹는다.
+                레이아웃 계약(이 박스를 넘지 않는다)은 그대로다.
+              */}
+              <PlayerCharacter
+                appearance={characterAppearance}
+                slot="home"
+                height={characterHeight}
+                bodyParameters={bodyParameters}
+                fill
+                idle
+              />
             </Pressable>
 
             {/* 보조 HUD. pointerEvents none이라 캐릭터 터치/360 진입을 막지 않는다. */}
