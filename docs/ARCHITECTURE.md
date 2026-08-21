@@ -212,6 +212,26 @@ createSession(category, id, nowIso, options?)     → status: 'active', activeSi
 
 **연결점.** `endWorkoutSession()`이 `growthEngine.applySessionResult(sessionResult)`를 호출하고, 결과(`GrowthApplicationResult`: gainedSpByMuscle / previousStages / currentStages / stageChanges / pumpByMuscle / totalSpGained)를 `EndSessionSummary.growth`에 실어 화면으로 돌려준다. `pump`는 저장하지 않는 세션 한정 값이다(영구 성장과 다르다). 다음 단계(성장 연출 / DanbaekRenderer)는 이 값만 보면 된다.
 
+## 5.5-D. Danbaek Body State (근육 + 지방 + 식단/회복 → 렌더링 파라미터)
+
+파이프라인: `Workout → GrowthEngine → Muscle SP/Stage → **BodyState → BodyParameters** → Renderer`. 마지막 두 칸이 이 레이어이고, 이 뒤로는 SP도 stage도 체지방률도 나타나지 않는다 — 그림 쪽은 "가슴이 얼마나 큰가" 같은 0~1 수치만 본다.
+
+**축은 서로를 바꾸지 않는다.** 근육이 늘어도 지방이 내려가지 않고, 식단이 좋아도 근육 SP가 생기지 않는다. 조합은 오직 `utils/body-state.ts`와 `utils/body-parameters.ts`에서만 일어난다. Account Level(PASS XP)은 여전히 완전히 별개다.
+
+**세부 근육 → 렌더링 묶음.** 저장/계산 단위는 `MuscleGroupDetail`(13) 그대로이고, 그림용으로 `VisualMuscleGroup`(8: chest / shoulders / arms / back / abs / glutes / thighs / calves)을 파생시킨다(`MuscleDetailToVisualGroup`). 화면 필터용 `MuscleGroup`(7)과 경계가 다른 이유는 하체가 둔근/허벅지/종아리로 갈라지기 때문이다. 세부 값은 언제나 그대로 남는다.
+
+**체지방은 신뢰도 순서로 정해진다** (`resolveFatStage`): ① 사용자가 입력한 실제 체지방률 → ② 체중 추세 + 식단 상태가 **둘 다** 있을 때만 게임 추정 → ③ 중립 기본값. 결과에는 항상 `fatStageSource`(measured / estimated / default)가 붙는다 — 추정값을 실제 체지방률처럼 표시하지 않기 위한 장치이며, 화면은 이 값을 반드시 함께 봐야 한다. 체중 추세(`computeWeightTrend`)는 21일 창·최소 2건·1kg 이상 변화일 때만 gaining/losing으로 판단해 하루치 변동에 반응하지 않는다.
+
+**definition = leanness × (base + gain × muscleMassScore)** (`computeDefinitionStage`). 지방만 낮으면 base만 남아 "마른 몸"이고, 근육이 많아도 지방이 높으면 leanness가 깎아 "근돼"가 된다. 네 가지 방향(마른/선명/근돼/말랑)이 분기 없이 이 식 하나에서 나온다. `shapeProfile`(lean / soft / athletic / muscular / bulky / massive)은 결과를 설명하는 label일 뿐 성장을 제한하는 클래스가 아니다.
+
+**부위별 파라미터** (`toDanbaekBodyParameters`): chest/shoulder/arm/backWidth/backThickness/glute/thigh/calf는 해당 세부 근육의 시각 스케일 가중 평균이고, waist는 지방이 주도하며, abdomenDefinition은 **definition × 복근 크기**라 지방에 덮이면 복근 stage가 5여도 보이지 않는다. 근육 stage → 시각 스케일은 `[0, 0.08, 0.2, 0.4, 0.68, 1]`로 **비선형**이다 — 초반은 미세하고 마지막 단계에서 과장된 단백이가 된다.
+
+**Pump는 저장하지 않는다.** `applyPumpToBodyParameters()`가 결과 화면용으로 파라미터 위에 잠깐 얹을 뿐이며(부위 볼륨만, 지방/덩치/복부 선명도는 건드리지 않는다), 세션 종료 요약의 `bodyParametersWithPump`가 그 결과다. 앱을 다시 켜면 펌핑은 남지 않는다.
+
+**저장은 기존 GrowthState 안에서 끝난다.** `DanbaekGrowthState.body`(fatStage / fatStageSource / definitionStage / nutritionState / recoveryState / lastCalculatedAt)만 영속화하고, 근육 stage는 이미 `muscles`에 있으므로 중복 저장하지 않으며, 렌더링 파라미터는 실행 시 계산한다. 저장하는 값 중 **입력**은 식단/회복뿐이고 나머지는 캐시라, 입력이 바뀔 때(세션 종료 / 신체 기록 추가 / 식단·회복 기록) 함께 다시 계산된다. 화면이 쓰는 것은 언제나 실시간 `bodyState`이며 캐시가 아니다. body가 비어 있던 기존 사용자는 그대로 동작하고(중립 상태로 계산), 깨진 값은 `migrateGrowthState()`가 버린다 — 근육 SP는 어떤 경우에도 초기화되지 않는다.
+
+**밸런스 숫자는 전부 `config/body-state-config.ts`에 있다** — 시각 스케일 표, 부위 가중치, 체지방 구간/추정 보정, 추세 판정, definition 계수, 체형 label 기준, 펌핑 폭.
+
 ## 6. 화면 구조 / 네비게이션
 
 루트 `_layout.tsx`는 `AppDataProvider`로 감싼 뒤, `onboardingComplete` 값에 따라 `Stack.Protected`로 `(onboarding)`과 `(tabs)+session` 중 하나만 마운트한다 (expo-router SDK 53+ Protected Routes 패턴). `session`은 `(tabs)`와 같은 guard 아래 있는 형제 `Stack.Screen`이라 온보딩 완료 후에만 접근 가능하지만, 탭 네비게이터 밖에 있어 탭바 없이 전체화면으로 뜬다.

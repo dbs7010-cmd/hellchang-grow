@@ -5,6 +5,7 @@ import type {
   MuscleSpDistribution,
   SpDistribution,
 } from '@/types/exercise';
+import type { NutritionState, RecoveryState } from '@/types/body-state';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -105,14 +106,25 @@ export interface MuscleGrowthState {
 }
 
 /**
- * 지방/컨디션 축. 이번 단계에서는 **아무도 채우지 않는다** — 다음 FatEngine이 들어올
- * 자리만 잡아둔다. 근육 SP 계산은 이 값을 절대 읽지 않는다 (두 엔진은 독립적이다).
+ * 지방/컨디션 축. 근육 SP 계산은 이 값을 **절대 읽지 않는다** — 두 축은 독립이고,
+ * 합쳐지는 곳은 표현 레이어(`utils/body-state.ts`) 하나뿐이다.
+ *
+ * 여기 저장하는 것은 두 종류다:
+  *  - 입력값: nutritionState / recoveryState — 다른 곳에서 알 수 없는, 사용자가 준 값.
+ *  - 캐시  : fatStage / definitionStage — 매번 다시 계산할 수 있지만, 마지막으로 판단한
+ *            값을 남겨 두면 트레이너 대사/추세 비교에서 쓸 수 있다.
+ * 부위별 근육 stage는 이미 `muscles`에 있으므로 여기에 중복 저장하지 않고,
+ * 렌더링 파라미터(DanbaekBodyParameters)는 실행 시 계산하고 저장하지 않는다.
  */
 export interface BodyCompositionState {
+  /** 마지막으로 계산된 fatStage (0~5). 표시할 때는 아래 source를 함께 봐야 한다. */
   fatStage?: number;
+  /** 그 fatStage가 실제 입력값에서 나온 것인지('measured') 게임 추정인지. */
+  fatStageSource?: 'measured' | 'estimated' | 'default';
   definitionStage?: number;
-  nutritionState?: unknown;
-  recoveryState?: unknown;
+  nutritionState?: NutritionState;
+  recoveryState?: RecoveryState;
+  lastCalculatedAt?: string;
 }
 
 export interface DanbaekGrowthState {

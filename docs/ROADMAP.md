@@ -126,6 +126,26 @@ WORKOUT CORE에서 만든 `growthEngine.applySessionResult(sessionResult)` 연�
 
 GROWTH ENGINE에서도 지방/식단 계산, 단백이 외형 변환(Visual Body), 실제 애니메이션, LLM/광고/결제는 구현하지 않는다. Fat 축은 `DanbaekGrowthState.body` 자리만 비워 뒀고 근육 SP 계산과 섞이지 않는다.
 
+## BODY STATE — 근육 + 지방 + 식단/회복 → 단백이 신체 파라미터
+
+WORKOUT CORE와 GROWTH ENGINE은 그대로 두고(공식/threshold/세션 UI/Exercise 모델 무수정) 그 위에 표현 레이어만 얹었다. 실제 캐릭터 그림은 아직 바꾸지 않는다.
+
+- [x] `DanbaekBodyState` 도입 — 세부 근육 stage(13) + 렌더링 묶음(8, `VisualMuscleGroup`) + 근육량 점수 + fatStage/definitionStage + 식단/회복/체중 추세 + 체형 label. 저장하지 않고 매번 계산한다
+- [x] 축 분리 유지 — 근육과 지방은 서로를 바꾸지 않고 표현 레이어에서만 조합된다. PASS XP는 여전히 별개
+- [x] 체지방 우선순위 — 실제 입력값 > (체중 추세 + 식단이 둘 다 있을 때) 게임 추정 > 중립 기본값. 결과에 `fatStageSource`가 항상 붙어 추정을 측정처럼 표시할 수 없다
+- [x] 체중 추세(`computeWeightTrend`) — 21일 창 / 최소 2건 / 1kg 이상일 때만 gaining·losing. 하루 변동에 반응하지 않고 증감량을 주장하지 않는다
+- [x] definition 공식 — `leanness × (base + gain × 근육량)`. 마른/선명/근돼/말랑 네 방향이 분기 없이 이 식에서 나온다. `shapeProfile`은 설명 label일 뿐 성장을 제한하지 않는다
+- [x] `DanbaekBodyParameters` — 부위별 scale(가슴/어깨/팔/등 너비·두께/둔근/허벅지/종아리) + waist + abdomenDefinition + overallMass/fatSoftness/definition, 전부 0~1. 렌더러는 SP도 stage도 모른다
+- [x] 비선형 성장 곡선 — stage→시각 스케일 `[0, 0.08, 0.2, 0.4, 0.68, 1]`. 초반은 미세하고 최종 단계에서 과장된다
+- [x] Pump 분리 — `applyPumpToBodyParameters()`로 결과 화면에서만 잠깐 얹고 저장하지 않는다. 세션 요약의 `bodyParametersWithPump`가 연결점이며 재실행 후 남지 않는다
+- [x] 식단/회복 입력 경로 — `NutritionState`/`RecoveryState`(good·normal·poor·unknown)와 `setNutritionState()`/`setRecoveryState()`. 새 식단 화면이나 음식 DB는 만들지 않았고, 이 값은 지방 추정·표현에만 쓰이며 근육 SP를 만들지 않는다
+- [x] 저장은 기존 `DanbaekGrowthState.body` 안에서 — 입력(식단/회복)과 캐시(fat/definition/lastCalculatedAt)만 넣고 근육 stage는 중복 저장하지 않는다. 입력이 바뀔 때마다(세션 종료 / 신체 기록 / 식단·회복) 캐시를 함께 갱신한다
+- [x] migration — body가 없던 기존 사용자는 중립 상태로 안전하게 동작하고, 깨진 값은 버린다. 근육 SP/운동 기록은 어떤 경우에도 초기화되지 않는다
+- [x] `scripts/verify-body-state.ts`(`npm run verify:body`, 89개 시나리오) 추가 — 부위별 반영, 비선형 곡선, 체지방 우선순위, 네 가지 조합, 펌핑 비영속, 저장 왕복/migration. 기존 verify 5종도 계속 통과
+- [x] 웹에서 실제 확인 — 세션 종료 시 body 캐시 생성, 실제 체지방률 입력 시 measured 우선, 신체 기록 변경이 지방 축만 바꾸고 근육 SP는 그대로
+
+BODY STATE에서도 실제 캐릭터 그림/에셋, 애니메이션, 식단 화면, 음식 DB, 체지방 시뮬레이션은 만들지 않는다.
+
 ## M3 — 다음 단계 (아직 착수하지 않음)
 
 - 실제 캐릭터/트레이너 아트 자산 반영 (이모지 → 실제 이미지, `TrainerProfile.portraitPlaceholder` 대체), 세트 완료/PR 연출에 실제 애니메이션 추가

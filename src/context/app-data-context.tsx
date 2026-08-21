@@ -11,7 +11,7 @@ import {
   hasReachedDailyPhotoLimit,
 } from '@/data/body-history-repository';
 import { getOpenEventPassState, saveOpenEventPassState } from '@/data/event-repository';
-import { getGrowthState } from '@/data/growth-repository';
+import { getGrowthState, saveGrowthState } from '@/data/growth-repository';
 import { getPassState, savePassState } from '@/data/pass-repository';
 import {
   getOnboardingComplete,
@@ -65,6 +65,12 @@ import { UserProfile } from '@/types/user';
 import { WorkoutCategory, WorkoutRecord } from '@/types/workout';
 import { WorkoutSession } from '@/types/workout-session';
 import { DanbaekGrowthState, GrowthApplicationResult, WorkoutSessionResult } from '@/types/growth';
+import {
+  DanbaekBodyParameters,
+  DanbaekBodyState,
+  NutritionState,
+  RecoveryState,
+} from '@/types/body-state';
 import { todayDateString, tomorrowDateString } from '@/utils/date';
 import { PrEvent, detectPRs } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
@@ -73,7 +79,9 @@ import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/cha
 import { buildPtContext, buildPtExerciseBrief, matchExerciseInText, PtContext } from '@/utils/pt-context';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { buildWorkoutSessionResult } from '@/utils/workout-session-result';
-import { createDefaultGrowthState } from '@/utils/growth-state';
+import { createDefaultGrowthState, updateBodyComposition } from '@/utils/growth-state';
+import { buildDanbaekBodyState } from '@/utils/body-state';
+import { applyPumpToBodyParameters, toDanbaekBodyParameters } from '@/utils/body-parameters';
 import {
   addExerciseToSession as addExerciseToSessionPure,
   addSetToExercise as addSetToExercisePure,
@@ -144,6 +152,12 @@ export interface EndSessionSummary {
    * 다음 단계의 성장 연출/DanbaekRenderer가 이 값만 보고 화면을 만들 수 있다.
    */
   growth: GrowthApplicationResult | null;
+  /**
+   * 세션 직후의 단백이 렌더링 파라미터에 이번 운동의 펌핑을 얹은 값.
+   * **일시값이다** — 저장되지 않고, 다음에 앱을 켜면 홈의 영구 상태로 돌아간다.
+   * 결과 화면/성장 연출이 이 값만 그대로 쓰면 된다.
+   */
+  bodyParametersWithPump: DanbaekBodyParameters;
 }
 
 interface AppDataContextValue extends AppDataState {
@@ -156,6 +170,13 @@ interface AppDataContextValue extends AppDataState {
   passProgress: ReturnType<typeof computePassLevelProgress>;
   /** 캐릭터 렌더러(PlayerCharacter)에 그대로 넘기는 외형 view-model. */
   characterAppearance: CharacterAppearance;
+  /**
+   * 근육 성장 + 실제 신체 기록 + 식단/회복을 하나로 합친 "지금 단백이 몸" 상태.
+   * 저장하지 않고 매번 계산한다 — 입력이 바뀌면 즉시 따라온다.
+   */
+  bodyState: DanbaekBodyState;
+  /** 위 상태를 렌더러가 읽는 0~1 수치로 변환한 값. 그림 쪽은 SP/stage를 모른다. */
+  bodyParameters: DanbaekBodyParameters;
   completeOnboarding: (input: {
     profile: Omit<UserProfile, 'id' | 'createdAt'>;
     photoUri?: string;
@@ -244,6 +265,13 @@ interface AppDataContextValue extends AppDataState {
   cancelSubscriptionMock: () => Promise<void>;
   redeemReferralCode: (code: string) => Promise<ReferralRedemptionResult>;
   activateOpenEventPass: () => Promise<void>;
+  /**
+   * 하루 식단 평가를 남긴다. 상세 음식 기록이 아니라 한 줄 평가값이며, 이 값은
+   * 지방 추정과 회복 표현에만 쓰인다 — **근육 SP를 만들지 않는다**.
+   */
+  setNutritionState: (nutritionState: NutritionState) => Promise<void>;
+  /** 수면/컨디션 평가. 현재는 표현과 트레이너 대사용이며 SP 공식에 개입하지 않는다. */
+  setRecoveryState: (recoveryState: RecoveryState) => Promise<void>;
   resetAllData: () => Promise<void>;
 }
 
@@ -495,12 +523,55 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, workoutRecords }));
   }, []);
 
+  /**
+   * 지방/컨디션 축의 저장값만 갱신한다. 근육 SP/stage는 건드리지 않는다 —
+   * 식단이 좋다고 근육이 생기는 경로를 만들지 않는다.
+   *
+   * 입력(식단/회복/신체 기록)이 바뀔 때마다 지방·데피니션 캐시도 같이 다시 계산한다.
+   * 캐시가 입력보다 오래된 값을 들고 있으면 트레이너 대사가 지난 상태를 말하게 된다.
+   * (화면이 쓰는 것은 언제나 실시간으로 계산되는 bodyState이며, 이 캐시가 아니다.)
+   */
+  const patchBodyComposition = useCallback(
+    (
+      patch: Parameters<typeof updateBodyComposition>[1],
+      overrides?: { bodyHistory?: BodyHistoryEntry[] }
+    ) => {
+      const nowIso = new Date().toISOString();
+      // 저장은 갱신 함수 안에서 한다 — setState는 즉시 실행되지 않으므로 바깥에서
+      // 결과를 읽으면 아직 비어 있다 (mutateActiveSession이 쓰는 것과 같은 패턴).
+      setState((prev) => {
+        const bodyHistory = overrides?.bodyHistory ?? prev.bodyHistory;
+        const computed = buildDanbaekBodyState({
+          growth: { ...prev.growth, body: { ...(prev.growth.body ?? {}), ...patch } },
+          bodyHistory,
+          nowIso,
+        });
+        const nextGrowth = updateBodyComposition(
+          prev.growth,
+          {
+            ...patch,
+            fatStage: computed.fatStage,
+            fatStageSource: computed.fatStageSource,
+            definitionStage: computed.definitionStage,
+          },
+          nowIso
+        );
+        saveGrowthState(nextGrowth);
+        return { ...prev, growth: nextGrowth };
+      });
+    },
+    []
+  );
+
   const addBodyHistoryEntry = useCallback<AppDataContextValue['addBodyHistoryEntry']>(
     async (input) => {
       const bodyHistory = await addBodyHistoryEntryRepo(input);
       setState((prev) => ({ ...prev, bodyHistory }));
+      // 체중/체지방률이 바뀌면 지방·데피니션 캐시도 새 기록 기준으로 다시 계산한다.
+      // 근육 SP/stage는 이 경로에서 절대 바뀌지 않는다.
+      patchBodyComposition({}, { bodyHistory });
     },
-    []
+    [patchBodyComposition]
   );
 
   const claimStreakReward = useCallback(async () => {
@@ -663,10 +734,43 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
      */
     const growth = await growthEngine.applySessionResult(sessionResult).catch(() => null);
     // 저장된 성장 상태를 다시 읽어 화면 쪽 state와 어긋나지 않게 맞춘다.
+    // 세션 직후의 몸 상태를 한 번 계산해 지방/데피니션 캐시를 남긴다. 근육 stage/SP는
+    // 이 경로에서 절대 바뀌지 않는다 (두 축은 독립이다).
+    let growthAfter = state.growth;
     if (growth) {
       const growthState = await getGrowthState();
-      setState((prev) => ({ ...prev, growth: growthState }));
+      const bodyAfter = buildDanbaekBodyState({
+        growth: growthState,
+        bodyHistory: state.bodyHistory,
+        nowIso,
+      });
+      growthAfter = updateBodyComposition(
+        growthState,
+        {
+          fatStage: bodyAfter.fatStage,
+          fatStageSource: bodyAfter.fatStageSource,
+          definitionStage: bodyAfter.definitionStage,
+        },
+        nowIso
+      );
+      await saveGrowthState(growthAfter);
+      setState((prev) => ({ ...prev, growth: growthAfter }));
     }
+
+    /**
+     * 결과 화면이 쓸 "방금 운동한 몸". 영구 파라미터 위에 이번 세션의 펌핑만 얹은
+     * 일시값이며 저장하지 않는다 — 앱을 다시 켜면 펌핑 없는 상태로 돌아간다.
+     */
+    const bodyParametersWithPump = applyPumpToBodyParameters(
+      toDanbaekBodyParameters(
+        buildDanbaekBodyState({
+          growth: growthAfter,
+          bodyHistory: state.bodyHistory,
+          nowIso,
+        })
+      ),
+      growth?.pumpByMuscle ?? {}
+    );
 
     return {
       durationMinutes: recordInput.durationMinutes ?? 0,
@@ -682,8 +786,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       routineCompleted,
       sessionResult,
       growth,
+      bodyParametersWithPump,
     };
-  }, [state.workoutRecords, state.routines, state.pass, state.bodyHistory, state.profile, addWorkoutRecord]);
+  }, [state.workoutRecords, state.routines, state.pass, state.bodyHistory, state.profile, state.growth, addWorkoutRecord]);
 
   const endWorkoutSession = useCallback<AppDataContextValue['endWorkoutSession']>(async () => {
     // [종료하고 기록]이 연타되거나 두 손가락으로 눌려도 기록은 정확히 한 번만 저장된다.
@@ -825,6 +930,21 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, openEventPass }));
   }, []);
 
+
+  const setNutritionState = useCallback<AppDataContextValue['setNutritionState']>(
+    async (nutritionState) => {
+      patchBodyComposition({ nutritionState });
+    },
+    [patchBodyComposition]
+  );
+
+  const setRecoveryState = useCallback<AppDataContextValue['setRecoveryState']>(
+    async (recoveryState) => {
+      patchBodyComposition({ recoveryState });
+    },
+    [patchBodyComposition]
+  );
+
   const resetAllData = useCallback(async () => {
     await clearAllKeys(Object.values(StorageKeys));
     setState({ ...initialState, loading: false });
@@ -836,6 +956,22 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   // 캐릭터 외형은 프로필에서만 나온다 — 운동 기록/PASS로 전신이 자동 성장하지 않는다.
   const characterAppearance = characterAppearanceFromProfile(state.profile);
 
+  /**
+   * 단백이 몸 상태와 렌더링 파라미터. 저장하지 않고 입력(근육 stage / 신체 기록 /
+   * 식단·회복)에서 매번 계산한다 — 파생값을 영속화하면 입력과 어긋날 수 있다.
+   * pump는 여기 들어가지 않는다: 세션 결과에서만 잠깐 얹는 일시값이다.
+   */
+  const bodyState = useMemo(
+    () =>
+      buildDanbaekBodyState({
+        growth: state.growth,
+        bodyHistory: state.bodyHistory,
+        nowIso: new Date().toISOString(),
+      }),
+    [state.growth, state.bodyHistory]
+  );
+  const bodyParameters = useMemo(() => toDanbaekBodyParameters(bodyState), [bodyState]);
+
   const value: AppDataContextValue = {
     ...state,
     hasSubscriptionAccess: isSubscribed,
@@ -844,6 +980,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     nextPhotoAvailableDate: tomorrowDateString(today),
     passProgress: computePassLevelProgress(state.pass.xp),
     characterAppearance,
+    bodyState,
+    bodyParameters,
+    setNutritionState,
+    setRecoveryState,
     completeOnboarding,
     updateProfile,
     addWorkoutRecord,

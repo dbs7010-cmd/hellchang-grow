@@ -48,6 +48,7 @@
     "verify:weight-core": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-weight-core.ts",
     "verify:workout-core": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-workout-core.ts",
     "verify:growth": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-growth-engine.ts",
+    "verify:body": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-body-state.ts",
     "verify:pt": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-pt-context.ts"
   },
   "private": true

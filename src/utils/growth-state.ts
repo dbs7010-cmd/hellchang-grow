@@ -5,7 +5,9 @@ import {
   type MuscleGroupDetail,
   type MuscleSpDistribution,
 } from '@/types/exercise';
+import type { NutritionState, RecoveryState } from '@/types/body-state';
 import type {
+  BodyCompositionState,
   DanbaekGrowthState,
   GrowthApplicationResult,
   MuscleGrowthState,
@@ -77,7 +79,7 @@ export function migrateGrowthState(
       : base.daily,
     lastSessionId: stored.lastSessionId,
     updatedAt: stored.updatedAt ?? nowIso,
-    body: stored.body,
+    body: migrateBodyComposition(stored.body),
   };
 }
 
@@ -206,6 +208,43 @@ export function applySessionSpToState(input: {
 }
 
 /**
+ * 지방/컨디션 축의 저장값을 안전하게 되살린다.
+ *
+ * 이 필드는 GROWTH ENGINE 단계에서 "예약 자리"로만 있었으므로, 기존 사용자에게는
+ * 대부분 비어 있다 — 비어 있으면 undefined 그대로 둔다(기본값을 지어내 저장하지
+ * 않는다). 표현 레이어가 값이 없을 때 중립 상태를 계산하므로 그게 맞는 동작이다.
+ * 근육 SP/stage는 이 함수가 손대지 않는다.
+ */
+function migrateBodyComposition(
+  stored: BodyCompositionState | undefined
+): BodyCompositionState | undefined {
+  if (!stored) return undefined;
+
+  const nutritionState = isNutritionState(stored.nutritionState) ? stored.nutritionState : undefined;
+  const recoveryState = isRecoveryState(stored.recoveryState) ? stored.recoveryState : undefined;
+  const fatStage = Number.isFinite(stored.fatStage) ? stored.fatStage : undefined;
+  const definitionStage = Number.isFinite(stored.definitionStage) ? stored.definitionStage : undefined;
+
+  const body: BodyCompositionState = {
+    fatStage,
+    fatStageSource: stored.fatStageSource,
+    definitionStage,
+    nutritionState,
+    recoveryState,
+    lastCalculatedAt: stored.lastCalculatedAt,
+  };
+  return Object.values(body).some((value) => value !== undefined) ? body : undefined;
+}
+
+function isNutritionState(value: unknown): value is NutritionState {
+  return value === 'good' || value === 'normal' || value === 'poor' || value === 'unknown';
+}
+
+function isRecoveryState(value: unknown): value is RecoveryState {
+  return value === 'good' || value === 'normal' || value === 'poor' || value === 'unknown';
+}
+
+/**
  * 하루 상한이 말하는 "하루"는 앱의 나머지(운동 기록 날짜/streak)와 같은 로컬 날짜다.
  * UTC로 자르면 자정 직후에 한 운동이 전날 몫으로 잡혀 상한 계산이 어긋난다.
  */
@@ -220,4 +259,24 @@ function sumTotalSp(muscles: Record<MuscleGroupDetail, MuscleGrowthState>): numb
 function round(value: number): number {
   const factor = 10 ** GrowthConfig.sp.decimals;
   return Math.round(value * factor) / factor;
+}
+
+/**
+ * 지방/컨디션 축의 저장값만 갱신한다. 근육 SP/stage/총합/당일 집계는 손대지 않는다 —
+ * 두 축이 서로를 바꾸지 않는다는 규칙을 이 함수의 형태로도 강제한다.
+ *
+ * 저장하는 것은 사용자가 준 입력(식단/회복)과 마지막으로 계산된 지방/데피니션 캐시뿐이다.
+ * 렌더링 파라미터는 여기에 저장하지 않는다(실행 시 계산한다).
+ */
+export function updateBodyComposition(
+  state: DanbaekGrowthState,
+  patch: Partial<BodyCompositionState>,
+  nowIso: string
+): DanbaekGrowthState {
+  const body: BodyCompositionState = {
+    ...(state.body ?? {}),
+    ...patch,
+    lastCalculatedAt: nowIso,
+  };
+  return { ...state, body, updatedAt: nowIso };
 }
