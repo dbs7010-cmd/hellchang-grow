@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useRootNavigationState, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -68,6 +68,7 @@ export default function SessionScreen() {
   const router = useRouter();
   const {
     activeSession,
+    loading,
     workoutRecords,
     characterAppearance,
     pauseWorkoutSession,
@@ -86,20 +87,35 @@ export default function SessionScreen() {
   } = useAppData();
 
   /**
-   * 세션 화면에서 빠져나가는 유일한 경로. 보통은 눌러서 들어온 화면(홈)으로 되돌아간다.
-   * 알림/딥링크/앱 재시작으로 세션이 첫 화면이 되면 되돌아갈 스택이 없어 back()이 아무 일도
-   * 하지 않으므로 — 기록은 저장됐는데 결과 화면의 [확인]이 먹통이 된다 — 그때는 홈으로
-   * 보낸다 (workout-start의 뒤로가기와 같은 규칙).
+   * 세션 화면에서 나가는 단 하나의 경로 — 목적지는 언제나 홈이다.
+   *
+   * 두 단계인 이유:
+   *  - 보통은 홈/운동 탭에서 들어오므로 back()이 정확히 홈으로 되돌린다.
+   *  - 세션이 앱의 첫 화면이면(알림/딥링크/재실행) 되돌아갈 화면이 없다. 이때는 탭
+   *    그룹을 직접 지정해 교체한다 — 그냥 "/"로 replace하면 스택 밖의 그룹이라
+   *    아무 일도 일어나지 않고 빈 화면에 갇힌다(실제로 그렇게 갇혔다).
    */
-  const leaveSession = useCallback(() => {
+  const exitToHome = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/');
+    else router.replace('/(tabs)');
   }, [router]);
+
+
+  /**
+   * 루트 네비게이터가 마운트됐는지. key가 생기기 전에 부른 router.replace()는 조용히
+   * 무시되고 다시 시도되지 않는다 — 세션 화면을 앱의 첫 화면으로 열었을 때 빈 화면에
+   * 갇히던 원인이다. 준비된 뒤에 나가도록 이 값을 effect의 조건으로 쓴다.
+   */
+  const rootNavigationState = useRootNavigationState();
+  const navigatorReady = Boolean(rootNavigationState?.key);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [summary, setSummary] = useState<SessionSummaryWithLine | null>(null);
   const lastMilestoneRef = useRef(0);
+  /** 연타 방지용(동기 판단). 렌더에서는 읽지 않는다 — 그 용도는 아래 ending state다. */
   const endingRef = useRef(false);
+  /** 종료 처리 중인지. 결과 화면이 뜨기 직전 한 프레임에 홈으로 튕기지 않게 렌더가 본다. */
+  const [ending, setEnding] = useState(false);
   const seenPrKeysRef = useRef<Set<string>>(new Set());
   const restHapticFiredRef = useRef(false);
 
@@ -147,13 +163,6 @@ export default function SessionScreen() {
     return () => clearInterval(interval);
   }, [activeSession]);
 
-  // handleEnd이 activeSession을 지우는 시점과 setSummary가 반영되는 시점 사이에
-  // 이 effect가 끼어들어 홈으로 리다이렉트해버리지 않도록, "종료 처리 중" 여부를 별도로 추적한다.
-  useEffect(() => {
-    if (!activeSession && !summary && !endingRef.current) {
-      leaveSession();
-    }
-  }, [activeSession, summary, leaveSession]);
 
   // 실시간 PR 감지: 세트를 완료할 때마다 activeSession이 바뀌므로, 기존 detectPRs를
   // 세션 종료를 기다리지 않고 그대로 재사용해 "새로 나타난" PR만 축하 연출로 보여준다.
@@ -214,8 +223,23 @@ export default function SessionScreen() {
     );
   }, [activeSession, workoutRecords, ensureSessionPendingSet]);
 
+
+  /**
+   * 세션도 결과도 없으면 이 화면은 빈 화면이다 — 반드시 홈으로 내보낸다.
+   *  - navigatorReady: 준비 전에 부른 replace는 무시되고 재시도되지 않는다.
+   *  - loading: 저장된 세션을 아직 복구하는 중일 수 있다. 나가면 진행 중이던 운동을 놓친다.
+   *  - ending: 종료 처리 중이다. 결과 화면이 뜨기 직전 한 프레임에 홈으로 튕기지 않게.
+   */
+  useEffect(() => {
+    if (!navigatorReady || loading || ending) return;
+    if (activeSession || summary) return;
+    exitToHome();
+  }, [navigatorReady, loading, ending, activeSession, summary, exitToHome]);
+
   if (!activeSession) {
-    return summary ? <ResultScreen summary={summary} onConfirm={leaveSession} /> : null;
+    // 종료 직후에는 결과 화면이 이 자리를 차지한다. 그 밖의 "그릴 것이 없는" 상태는
+    // 아래 effect가 홈으로 내보낸다 (여기서 화면을 그리지 않는다).
+    return summary ? <ResultScreen summary={summary} onConfirm={exitToHome} /> : null;
   }
 
   const elapsedSeconds = computeElapsedSeconds(activeSession, nowMs);
@@ -319,12 +343,14 @@ export default function SessionScreen() {
     if (endingRef.current) return;
     setConfirmEnd(false);
     endingRef.current = true;
+    setEnding(true);
     const trainerLine = pickTrainerLine(StanleyTrainer.dialogueSet.sessionEnd).text;
     const result = await endWorkoutSession();
     if (result) {
       setSummary({ ...result, trainerLine });
     } else {
       endingRef.current = false;
+      setEnding(false);
     }
   };
 
