@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "status": "LOCKED_DERIVATIVE",
+  "lockedSource": "단백이 성장 시스템 기본 이미지",
+  "viewBox": [0, 0, 200, 280],
+  "stage0Master": "danbaek_stage0_layered_master.svg",
+  "fixedIdentity": ["head", "face", "mouth"],
+  "baseIds": ["torso-base", "arm-left", "arm-right", "leg-left", "leg-right"],
+  "approvedRegions": {
+    "chest": [72, 86, 128, 116],
+    "shoulder": [56, 78, 144, 112],
+    "arm": [50, 86, 150, 168],
+    "back": [62, 96, 138, 150],
+    "waist": [76, 128, 124, 174],
+    "abs": [86, 108, 114, 160],
+    "glute": [74, 154, 126, 184],
+    "thigh": [68, 168, 132, 220],
+    "calf": [76, 214, 124, 258]
+  },
+  "parameters": {
+    "chestScale": {"region": "chest", "operation": "local-x-scale+canon-lines"},
+    "shoulderScale": {"region": "shoulder", "operation": "local-x-scale"},
+    "armScale": {"region": "arm", "operation": "paired-local-x-scale"},
+    "backWidth": {"region": "back", "operation": "local-x-scale"},
+    "backThickness": {"region": "back", "operation": "canon-line-emphasis"},
+    "waistScale": {"region": "waist", "operation": "local-x-scale"},
+    "abdomenDefinition": {"region": "abs", "operation": "canon-line-opacity"},
+    "gluteScale": {"region": "glute", "operation": "local-x-scale"},
+    "thighScale": {"region": "thigh", "operation": "paired-local-x-scale"},
+    "calfScale": {"region": "calf", "operation": "paired-local-x-scale"},
+    "overallMass": {"operation": "bounded-body-scale", "maxExtraScale": 0.18},
+    "fatSoftness": {"operation": "detail-line-opacity-inverse"},
+    "definition": {"operation": "detail-line-opacity"}
+  },
+  "stageMapping": {"min": 1, "max": 10, "rule": "round(clamp(value,0,1)*9)+1 unless existing engine stage mapping exists"},
+  "rules": [
+    "Head and face never scale with growth.",
+    "Renderer may transform only inside the approvedRegions rectangles.",
+    "No new muscle silhouette may be invented outside those regions.",
+    "Use existing full-body stage SVGs as visual ceilings/validation references.",
+    "Do not use full-body fallback for a single-part change.",
+    "When local transforms overlap, preserve Stage 0 seam anchors from PART_PATH_SPEC.md."
+  ]
+}
