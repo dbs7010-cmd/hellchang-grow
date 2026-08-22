@@ -87,6 +87,7 @@ export default function SessionScreen() {
     ensureSessionPendingSet,
     startSessionRest,
     skipSessionRest,
+    discardWorkoutSession,
     endWorkoutSession,
   } = useAppData();
 
@@ -143,6 +144,7 @@ export default function SessionScreen() {
   const [showAddExercise, setShowAddExercise] = useState(false);
   const [customRestSeconds, setCustomRestSeconds] = useState('');
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [endError, setEndError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeSession || activeSession.status === 'completed') return;
@@ -259,6 +261,10 @@ export default function SessionScreen() {
   const previousExercise = currentIndex > 0 ? activeSession.exercises[currentIndex - 1] : undefined;
   const pendingSet = currentExercise?.sets.find((set) => !set.completed);
   const completedSets = currentExercise?.sets.filter((set) => set.completed) ?? [];
+  const sessionCompletedSets = activeSession.exercises.reduce(
+    (total, exercise) => total + exercise.sets.filter((set) => set.completed).length,
+    0
+  );
   const setProgress = currentExercise
     ? getSetProgress(activeSession, currentExercise.id)
     : { completed: 0, target: undefined };
@@ -360,13 +366,34 @@ export default function SessionScreen() {
     // 연타/두 손가락 탭으로 종료가 두 번 들어와도 한 번만 처리한다 (기록 중복 저장 방지).
     if (endingRef.current) return;
     setConfirmEnd(false);
+    setEndError(null);
     endingRef.current = true;
     setEnding(true);
     const trainerLine = pickTrainerLine(StanleyTrainer.dialogueSet.sessionEnd).text;
-    const result = await endWorkoutSession();
-    if (result) {
-      setSummary({ ...result, trainerLine });
-    } else {
+    try {
+      const result = await endWorkoutSession();
+      if (result) {
+        setSummary({ ...result, trainerLine });
+        return;
+      }
+      setConfirmEnd(true);
+    } catch {
+      // Growth/저장 실패를 조용히 완료로 확정하지 않는다. 저장된 세션은 그대로라 재시도 가능하다.
+      setEndError('성장 보상을 저장하지 못했어요. 세션은 안전하게 보관 중입니다.');
+      setConfirmEnd(true);
+    } finally {
+      endingRef.current = false;
+      setEnding(false);
+    }
+  };
+
+  const handleDiscard = async () => {
+    if (endingRef.current) return;
+    endingRef.current = true;
+    setEnding(true);
+    try {
+      await discardWorkoutSession();
+    } finally {
       endingRef.current = false;
       setEnding(false);
     }
@@ -422,6 +449,7 @@ export default function SessionScreen() {
                 key={category}
                 label={WorkoutCategoryLabels[category]}
                 selected={activeSession.primaryCategory === category}
+                disabled={isPaused}
                 onPress={() => changeSessionCategory(category)}
               />
             ))}
@@ -447,12 +475,12 @@ export default function SessionScreen() {
             <View style={styles.exerciseNav}>
               <NavArrow
                 label="‹"
-                disabled={!previousExercise}
+                disabled={isPaused || !previousExercise}
                 onPress={() => previousExercise && setCurrentSessionExercise(previousExercise.id)}
               />
               <NavArrow
                 label="›"
-                disabled={!nextExercise}
+                disabled={isPaused || !nextExercise}
                 onPress={() => nextExercise && setCurrentSessionExercise(nextExercise.id)}
               />
             </View>
@@ -481,12 +509,19 @@ export default function SessionScreen() {
             <SetHero
               set={pendingSet}
               usesWeight={usesWeight}
+              disabled={isPaused}
               onChange={(patch) => handleUpdateSet(pendingSet.id, patch)}
               onAdjust={(delta) => handleAdjustSet(pendingSet.id, delta)}
               onComplete={() => handleCompleteSet(pendingSet.id)}
             />
           ) : (
-            <PrimaryButton label="+ 세트 시작" variant="gold" size="large" onPress={handleAddSet} />
+            <PrimaryButton
+              label="+ 세트 시작"
+              variant="gold"
+              size="large"
+              disabled={isPaused}
+              onPress={handleAddSet}
+            />
           )}
 
           {/* 세트가 쌓여도 아래 조작 바를 밀어내지 않도록 이 영역만 스크롤된다. */}
@@ -504,9 +539,10 @@ export default function SessionScreen() {
           {nextExercise && (
             <Pressable
               onPress={() => setCurrentSessionExercise(nextExercise.id)}
+              disabled={isPaused}
               accessibilityRole="button"
               accessibilityLabel={`다음 운동 ${nextExercise.exerciseName}로 이동`}
-              style={styles.nextExerciseRow}>
+              style={[styles.nextExerciseRow, isPaused && styles.disabledControl]}>
               <ThemedText type="caption" themeColor="textSecondary">
                 다음 · {nextExercise.exerciseName}
               </ThemedText>
@@ -523,6 +559,7 @@ export default function SessionScreen() {
                   key={exercise.id}
                   label={exercise.exerciseName}
                   selected={exercise.id === currentExercise?.id}
+                  disabled={isPaused}
                   onPress={() => setCurrentSessionExercise(exercise.id)}
                 />
               ))}
@@ -537,6 +574,7 @@ export default function SessionScreen() {
             value={addExerciseQuery}
             onChangeText={setAddExerciseQuery}
             placeholder="운동 검색 또는 직접 입력"
+            editable={!isPaused}
           />
           <ChipRow>
             {searchExercises(addExerciseQuery)
@@ -545,6 +583,7 @@ export default function SessionScreen() {
                 <Chip
                   key={exercise.id}
                   label={exercise.name}
+                  disabled={isPaused}
                   onPress={() => handleAddExerciseByName(exercise.id, exercise.name)}
                 />
               ))}
@@ -553,6 +592,7 @@ export default function SessionScreen() {
             <PrimaryButton
               label="직접 추가"
               variant="secondary"
+              disabled={isPaused}
               style={styles.flexItem}
               onPress={handleAddCustomExercise}
             />
@@ -574,7 +614,12 @@ export default function SessionScreen() {
           <View style={styles.inlineRow}>
             <ChipRow>
               {AppConfig.restTimerPresetsSeconds.map((seconds) => (
-                <Chip key={seconds} label={`${seconds}초`} onPress={() => handleStartRest(seconds)} />
+                <Chip
+                  key={seconds}
+                  label={`${seconds}초`}
+                  disabled={isPaused}
+                  onPress={() => handleStartRest(seconds)}
+                />
               ))}
             </ChipRow>
             <TextField
@@ -582,6 +627,7 @@ export default function SessionScreen() {
               value={customRestSeconds}
               onChangeText={setCustomRestSeconds}
               placeholder="직접"
+              editable={!isPaused}
               containerStyle={styles.restInput}
               onSubmitEditing={handleStartCustomRest}
             />
@@ -594,7 +640,11 @@ export default function SessionScreen() {
       {confirmEnd ? (
         <View style={styles.confirmBar}>
           <ThemedText type="small" style={styles.confirmText}>
-            운동을 종료할까요?
+            {endError
+              ? endError
+              : sessionCompletedSets === 0
+                ? '완료한 세트가 없어요. 기록 없이 나갈까요?'
+                : '운동을 종료할까요?'}
           </ThemedText>
           <View style={styles.inlineRow}>
             <PrimaryButton
@@ -604,11 +654,11 @@ export default function SessionScreen() {
               onPress={() => setConfirmEnd(false)}
             />
             <PrimaryButton
-              label="종료하고 기록"
+              label={endError ? '다시 시도' : sessionCompletedSets === 0 ? '기록 없이 나가기' : '종료하고 기록'}
               variant="gold"
               haptic="medium"
               style={styles.flexItem}
-              onPress={handleEnd}
+              onPress={sessionCompletedSets === 0 ? handleDiscard : handleEnd}
             />
           </View>
         </View>
@@ -617,6 +667,7 @@ export default function SessionScreen() {
           <PrimaryButton
             label="+ 운동 추가"
             variant="secondary"
+            disabled={isPaused}
             style={styles.flexItem}
             onPress={() => setShowAddExercise(true)}
           />
@@ -1007,11 +1058,13 @@ function PreviousPerformanceLine({
 function SetHero({
   set,
   usesWeight,
+  disabled,
   onChange,
   onAdjust,
   onComplete,
 }: {
   set: WorkoutSetEntry;
+  disabled?: boolean;
   /**
    * 이 운동이 중량을 쓰는가(Exercise DB 기준). 풀업/푸쉬업처럼 맨몸 운동이면 중량 줄을
    * 접어 두고 [+ 중량]으로 열 수 있게 한다 — 중량을 다는 사람도 있으므로 없애지는 않는다.
@@ -1034,7 +1087,7 @@ function SetHero({
   return (
     <View style={styles.hero}>
       {!showWeight && (
-        <Pressable onPress={() => setWeightOpen(true)} hitSlop={8}>
+        <Pressable onPress={() => setWeightOpen(true)} hitSlop={8} disabled={disabled}>
           <ThemedText type="captionBold" themeColor="textSecondary">
             + 중량 추가
           </ThemedText>
@@ -1042,11 +1095,12 @@ function SetHero({
       )}
       {showWeight && (
       <View style={styles.heroRow}>
-        <StepperButton label="−" onPress={() => stepWeight(-AppConfig.setWeightStepKg)} />
+        <StepperButton label="−" disabled={disabled} onPress={() => stepWeight(-AppConfig.setWeightStepKg)} />
         <View style={styles.heroValue}>
           <TextField
             keyboardType="numeric"
             value={String(weight)}
+            editable={!disabled}
             onChangeText={(text) => onChange({ weightKg: text ? Math.max(0, Number(text)) : 0 })}
             style={[styles.heroInput, { color: theme.gold }]}
           />
@@ -1054,15 +1108,16 @@ function SetHero({
             kg
           </ThemedText>
         </View>
-        <StepperButton label="+" onPress={() => stepWeight(AppConfig.setWeightStepKg)} />
+        <StepperButton label="+" disabled={disabled} onPress={() => stepWeight(AppConfig.setWeightStepKg)} />
       </View>
       )}
       <View style={styles.heroRow}>
-        <StepperButton label="−" onPress={() => stepReps(-AppConfig.setRepsStep)} />
+        <StepperButton label="−" disabled={disabled} onPress={() => stepReps(-AppConfig.setRepsStep)} />
         <View style={styles.heroValue}>
           <TextField
             keyboardType="numeric"
             value={String(reps)}
+            editable={!disabled}
             onChangeText={(text) => onChange({ reps: text ? Math.max(0, Number(text)) : 0 })}
             style={styles.heroInput}
           />
@@ -1070,13 +1125,14 @@ function SetHero({
             회
           </ThemedText>
         </View>
-        <StepperButton label="+" onPress={() => stepReps(AppConfig.setRepsStep)} />
+        <StepperButton label="+" disabled={disabled} onPress={() => stepReps(AppConfig.setRepsStep)} />
       </View>
       <PrimaryButton
         label="✓ 세트 완료"
         variant="gold"
         size="large"
         haptic="medium"
+        disabled={disabled}
         style={styles.fullWidth}
         onPress={onComplete}
       />
@@ -1084,9 +1140,9 @@ function SetHero({
   );
 }
 
-function StepperButton({ label, onPress }: { label: string; onPress: () => void }) {
+function StepperButton({ label, disabled, onPress }: { label: string; disabled?: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} hitSlop={8}>
+    <Pressable onPress={onPress} hitSlop={8} disabled={disabled} style={disabled && styles.disabledControl}>
       <ThemedView type="backgroundSelected" style={styles.stepperButton}>
         <ThemedText type="subtitle">{label}</ThemedText>
       </ThemedView>
@@ -1187,7 +1243,13 @@ function RestScreen({
         )}
       </View>
 
-      <PrimaryButton label="다음 세트 시작" variant="gold" size="large" onPress={onSkip} />
+      <PrimaryButton
+        label="다음 세트 시작"
+        variant="gold"
+        size="large"
+        disabled={session.status === 'paused'}
+        onPress={onSkip}
+      />
     </SessionShell>
   );
 }
@@ -1363,6 +1425,9 @@ const styles = StyleSheet.create({
   },
   flexItem: {
     flex: 1,
+  },
+  disabledControl: {
+    opacity: 0.4,
   },
   bottomBar: {
     flexDirection: 'row',

@@ -13,6 +13,11 @@ export async function addWorkoutRecord(
   record: Omit<WorkoutRecord, 'id' | 'createdAt'>
 ): Promise<WorkoutRecord[]> {
   const records = await getWorkoutRecords();
+  // 새 Core Loop 기록은 sessionId가 idempotency key다. 저장 성공 뒤 receipt 갱신 전에
+  // 앱이 끊겨도 같은 세션의 재시도는 기존 배열을 그대로 돌려준다.
+  if (record.sessionId && records.some((existing) => existing.sessionId === record.sessionId)) {
+    return records;
+  }
   const newRecord: WorkoutRecord = {
     ...record,
     id: createId('workout'),

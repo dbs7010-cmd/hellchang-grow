@@ -30,7 +30,11 @@ export const localGrowthEngine: GrowthEngine = {
 
     const state = await getGrowthState();
     // 같은 세션이 두 번 들어와도(재시도/중복 호출) SP가 두 번 쌓이지 않는다.
-    if (state.lastSessionId === result.sessionId) return null;
+    if (state.lastSessionId === result.sessionId) {
+      return state.pendingCompletionResult?.sessionId === result.sessionId
+        ? state.pendingCompletionResult
+        : null;
+    }
 
     const calculation = calculateSessionMuscleSp({
       exercises,
@@ -45,7 +49,10 @@ export const localGrowthEngine: GrowthEngine = {
       nowIso: result.endedAt || new Date().toISOString(),
     });
 
-    await saveGrowthState(applied.state);
+    await saveGrowthState({
+      ...applied.state,
+      pendingCompletionResult: applied.result,
+    });
     return applied.result;
   },
 };

@@ -143,6 +143,11 @@ export interface DanbaekGrowthState {
   };
   /** 마지막으로 반영한 세션. 같은 세션이 두 번 적립되지 않게 한다. */
   lastSessionId?: string;
+  /**
+   * 완료 receipt가 끝날 때까지만 유지하는 복구용 Result. 정상 cleanup에서 제거되며,
+   * Growth 저장 직후 앱이 끊겨도 최초 pump/SP 결과를 receipt로 옮길 수 있게 한다.
+   */
+  pendingCompletionResult?: GrowthApplicationResult;
   updatedAt: string;
   /** 예약 영역 (FatEngine). 근육 SP와 섞지 않는다. */
   body?: BodyCompositionState;

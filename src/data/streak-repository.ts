@@ -16,8 +16,13 @@ export async function getStreakState(): Promise<StreakState> {
 }
 
 export async function registerTodayRecord(): Promise<StreakState> {
+  return registerRecordDate(todayDateString());
+}
+
+/** pending completion이 날짜를 넘겨 재시도돼도 원래 운동 날짜로 idempotent하게 반영한다. */
+export async function registerRecordDate(recordDate: string): Promise<StreakState> {
   const state = await getStreakState();
-  const updated = computeStreakUpdate(state, todayDateString());
+  const updated = computeStreakUpdate(state, recordDate);
 
   if (updated === state) {
     return state;

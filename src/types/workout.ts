@@ -33,6 +33,8 @@ export interface WorkoutExercise {
 
 export interface WorkoutRecord {
   id: string;
+  /** 새 Core Loop 세션 기록의 idempotency key. 과거/수동 기록에는 없을 수 있다. */
+  sessionId?: string;
   /** YYYY-MM-DD, 기록 대상 날짜 */
   date: string;
   category: WorkoutCategory;

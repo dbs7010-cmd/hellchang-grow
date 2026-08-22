@@ -78,6 +78,10 @@ export function migrateGrowthState(
       ? { date: stored.daily.date, spByMuscle: stored.daily.spByMuscle ?? {} }
       : base.daily,
     lastSessionId: stored.lastSessionId,
+    pendingCompletionResult:
+      stored.pendingCompletionResult?.sessionId === stored.lastSessionId
+        ? stored.pendingCompletionResult
+        : undefined,
     updatedAt: stored.updatedAt ?? nowIso,
     body: migrateBodyComposition(stored.body),
   };

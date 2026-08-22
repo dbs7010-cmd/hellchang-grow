@@ -46,6 +46,11 @@ export interface WorkoutSession {
   /** 휴식 타이머 종료 시각(epoch ms). 없으면 휴식 중이 아님 */
   restUntilMs?: number;
   /**
+   * 세션 전체가 paused일 때 동결해 둔 휴식 잔여 초. pause 중에는 restUntilMs를 비우고
+   * 이 값만 보존하며, resume 시 현재 시각 기준의 새 restUntilMs로 복원한다.
+   */
+  restPausedSecondsRemaining?: number;
+  /**
    * 이번 휴식으로 고른 전체 길이(초). 원형 타이머가 "얼마나 남았는지"를 실제 고른 값 기준으로
    * 그리기 위해 필요하다 — 이 값이 없으면 60초를 골라도 링이 2/3만 찬 채로 시작한다.
    */

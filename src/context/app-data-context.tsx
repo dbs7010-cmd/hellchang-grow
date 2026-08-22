@@ -26,7 +26,17 @@ import {
   saveRoutine as saveRoutineRepo,
   updateRoutine as updateRoutineRepo,
 } from '@/data/routine-repository';
-import { claimStreakReward as claimStreakRewardRepo, getStreakState, registerTodayRecord } from '@/data/streak-repository';
+import {
+  claimStreakReward as claimStreakRewardRepo,
+  getStreakState,
+  registerRecordDate,
+  registerTodayRecord,
+} from '@/data/streak-repository';
+import {
+  clearPendingSessionCompletion,
+  getPendingSessionCompletion,
+  savePendingSessionCompletion,
+} from '@/data/session-completion-repository';
 import { getSubscriptionState } from '@/data/subscription-repository';
 import { grantRewardedPtUses, getTrainerUsageState, consumeRewardedPtUse } from '@/data/trainer-usage-repository';
 import {
@@ -64,6 +74,7 @@ import { TrainerUsageState } from '@/types/ads';
 import { UserProfile } from '@/types/user';
 import { WorkoutCategory, WorkoutRecord } from '@/types/workout';
 import { WorkoutSession } from '@/types/workout-session';
+import type { SessionCompletionReceipt } from '@/types/session-completion';
 import { DanbaekGrowthState, GrowthApplicationResult, WorkoutSessionResult } from '@/types/growth';
 import {
   DanbaekBodyParameters,
@@ -82,6 +93,7 @@ import { buildWorkoutSessionResult } from '@/utils/workout-session-result';
 import { createDefaultGrowthState, updateBodyComposition } from '@/utils/growth-state';
 import { buildDanbaekBodyState } from '@/utils/body-state';
 import { applyPumpToBodyParameters, toDanbaekBodyParameters } from '@/utils/body-parameters';
+import { mutateSessionIfActive, runSessionCompletion } from '@/utils/core-loop';
 import {
   addExerciseToSession as addExerciseToSessionPure,
   addSetToExercise as addSetToExercisePure,
@@ -89,6 +101,7 @@ import {
   changeSessionCategory as changeSessionCategoryPure,
   clearRest as clearRestPure,
   completeSession,
+  computeCompletedExerciseCount,
   completeSet as completeSetPure,
   completeSetAndStartRest as completeSetAndStartRestPure,
   computeCompletedSetsCount,
@@ -248,6 +261,8 @@ interface AppDataContextValue extends AppDataState {
   ) => Promise<void>;
   startSessionRest: (seconds: number) => Promise<void>;
   skipSessionRest: () => Promise<void>;
+  /** 완료 세트가 없는 세션을 어떤 기록/보상도 만들지 않고 폐기한다. */
+  discardWorkoutSession: () => Promise<void>;
   endWorkoutSession: () => Promise<EndSessionSummary | null>;
   saveRoutine: (input: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateRoutine: (routineId: string, input: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
@@ -332,6 +347,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       });
     },
     []
+  );
+
+  /** paused 세션의 진행 상태는 UI뿐 아니라 context 경계에서도 절대 변경하지 않는다. */
+  const mutateRunningSession = useCallback(
+    (mutate: (session: WorkoutSession) => WorkoutSession) => {
+      mutateActiveSession((session) => mutateSessionIfActive(session, mutate));
+    },
+    [mutateActiveSession]
   );
 
   useEffect(() => {
@@ -605,80 +628,80 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const changeSessionCategory = useCallback<AppDataContextValue['changeSessionCategory']>(
     async (category) => {
-      mutateActiveSession((session) => changeSessionCategoryPure(session, category));
+      mutateRunningSession((session) => changeSessionCategoryPure(session, category));
     },
-    [mutateActiveSession]
+    [mutateRunningSession]
   );
 
   const addExerciseToSession = useCallback<AppDataContextValue['addExerciseToSession']>(
     async (exercise) => {
       const id = createId('session-ex');
-      mutateActiveSession((session) => addExerciseToSessionPure(session, { id, ...exercise }));
+      mutateRunningSession((session) => addExerciseToSessionPure(session, { id, ...exercise }));
     },
-    [mutateActiveSession]
+    [mutateRunningSession]
   );
 
   const setCurrentSessionExercise = useCallback<AppDataContextValue['setCurrentSessionExercise']>(
     async (exerciseEntryId) => {
-      mutateActiveSession((session) => setCurrentExercisePure(session, exerciseEntryId));
+      mutateRunningSession((session) => setCurrentExercisePure(session, exerciseEntryId));
     },
-    [mutateActiveSession]
+    [mutateRunningSession]
   );
 
   const addSetToExercise = useCallback<AppDataContextValue['addSetToExercise']>(
     async (exerciseEntryId, initial) => {
       const setId = createId('set');
-      mutateActiveSession((session) => addSetToExercisePure(session, exerciseEntryId, setId, initial));
+      mutateRunningSession((session) => addSetToExercisePure(session, exerciseEntryId, setId, initial));
     },
-    [mutateActiveSession]
+    [mutateRunningSession]
   );
 
   const updateSessionSet = useCallback<AppDataContextValue['updateSessionSet']>(
     async (exerciseEntryId, setId, patch) => {
-      mutateActiveSession((session) => updateSetPure(session, exerciseEntryId, setId, patch));
+      mutateRunningSession((session) => updateSetPure(session, exerciseEntryId, setId, patch));
     },
-    [mutateActiveSession]
+    [mutateRunningSession]
   );
 
   const adjustSessionSet = useCallback<AppDataContextValue['adjustSessionSet']>(
     async (exerciseEntryId, setId, delta) => {
-      mutateActiveSession((session) => adjustSetPure(session, exerciseEntryId, setId, delta));
+      mutateRunningSession((session) => adjustSetPure(session, exerciseEntryId, setId, delta));
     },
-    [mutateActiveSession]
+    [mutateRunningSession]
   );
 
   const completeSessionSet = useCallback<AppDataContextValue['completeSessionSet']>(
     async (exerciseEntryId, setId, options) => {
       const restSeconds = options?.restSeconds ?? 0;
-      mutateActiveSession((session) =>
+      mutateRunningSession((session) =>
         restSeconds > 0
           ? completeSetAndStartRestPure(session, exerciseEntryId, setId, restSeconds, Date.now())
           : completeSetPure(session, exerciseEntryId, setId)
       );
     },
-    [mutateActiveSession]
+    [mutateRunningSession]
   );
 
   const ensureSessionPendingSet = useCallback<AppDataContextValue['ensureSessionPendingSet']>(
     async (exerciseEntryId, defaults) => {
       const setId = createId('set');
-      mutateActiveSession((session) => ensurePendingSetPure(session, exerciseEntryId, setId, defaults));
+      mutateRunningSession((session) => ensurePendingSetPure(session, exerciseEntryId, setId, defaults));
     },
-    [mutateActiveSession]
+    [mutateRunningSession]
   );
 
   const startSessionRest = useCallback<AppDataContextValue['startSessionRest']>(
     async (seconds) => {
-      mutateActiveSession((session) => startRestPure(session, seconds, Date.now()));
+      mutateRunningSession((session) => startRestPure(session, seconds, Date.now()));
     },
-    [mutateActiveSession]
+    [mutateRunningSession]
   );
 
   const skipSessionRest = useCallback(async () => {
-    mutateActiveSession((session) => clearRestPure(session));
-  }, [mutateActiveSession]);
+    mutateRunningSession((session) => clearRestPure(session));
+  }, [mutateRunningSession]);
 
-  /** 세션 하나를 기록/보상으로 확정한다. 호출자는 이 함수가 한 번만 실행되도록 보장해야 한다. */
+  /** 세션 하나를 receipt 단계에 따라 기록/보상으로 정확히 한 번 확정한다. */
   const finishSession = useCallback(async (session: WorkoutSession): Promise<EndSessionSummary> => {
     const nowIso = new Date().toISOString();
     const completed = completeSession(session, nowIso, Date.now());
@@ -713,8 +736,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       : WorkoutCategoryLabels[completed.primaryCategory];
     const recordInput = sessionToWorkoutRecordInput(completed, titleLabel);
 
-    const { workoutRecords, streak } = await addWorkoutRecord(recordInput);
-
     let routineCompleted = false;
     if (completed.routineId) {
       const routine = state.routines.find((r) => r.id === completed.routineId);
@@ -732,77 +753,139 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       prs.length * AppConfig.passXpPerPr +
       (routineCompleted ? AppConfig.passXpPerRoutineCompletion : 0);
     const newXp = addXp(state.pass.xp, xpAwarded);
-    await savePassState({ xp: newXp });
 
-    await clearActiveSession();
-    setState((prev) => ({ ...prev, activeSession: null, pass: { xp: newXp } }));
+    const initialReceipt: SessionCompletionReceipt = {
+      version: 1,
+      sessionId: completed.id,
+      completedAt: nowIso,
+      growthApplied: false,
+      workoutRecordSaved: false,
+      rewardsSaved: false,
+      snapshot: {
+        sessionResult,
+        recordInput,
+        durationMinutes: recordInput.durationMinutes ?? 0,
+        category: completed.primaryCategory,
+        exerciseCount: computeCompletedExerciseCount(completed),
+        completedSets: computeCompletedSetsCount(completed),
+        totalVolumeKg: computeTotalVolumeKg(completed),
+        prs,
+        xpAwarded,
+        passXpAfter: newXp,
+        passLevel: computePassLevelProgress(newXp).level,
+        routineCompleted,
+        bodyParametersBefore,
+      },
+    };
 
-    /**
-     * WorkoutSession → WorkoutSessionResult → GrowthEngine 연결 지점.
-     * 엔진이 부위별 SP를 계산해 저장하고, 반영 결과를 돌려준다. PASS XP(위)와는
-     * 완전히 별개의 축이다 — 한 번의 운동으로 둘이 각각 계산된다.
-     * 엔진이 실패해도 이미 저장된 운동 기록/보상은 되돌리지 않는다(성장만 건너뛴다).
-     */
-    const growth = await growthEngine.applySessionResult(sessionResult).catch(() => null);
-    // 저장된 성장 상태를 다시 읽어 화면 쪽 state와 어긋나지 않게 맞춘다.
-    // 세션 직후의 몸 상태를 한 번 계산해 지방/데피니션 캐시를 남긴다. 근육 stage/SP는
-    // 이 경로에서 절대 바뀌지 않는다 (두 축은 독립이다).
-    let growthAfter = state.growth;
-    if (growth) {
-      const growthState = await getGrowthState();
-      const bodyAfter = buildDanbaekBodyState({
-        growth: growthState,
-        bodyHistory: state.bodyHistory,
-        nowIso,
-      });
-      growthAfter = updateBodyComposition(
-        growthState,
-        {
-          fatStage: bodyAfter.fatStage,
-          fatStageSource: bodyAfter.fatStageSource,
-          definitionStage: bodyAfter.definitionStage,
-        },
-        nowIso
-      );
-      await saveGrowthState(growthAfter);
-      setState((prev) => ({ ...prev, growth: growthAfter }));
+    const completion = await runSessionCompletion(initialReceipt, {
+      loadReceipt: getPendingSessionCompletion,
+      saveReceipt: savePendingSessionCompletion,
+      clearReceipt: clearPendingSessionCompletion,
+      applyGrowth: async (snapshot) => {
+        const growth = await growthEngine.applySessionResult(snapshot.sessionResult);
+        const growthState = await getGrowthState();
+        const bodyAfter = buildDanbaekBodyState({
+          growth: growthState,
+          bodyHistory: state.bodyHistory,
+          nowIso: snapshot.sessionResult.endedAt,
+        });
+        const growthAfter = updateBodyComposition(
+          growthState,
+          {
+            fatStage: bodyAfter.fatStage,
+            fatStageSource: bodyAfter.fatStageSource,
+            definitionStage: bodyAfter.definitionStage,
+          },
+          snapshot.sessionResult.endedAt
+        );
+        await saveGrowthState(growthAfter);
+        setState((prev) => ({ ...prev, growth: growthAfter }));
+
+        const bodyParametersAfter = toDanbaekBodyParameters(
+          buildDanbaekBodyState({
+            growth: growthAfter,
+            bodyHistory: state.bodyHistory,
+            nowIso: snapshot.sessionResult.endedAt,
+          })
+        );
+        return {
+          growth,
+          bodyParametersAfter,
+          bodyParametersWithPump: applyPumpToBodyParameters(
+            bodyParametersAfter,
+            growth?.pumpByMuscle ?? {}
+          ),
+        };
+      },
+      saveWorkoutRecord: async (snapshot) => {
+        const workoutRecords = await addWorkoutRecordRepo(snapshot.recordInput);
+        setState((prev) => ({ ...prev, workoutRecords }));
+      },
+      saveRewards: async (snapshot) => {
+        // 목표 XP 절대값 저장이라 성공 뒤 receipt 갱신 전에 실패해도 재시도가 중복 가산하지 않는다.
+        await savePassState({ xp: snapshot.passXpAfter });
+        const streak = await registerRecordDate(snapshot.recordInput.date);
+        const workoutRecords = await getWorkoutRecords();
+        setState((prev) => ({
+          ...prev,
+          workoutRecords,
+          streak,
+          pass: { xp: snapshot.passXpAfter },
+        }));
+        return {
+          weeklyCount: getThisWeekRecords(workoutRecords, snapshot.recordInput.date).length,
+          streak: streak.currentStreakDays,
+        };
+      },
+      cleanupSession: async (snapshot) => {
+        const persistedGrowth = await getGrowthState();
+        if (
+          persistedGrowth.pendingCompletionResult?.sessionId ===
+          snapshot.sessionResult.sessionId
+        ) {
+          const cleanedGrowth = {
+            ...persistedGrowth,
+            pendingCompletionResult: undefined,
+          };
+          await saveGrowthState(cleanedGrowth);
+          setState((prev) => ({ ...prev, growth: cleanedGrowth }));
+        }
+        await clearActiveSession();
+      },
+    });
+
+    activeSessionRef.current = null;
+    setState((prev) => ({ ...prev, activeSession: null }));
+    const snapshot = completion.snapshot;
+    if (
+      snapshot.weeklyCount === undefined ||
+      snapshot.streak === undefined ||
+      !snapshot.bodyParametersAfter ||
+      !snapshot.bodyParametersWithPump
+    ) {
+      throw new Error('Session completion receipt is missing its final result snapshot.');
     }
 
-    /**
-     * 결과 화면이 쓸 "방금 운동한 몸". 영구 파라미터 위에 이번 세션의 펌핑만 얹은
-     * 일시값이며 저장하지 않는다 — 앱을 다시 켜면 펌핑 없는 상태로 돌아간다.
-     */
-    const bodyParametersAfter = toDanbaekBodyParameters(
-      buildDanbaekBodyState({
-        growth: growthAfter,
-        bodyHistory: state.bodyHistory,
-        nowIso,
-      })
-    );
-    const bodyParametersWithPump = applyPumpToBodyParameters(
-      bodyParametersAfter,
-      growth?.pumpByMuscle ?? {}
-    );
-
     return {
-      durationMinutes: recordInput.durationMinutes ?? 0,
-      category: completed.primaryCategory,
-      weeklyCount: getThisWeekRecords(workoutRecords).length,
-      streak: streak.currentStreakDays,
-      exerciseCount: completed.exercises.length,
-      completedSets: computeCompletedSetsCount(completed),
-      totalVolumeKg: computeTotalVolumeKg(completed),
-      prs,
-      xpAwarded,
-      passLevel: computePassLevelProgress(newXp).level,
-      routineCompleted,
-      sessionResult,
-      growth,
-      bodyParametersBefore,
-      bodyParametersAfter,
-      bodyParametersWithPump,
+      durationMinutes: snapshot.durationMinutes,
+      category: snapshot.category,
+      weeklyCount: snapshot.weeklyCount,
+      streak: snapshot.streak,
+      exerciseCount: snapshot.exerciseCount,
+      completedSets: snapshot.completedSets,
+      totalVolumeKg: snapshot.totalVolumeKg,
+      prs: snapshot.prs,
+      xpAwarded: snapshot.xpAwarded,
+      passLevel: snapshot.passLevel,
+      routineCompleted: snapshot.routineCompleted,
+      sessionResult: snapshot.sessionResult,
+      growth: snapshot.growth ?? null,
+      bodyParametersBefore: snapshot.bodyParametersBefore,
+      bodyParametersAfter: snapshot.bodyParametersAfter,
+      bodyParametersWithPump: snapshot.bodyParametersWithPump,
     };
-  }, [state.workoutRecords, state.routines, state.pass, state.bodyHistory, state.profile, state.growth, addWorkoutRecord]);
+  }, [state.workoutRecords, state.routines, state.pass, state.bodyHistory, state.profile, state.growth]);
 
   const endWorkoutSession = useCallback<AppDataContextValue['endWorkoutSession']>(async () => {
     // [종료하고 기록]이 연타되거나 두 손가락으로 눌려도 기록은 정확히 한 번만 저장된다.
@@ -810,8 +893,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     if (endingSessionRef.current) return null;
     const session = activeSessionRef.current;
     if (!session) return null;
+    // UI를 우회해 직접 호출해도 빈 세션은 기록/연속/XP/Growth 완료 경로에 들어갈 수 없다.
+    if (computeCompletedSetsCount(session) === 0) return null;
     endingSessionRef.current = true;
-    activeSessionRef.current = null;
 
     try {
       return await finishSession(session);
@@ -819,6 +903,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       endingSessionRef.current = false;
     }
   }, [finishSession]);
+
+  const discardWorkoutSession = useCallback<AppDataContextValue['discardWorkoutSession']>(async () => {
+    const session = activeSessionRef.current;
+    if (!session || computeCompletedSetsCount(session) > 0) return;
+    await clearActiveSession();
+    activeSessionRef.current = null;
+    setState((prev) => ({ ...prev, activeSession: null }));
+  }, []);
 
   const saveRoutine = useCallback<AppDataContextValue['saveRoutine']>(async (input) => {
     const routines = await saveRoutineRepo(input);
@@ -1018,6 +1110,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     ensureSessionPendingSet,
     startSessionRest,
     skipSessionRest,
+    discardWorkoutSession,
     endWorkoutSession,
     saveRoutine,
     updateRoutine,

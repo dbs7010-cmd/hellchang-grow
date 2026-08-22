@@ -72,21 +72,30 @@ export function computeElapsedSeconds(session: WorkoutSession, nowMs: number): n
 
 export function pauseSession(session: WorkoutSession, nowMs: number): WorkoutSession {
   if (session.status !== 'active') return session;
+  const restSecondsRemaining = getRestSecondsRemaining(session, nowMs);
   return {
     ...session,
     status: 'paused',
     accumulatedSeconds: computeElapsedSeconds(session, nowMs),
     activeSince: undefined,
+    restUntilMs: restSecondsRemaining > 0 ? undefined : session.restUntilMs,
+    restPausedSecondsRemaining: restSecondsRemaining > 0 ? restSecondsRemaining : undefined,
   };
 }
 
 export function resumeSession(session: WorkoutSession, nowIso: string): WorkoutSession {
   if (session.status !== 'paused') return session;
+  const nowMs = new Date(nowIso).getTime();
   return {
     ...session,
     status: 'active',
     activeSince: nowIso,
-    lastHeartbeatMs: new Date(nowIso).getTime(),
+    lastHeartbeatMs: nowMs,
+    restUntilMs:
+      session.restPausedSecondsRemaining !== undefined
+        ? nowMs + session.restPausedSecondsRemaining * 1000
+        : session.restUntilMs,
+    restPausedSecondsRemaining: undefined,
     pausedByAppBackground: undefined,
     pausedAtMs: undefined,
   };
@@ -362,12 +371,26 @@ export function getAutoRestSeconds(
 // ── 휴식 타이머 ────────────────────────────────────────────────────────────
 
 export function startRest(session: WorkoutSession, seconds: number, nowMs: number): WorkoutSession {
-  return { ...session, restUntilMs: nowMs + seconds * 1000, restTotalSeconds: seconds };
+  return {
+    ...session,
+    restUntilMs: nowMs + seconds * 1000,
+    restPausedSecondsRemaining: undefined,
+    restTotalSeconds: seconds,
+  };
 }
 
 export function clearRest(session: WorkoutSession): WorkoutSession {
-  if (session.restUntilMs === undefined && session.restTotalSeconds === undefined) return session;
-  return { ...session, restUntilMs: undefined, restTotalSeconds: undefined };
+  if (
+    session.restUntilMs === undefined &&
+    session.restPausedSecondsRemaining === undefined &&
+    session.restTotalSeconds === undefined
+  ) return session;
+  return {
+    ...session,
+    restUntilMs: undefined,
+    restPausedSecondsRemaining: undefined,
+    restTotalSeconds: undefined,
+  };
 }
 
 /**
@@ -381,6 +404,9 @@ export function getRestProgress(session: WorkoutSession, secondsRemaining: numbe
 }
 
 export function getRestSecondsRemaining(session: WorkoutSession, nowMs: number): number {
+  if (session.restPausedSecondsRemaining !== undefined) {
+    return Math.max(0, session.restPausedSecondsRemaining);
+  }
   if (session.restUntilMs === undefined) return 0;
   return Math.max(0, Math.ceil((session.restUntilMs - nowMs) / 1000));
 }
@@ -392,6 +418,11 @@ export function computeCompletedSetsCount(session: WorkoutSession): number {
     (sum, exercise) => sum + exercise.sets.filter((set) => set.completed).length,
     0
   );
+}
+
+/** Result의 "운동 N개"는 계획에 담긴 수가 아니라 실제 완료 세트가 있는 운동 수다. */
+export function computeCompletedExerciseCount(session: WorkoutSession): number {
+  return session.exercises.filter((exercise) => exercise.sets.some((set) => set.completed)).length;
 }
 
 /** 총 볼륨 = weight × reps 기반으로 계산 가능한(완료된, 중량/횟수 모두 있는) 세트만 포함한다. */
@@ -427,6 +458,7 @@ export function sessionToWorkoutRecordInput(
   });
 
   return {
+    sessionId: session.id,
     date: toDateString(new Date(session.startedAt)),
     category: session.primaryCategory,
     // 루틴으로 시작했으면 사용자가 붙인 이름을 그대로 쓴다 ("가슴 A"). 아니면 부위/종류 라벨
