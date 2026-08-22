@@ -41,7 +41,11 @@ import {
 import { shouldConfirmSessionExit } from '@/utils/session-exit';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import { formatVolumeKg } from '@/utils/workout-stats';
-import { deriveWorkoutCharacterState } from '@/utils/workout-character-motion';
+import {
+  deriveWorkoutCharacterState,
+  getExerciseReactionCopy,
+  willCountAsEffectiveSet,
+} from '@/utils/workout-character-motion';
 import {
   computeCompletedSetsCount,
   computeElapsedSeconds,
@@ -156,6 +160,12 @@ export default function SessionScreen() {
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
   /** 뒤로가기를 가로챈 상태인지. 확인 바를 띄우는 동안 화면은 그대로 남는다. */
+  /**
+   * 방금 유효 세트를 끝냈다는 짧은 표시. **표현 전용 일시 상태다** — 성장/보상과 무관하고
+   * 저장되지 않으며, 화면을 벗어나면 컴포넌트와 함께 사라진다.
+   */
+  const [setReaction, setSetReaction] = useState<string | null>(null);
+  const setReactionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [confirmExit, setConfirmExit] = useState(false);
   /** 사용자가 [세션 유지하고 나가기]를 눌렀다는 표시. 이때만 뒤로가기를 통과시킨다. */
   const exitConfirmedRef = useRef(false);
@@ -259,6 +269,14 @@ export default function SessionScreen() {
     return () => clearTimeout(timer);
   }, [activeSession?.restUntilMs]);
 
+  /** 화면을 벗어나면 일시 반응 타이머는 남기지 않는다 (세션 데이터와 무관한 표현값이다). */
+  useEffect(
+    () => () => {
+      if (setReactionTimerRef.current) clearTimeout(setReactionTimerRef.current);
+    },
+    []
+  );
+
   // 휴식이 0에 도달하는 순간 딱 한 번 haptic을 울린다.
   useEffect(() => {
     if (!activeSession?.restUntilMs) return;
@@ -311,6 +329,15 @@ export default function SessionScreen() {
   const isPaused = activeSession.status === 'paused';
   const restSecondsRemaining = getRestSecondsRemaining(activeSession, nowMs);
   const isResting = restSecondsRemaining > 0;
+  /**
+   * 휴식이 방금 끝났는가. 세션에 이미 있는 restUntilMs에서 그대로 읽는다 — 추가 상태나
+   * 타이머 없이 파생되므로 화면을 벗어났다 돌아와도 남거나 어긋나지 않는다.
+   * (사용자가 [다음 세트 시작]으로 건너뛰면 restUntilMs가 지워져 READY도 뜨지 않는다.)
+   */
+  const restJustEnded =
+    !isResting &&
+    activeSession.restUntilMs !== undefined &&
+    nowMs - activeSession.restUntilMs < REST_READY_WINDOW_MS;
 
   const currentExercise = getCurrentExercise(activeSession);
   const currentIndex = currentExercise
@@ -341,12 +368,16 @@ export default function SessionScreen() {
           equipment: 'other',
         })
     : undefined);
+  // 종료 처리/결과 화면으로 넘어가는 중에는 일시 반응을 남기지 않는다.
+  const activeSetReaction = ending || summary ? null : setReaction;
   const characterState = deriveWorkoutCharacterState({
     ending,
     paused: isPaused,
     resting: isResting,
     hasExercise: Boolean(currentExercise),
     hasPendingSet: Boolean(pendingSet),
+    setJustCompleted: Boolean(activeSetReaction),
+    restJustEnded,
   });
   // DB에 없는 [직접 추가] 운동은 판단할 근거가 없으므로 중량 입력을 그대로 열어 둔다.
   const usesWeight = resolvedCurrent ? resolvedCurrent.usesWeight : true;
@@ -373,6 +404,17 @@ export default function SessionScreen() {
    */
   const handleCompleteSet = async (setId: string) => {
     if (!currentExercise) return;
+    // 무효 세트는 기록도 보상도 만들지 않으므로 캐릭터도 반응하지 않는다(같은 기준 재사용).
+    // 연타로 두 번 들어와도 이전 타이머를 지우고 하나만 돈다.
+    const completedSet = currentExercise.sets.find((set) => set.id === setId);
+    if (willCountAsEffectiveSet(completedSet)) {
+      if (setReactionTimerRef.current) clearTimeout(setReactionTimerRef.current);
+      setSetReaction(getExerciseReactionCopy(resolvedCurrent?.primaryMuscles[0] ?? activeSession.primaryMuscleGroup));
+      setReactionTimerRef.current = setTimeout(() => {
+        setSetReaction(null);
+        setReactionTimerRef.current = null;
+      }, SET_REACTION_MS);
+    }
     await completeSessionSet(currentExercise.id, setId, {
       restSeconds: getAutoRestSeconds(activeSession, currentExercise.id, AppConfig.defaultRestSeconds),
     });
@@ -479,6 +521,7 @@ export default function SessionScreen() {
         family={motionFamily}
         bodyParameters={bodyParameters}
         characterState={characterState}
+        reactionCopy={activeSetReaction}
         reaction={reaction}
         onPauseToggle={handlePauseToggle}
         onSkip={skipSessionRest}
@@ -554,6 +597,7 @@ export default function SessionScreen() {
             family={motionFamily}
             state={characterState}
             bodyParameters={bodyParameters}
+            reactionCopy={activeSetReaction}
             height={SESSION_CHARACTER_HEIGHT}
           />
 
@@ -832,6 +876,12 @@ function SessionShell({
  * 세션 화면의 단백이 높이. 세로 공간이 늘 부족한 화면이라(412x915 기준) 캐릭터가
  * 세트 조작을 밀어내지 않도록 고정한다 — 주인공은 [세트 완료]다.
  */
+/** 세트 완료 반응이 화면에 머무는 시간(ms). 짧게 스치고 곧 휴식/입력 상태로 돌아간다. */
+const SET_REACTION_MS = 900;
+
+/** 휴식이 끝난 뒤 READY 표현을 유지하는 창(ms). 세션 타이머가 1초 간격이라 여유를 둔다. */
+const REST_READY_WINDOW_MS = 2000;
+
 const SESSION_CHARACTER_HEIGHT = 104;
 const REST_CHARACTER_HEIGHT = 70;
 
@@ -1279,6 +1329,7 @@ function RestScreen({
   family,
   bodyParameters,
   characterState,
+  reactionCopy,
   reaction,
   onPauseToggle,
   onSkip,
@@ -1292,6 +1343,8 @@ function RestScreen({
   family?: Parameters<typeof CharacterMotionStage>[0]['family'];
   bodyParameters: Parameters<typeof CharacterMotionStage>[0]['bodyParameters'];
   characterState: Parameters<typeof CharacterMotionStage>[0]['state'];
+  /** 세트 완료 직후의 한 줄. 휴식이 자동으로 시작되므로 그 반응은 이 화면에서 보인다. */
+  reactionCopy?: string | null;
   reaction: React.ReactNode;
   onPauseToggle: () => void;
   onSkip: () => void;
@@ -1328,6 +1381,7 @@ function RestScreen({
             family={family}
             state={characterState}
             bodyParameters={bodyParameters}
+            reactionCopy={reactionCopy}
             height={REST_CHARACTER_HEIGHT}
           />
           <ThemedText type="caption" themeColor="textSecondary">

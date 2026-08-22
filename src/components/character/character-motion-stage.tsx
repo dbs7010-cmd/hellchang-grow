@@ -12,6 +12,9 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { PlayerCharacter } from '@/components/character/player-character';
+import { ThemedText } from '@/components/themed-text';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import type { DanbaekBodyParameters } from '@/types/body-state';
 import type { MotionFamily } from '@/types/exercise';
 import { CharacterAppearance } from '@/utils/character-appearance';
@@ -25,6 +28,11 @@ export interface CharacterMotionStageProps {
   state: WorkoutCharacterState;
   /** 성장 상태. 홈과 같은 바디를 그대로 쓴다 — 모션만 이 컴포넌트가 얹는다. */
   bodyParameters?: DanbaekBodyParameters | null;
+  /**
+   * 방금 자극한 부위에 대한 단백이의 한 줄. 이 자리 안에 겹쳐 그리므로 레이아웃 높이를
+   * 늘리지 않고, 세트 입력/휴식 UI를 밀어내지도 않는다. 표현 전용 값이다.
+   */
+  reactionCopy?: string | null;
   height: number;
   style?: ViewStyle;
 }
@@ -46,9 +54,11 @@ export function CharacterMotionStage({
   family,
   state,
   bodyParameters,
+  reactionCopy,
   height,
   style,
 }: CharacterMotionStageProps) {
+  const theme = useTheme();
   const progress = useSharedValue(0);
   const reducedMotion = useReducedMotion();
   const profile = getCharacterMotionProfile(state, family, reducedMotion);
@@ -99,6 +109,13 @@ export function CharacterMotionStage({
           idle={reducedMotion || state === 'idle' || state === 'ready' || state === 'resting'}
         />
       </Animated.View>
+      {reactionCopy && (
+        <View style={[styles.reaction, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+          <ThemedText type="caption" numberOfLines={1}>
+            {reactionCopy}
+          </ThemedText>
+        </View>
+      )}
     </View>
   );
 }
@@ -109,5 +126,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'hidden',
+  },
+  /** 캐릭터 자리 위에 겹쳐 뜨는 한 줄 — 흐름에 없으므로 아래 UI를 밀지 않는다. */
+  reaction: {
+    position: 'absolute',
+    top: 0,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 2,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    maxWidth: '92%',
   },
 });

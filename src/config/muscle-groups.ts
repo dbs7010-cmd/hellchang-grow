@@ -50,3 +50,23 @@ export const MuscleGroupDetailLabels: Record<MuscleGroupDetail, string> = {
   hamstrings: '햄스트링',
   calves: '종아리',
 };
+
+/**
+ * 세트를 끝냈을 때 단백이가 보내는 한 줄 반응.
+ *
+ * 스탠리 PT 대사(`config/trainers.ts`)와 **다른 계통**이다 — 이건 트레이너의 코칭이 아니라
+ * 방금 자극받은 단백이 본인의 반응이라, 부위별로 한 줄씩만 둔다. 대사 풀을 키우지 않는다.
+ * 부위를 알 수 없는 운동(직접 추가 등)은 아래 기본 문구 하나로 떨어진다.
+ */
+export const MuscleGroupSetReactionLines: Record<MuscleGroup, string> = {
+  chest: '가슴에 제대로 들어갔어요.',
+  back: '등이 슬슬 깨어납니다.',
+  legs: '하체가 버티기 시작합니다.',
+  shoulders: '어깨가 단단해지는 중이에요.',
+  arms: '팔에 불이 붙었어요.',
+  core: '코어가 조여집니다.',
+  fullBody: '온몸이 뜨거워졌어요.',
+};
+
+/** 부위를 특정할 수 없을 때 쓰는 단 하나의 범용 반응. */
+export const DefaultSetReactionLine = '좋아요, 한 세트 더 쌓았습니다.';

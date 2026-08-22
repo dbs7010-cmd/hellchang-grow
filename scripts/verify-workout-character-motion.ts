@@ -1,5 +1,12 @@
 import { MotionFamilies } from '@/config/motion-families';
-import { deriveWorkoutCharacterState, getCharacterMotionProfile } from '@/utils/workout-character-motion';
+import { DefaultSetReactionLine, MuscleGroupSetReactionLines } from '@/config/muscle-groups';
+import type { WorkoutSetEntry } from '@/types/workout';
+import {
+  deriveWorkoutCharacterState,
+  getCharacterMotionProfile,
+  getExerciseReactionCopy,
+  willCountAsEffectiveSet,
+} from '@/utils/workout-character-motion';
 
 let failures = 0;
 function expect(name: string, condition: boolean) {
@@ -33,6 +40,43 @@ expect('H: ending wins over pause/rest and uses one short reaction', state({ end
 const reduced = getCharacterMotionProfile('working', 'squat', true);
 expect('I: reduced motion removes outer translation/rotation/scale loop', reduced.durationMs === 0 && reduced.translateY === 0 && reduced.rotateDeg === 0 && reduced.scaleYDelta === 0);
 expect('fatigued remains available but is not inferred without data', state() !== 'fatigued' && getCharacterMotionProfile('fatigued', 'squat').durationMs > squat.durationMs);
+
+
+// ── 세션 중 단백이 반응 (표현 전용 transient state) ─────────────────────────
+const set = (over: Partial<WorkoutSetEntry>): WorkoutSetEntry => ({ id: 's', completed: true, ...over });
+
+expect('1: an invalid set (no reps) triggers no reaction', !willCountAsEffectiveSet(set({})));
+expect('1: a 0-rep set triggers no reaction', !willCountAsEffectiveSet(set({ weightKg: 100, reps: 0 })));
+// 완료 직전 세트(completed: false)를 받는 것이 실제 호출 계약이다.
+expect('1: a pending set with no reps triggers no reaction', !willCountAsEffectiveSet(set({ completed: false })));
+expect('1: a pending 0-rep set triggers no reaction', !willCountAsEffectiveSet(set({ weightKg: 100, reps: 0, completed: false })));
+expect('2: a pending set with real reps does trigger the reaction', willCountAsEffectiveSet(set({ reps: 10, completed: false })));
+expect('3: a pending 0kg x 10 set triggers the reaction', willCountAsEffectiveSet(set({ weightKg: 0, reps: 10, completed: false })));
+expect('2: a reps-only set triggers the reaction', willCountAsEffectiveSet(set({ reps: 12 })));
+expect('3: a 0kg x 10 set triggers the reaction', willCountAsEffectiveSet(set({ weightKg: 0, reps: 10 })));
+expect('4: a weighted set triggers the reaction', willCountAsEffectiveSet(set({ weightKg: 60, reps: 8 })));
+
+expect('2/3/4: the reaction state wins over the auto-started rest for its short window',
+  state({ setJustCompleted: true, resting: true }) === 'set_complete');
+expect('5: once the reaction window ends the session falls back to REST',
+  state({ setJustCompleted: false, resting: true }) === 'resting');
+expect('6: when rest ends the character shows READY before the next input',
+  state({ resting: false, restJustEnded: true }) === 'ready');
+expect('6: READY gives way to the normal input state once the window passes',
+  state({ resting: false, restJustEnded: false }) === 'working');
+expect('7: ending the workout clears any transient reaction',
+  state({ ending: true, setJustCompleted: true, restJustEnded: true }) === 'complete');
+expect('7: pause also wins over the transient reaction',
+  state({ paused: true, setJustCompleted: true }) === 'paused');
+
+const reaction = getCharacterMotionProfile('set_complete');
+expect('the set reaction is one short non-repeating bounce', !reaction.repeats && reaction.durationMs > 0 && reaction.durationMs <= 1000);
+expect('the set reaction is muted with reduced motion', getCharacterMotionProfile('set_complete', undefined, true).durationMs === 0);
+
+expect('copy: a known muscle group gets its own line', getExerciseReactionCopy('chest') === MuscleGroupSetReactionLines.chest);
+expect('copy: legs and back do not share a line', getExerciseReactionCopy('legs') !== getExerciseReactionCopy('back'));
+expect('copy: an unmapped exercise falls back to one generic line', getExerciseReactionCopy(undefined) === DefaultSetReactionLine);
+expect('copy: every muscle group has exactly one line', Object.values(MuscleGroupSetReactionLines).every((line) => line.length > 0));
 
 console.log(failures === 0 ? '\nAll WORKOUT CHARACTER MOTION checks passed.' : `\n${failures} WORKOUT CHARACTER MOTION check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);
