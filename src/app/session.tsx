@@ -33,9 +33,12 @@ import { detectPRs, findPreviousPerformance, PrEvent } from '@/utils/exercise-hi
 import { createId } from '@/utils/id';
 import {
   buildGrowthRevealMuscles,
+  buildGrowthHighlight,
   buildGrowthRevealSequence,
   hasPermanentBodyChange,
+  resolveGrowthComparisonCamera,
   revealBodyParameters,
+  type GrowthComparisonCamera,
   type GrowthRevealPhase,
 } from '@/utils/growth-reveal';
 import { shouldConfirmSessionExit } from '@/utils/session-exit';
@@ -973,14 +976,29 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
     transform: [{ scale: revealScale.get() }],
   }));
   const displayedBody = revealBodyParameters(revealPhase, summary);
+  /**
+   * 실제로 단계가 오른 부위만 이름을 부른다. 저장된 stage 변화가 없으면 null이라
+   * 성장 문구 자체가 뜨지 않는다 — SP만 오른 날을 성장했다고 말하지 않기 위해서다.
+   */
+  const growthHighlight = buildGrowthHighlight(summary.growth?.stageChanges ?? []);
+  /**
+   * 실제로 단계가 오른 부위 쪽으로 **카메라만** 당긴다. 한 세션의 영구 변화는 전신
+   * 축소 비교에서는 1px도 되지 않아 사실상 보이지 않기 때문이다.
+   *
+   * BEFORE와 AFTER가 이 **같은 객체 하나**를 받는다 — 배율/크롭/기준점이 어긋날 수
+   * 없으므로 두 그림의 차이는 오직 bodyParametersBefore ↔ After뿐이다.
+   * 단계 변화가 없으면 null이라 확대 비교 자체가 생기지 않는다.
+   */
+  const growthCamera = useMemo(
+    () => resolveGrowthComparisonCamera(summary.growth?.stageChanges ?? []),
+    [summary.growth]
+  );
   const revealTitle =
     revealPhase === 'pump'
       ? '운동 직후 펌핑'
       : revealPhase === 'before'
         ? '운동 전 단백이'
-        : stageChanges.length > 0
-          ? '오늘의 성장 반영 완료!'
-          : '지금 단백이 실제 몸';
+        : (growthHighlight ?? '지금 단백이 실제 몸');
 
   /** 펌핑과 영구 성장의 관계를 한 줄로 짚어 준다 (보조 계층 문구). */
   const revealCaption =
@@ -1000,10 +1018,9 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
         showsVerticalScrollIndicator={false}>
         <View style={styles.resultHero}>
           {/*
-            홈과 같은 캐릭터 렌더러. 다만 여기서만 **펌핑이 얹힌** 일시 파라미터를 쓴다 —
-            저장되지 않으므로 홈으로 돌아가면 영구 상태로 돌아간다.
-            TODO(growth-celebration): summary.growth.stageChanges가 있으면 이 자리에서
-            "이전 → 지금" 바디를 비교해 보여줄 수 있다. 이번 단계에서는 연결점만 둔다.
+            홈과 같은 캐릭터 렌더러. 단계에 따라 세션 완료 스냅샷의 몸(운동 전 / 펌핑 /
+            지금)을 골라 넘길 뿐, 여기서 새 파라미터를 계산하거나 저장값을 바꾸지 않는다.
+            펌핑은 저장되지 않으므로 홈으로 돌아가면 영구 상태만 남는다.
           */}
           <Animated.View style={[styles.resultCharacter, revealStyle]}>
             <PlayerCharacter
@@ -1080,16 +1097,20 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
                 label="BEFORE"
                 appearance={characterAppearance}
                 bodyParameters={summary.bodyParametersBefore}
+                camera={growthCamera}
               />
               <ThemedText type="subtitle" style={{ color: theme.gold }}>→</ThemedText>
               <BodyComparison
                 label="AFTER"
                 appearance={characterAppearance}
                 bodyParameters={summary.bodyParametersAfter}
+                camera={growthCamera}
               />
             </View>
             <ThemedText type="caption" themeColor="textSecondary" style={styles.centered}>
-              펌핑이 아닌 오늘의 영구 성장만 비교했어요.
+              {growthCamera
+                ? `${growthCamera.label}를 같은 배율로 확대해 비교했어요. 펌핑이 아닌 오늘의 영구 성장입니다.`
+                : '펌핑이 아닌 오늘의 영구 성장만 비교했어요.'}
             </ThemedText>
           </Section>
         )}
@@ -1148,20 +1169,61 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
   );
 }
 
-function BodyComparison({ label, appearance, bodyParameters }: {
+/**
+ * 성장 비교 한 칸.
+ *
+ * `camera`가 있으면 같은 캐릭터를 **클리핑되는 창 안에서 확대해서** 보여준다. 확대는
+ * 화면 표시일 뿐이라 bodyParameters는 원본 그대로 넘어가고, 렌더러도 평소와 같은 계약
+ * (`PlayerCharacter` + CANON viewBox 높이)으로 그린다. camera가 null이면 예전처럼
+ * 전신을 축소해서 보여준다.
+ */
+function BodyComparison({ label, appearance, bodyParameters, camera }: {
   label: string;
   appearance: ReturnType<typeof useAppData>['characterAppearance'];
   bodyParameters: EndSessionSummary['bodyParametersAfter'];
+  camera: GrowthComparisonCamera | null;
 }) {
+  const theme = useTheme();
+
+  if (!camera) {
+    return (
+      <View style={styles.bodyComparisonItem}>
+        <ThemedText type="captionBold" themeColor="textSecondary">{label}</ThemedText>
+        <PlayerCharacter
+          appearance={appearance}
+          slot="result"
+          height={RESULT_COMPARISON_HEIGHT}
+          bodyParameters={bodyParameters}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.bodyComparisonItem}>
       <ThemedText type="captionBold" themeColor="textSecondary">{label}</ThemedText>
-      <PlayerCharacter
-        appearance={appearance}
-        slot="result"
-        height={RESULT_COMPARISON_HEIGHT}
-        bodyParameters={bodyParameters}
-      />
+      <View
+        style={[
+          styles.bodyComparisonViewport,
+          { height: camera.viewportHeight, borderColor: theme.border, backgroundColor: theme.backgroundElement },
+        ]}>
+        {/*
+          카메라 레이어. 확대/이동은 여기서만 일어나고 캐릭터 안으로는 들어가지 않는다.
+          BEFORE/AFTER가 같은 camera 객체를 쓰므로 두 창의 배율·이동·기준점이 동일하다.
+        */}
+        <View
+          style={[
+            styles.bodyComparisonCamera,
+            { transform: [{ translateY: camera.translateY }, { scale: camera.zoom }] },
+          ]}>
+          <PlayerCharacter
+            appearance={appearance}
+            slot="result"
+            height={camera.characterHeight}
+            bodyParameters={bodyParameters}
+          />
+        </View>
+      </View>
     </View>
   );
 }
@@ -1668,6 +1730,24 @@ const styles = StyleSheet.create({
     minWidth: 0,
     alignItems: 'center',
     gap: Spacing.one,
+  },
+  /** 확대된 캐릭터를 잘라내는 창. 높이는 카메라가 정하고, 폭은 열을 그대로 쓴다. */
+  bodyComparisonViewport: {
+    width: '100%',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderRadius: Radius.medium,
+  },
+  /**
+   * 창 위쪽에 붙는 캐릭터 레이어. 절대 배치라 창 높이에 영향을 주지 않고,
+   * transform은 레이아웃을 바꾸지 않으므로 아래 UI를 밀어내지 않는다.
+   */
+  bodyComparisonCamera: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   rewardCard: {
     borderRadius: Radius.large,
