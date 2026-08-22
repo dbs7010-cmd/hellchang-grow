@@ -109,6 +109,7 @@ import {
   createSession,
   ensurePendingSet as ensurePendingSetPure,
   heartbeatSession,
+  isRoutineCompleted,
   pauseSession,
   pauseSessionForBackground,
   recoverStaleSession,
@@ -736,16 +737,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       : WorkoutCategoryLabels[completed.primaryCategory];
     const recordInput = sessionToWorkoutRecordInput(completed, titleLabel);
 
+    // 루틴 완료 보너스도 실제로 수행한 운동만 인정한다 — 체크만 하고 횟수가 없는 세트로는
+    // 루틴이 완료되지 않는다 (기록/XP/streak과 같은 유효 세트 기준).
     let routineCompleted = false;
     if (completed.routineId) {
       const routine = state.routines.find((r) => r.id === completed.routineId);
-      if (routine) {
-        const doneExerciseIds = new Set(
-          completed.exercises.filter((e) => e.sets.some((s) => s.completed)).map((e) => e.exerciseId)
-        );
-        routineCompleted =
-          routine.exerciseIds.length > 0 && routine.exerciseIds.every((id) => doneExerciseIds.has(id));
-      }
+      if (routine) routineCompleted = isRoutineCompleted(completed, routine.exerciseIds);
     }
 
     const xpAwarded =

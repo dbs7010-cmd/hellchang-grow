@@ -33,7 +33,13 @@ import { countPeriodPRs } from '@/utils/exercise-history';
 import { buildHistoryDays } from '@/utils/history';
 import { buildRecommendationContext } from '@/utils/recommendation-context';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
-import { buildPeriodChart, countCompletedSets, formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
+import {
+  buildPeriodChart,
+  countCompletedExercises,
+  countCompletedSets,
+  formatVolumeKg,
+  sumVolumeKg,
+} from '@/utils/workout-stats';
 
 type Period = 'week' | 'month' | 'year';
 
@@ -506,15 +512,17 @@ export default function HistoryScreen() {
                   )}
                 </View>
                 {day.workouts.map((record) => {
+                  // 담기만 한 운동/횟수 없는 세트는 세지 않는다 — 결과 화면과 같은 기준.
                   const setCount = countCompletedSets(record);
+                  const exerciseCount = countCompletedExercises(record);
                   const suspicious = (record.durationMinutes ?? 0) > AppConfig.suspiciousDurationMinutes;
                   return (
                     <View key={record.id}>
                       <ThemedText type="caption" themeColor="textSecondary">
                         · {record.title} ({WorkoutCategoryLabels[record.category]})
                         {record.durationMinutes ? ` · ${record.durationMinutes}분` : ''}
-                        {record.exercises && record.exercises.length > 0
-                          ? ` · 운동 ${record.exercises.length}개 · ${setCount}세트`
+                        {exerciseCount > 0
+                          ? ` · 운동 ${exerciseCount}개 · ${setCount}세트`
                           : ''}
                       </ThemedText>
                       {suspicious && (

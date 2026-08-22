@@ -11,6 +11,8 @@ import {
   addSetToExercise,
   completeSet,
   isEffectiveSet,
+  getPerformedExerciseIds,
+  isRoutineCompleted,
   sessionToWorkoutRecordInput,
   computeCompletedExerciseCount,
   computeCompletedSetsCount,
@@ -360,6 +362,66 @@ async function expectFirstFailure(run: () => Promise<unknown>) {
   check('H: the bodyweight set is stored as a real set',
     mixedRecord.exercises?.[1]?.setDetails?.map((entry) => entry.id), ['mix-3']);
   check('K: a normal session still reports its volume', computeTotalVolumeKg(mixed), 600);
+}
+
+
+// ── 루틴 완료 보너스 XP도 실제로 수행한 운동만 인정한다 ─────────────────────
+{
+  const routineIds = ['squat', 'leg-press'];
+  const build = (sets: { ex: number; id: string; weightKg?: number; reps?: number }[]) => {
+    let session = createSession('strength', 'core-routine', START_ISO, {
+      initialExercises: [
+        { exerciseId: 'squat', exerciseName: '스쿼트' },
+        { exerciseId: 'leg-press', exerciseName: '레그프레스' },
+      ],
+    });
+    for (const set of sets) {
+      const entryId = session.exercises[set.ex].id;
+      session = addSetToExercise(session, entryId, set.id, { weightKg: set.weightKg, reps: set.reps });
+      session = completeSet(session, entryId, set.id);
+    }
+    return session;
+  };
+
+  const invalidOnly = build([
+    { ex: 0, id: 'r1', weightKg: 100, reps: 0 },
+    { ex: 1, id: 'r2' },
+  ]);
+  check('A: exercises with only invalid sets are not counted as performed',
+    computeCompletedExerciseCount(invalidOnly), 0);
+  check('B: 100kg x 0 reps alone never completes a routine',
+    isRoutineCompleted(invalidOnly, routineIds), false);
+  check('C: a reps-less set never completes a routine',
+    isRoutineCompleted(build([{ ex: 0, id: 'r3' }, { ex: 1, id: 'r4' }]), routineIds), false);
+
+  const bodyweightRoutine = build([
+    { ex: 0, id: 'r5', weightKg: 0, reps: 10 },
+    { ex: 1, id: 'r6', reps: 12 },
+  ]);
+  check('D: 0kg x 10 counts as performing the exercise',
+    isRoutineCompleted(bodyweightRoutine, routineIds), true);
+  check('D: a set with no weight but real reps also counts',
+    getPerformedExerciseIds(bodyweightRoutine).has('leg-press'), true);
+
+  const mixed = build([
+    { ex: 0, id: 'r7', weightKg: 80, reps: 5 },
+    { ex: 0, id: 'r8', weightKg: 120, reps: 0 },
+    { ex: 1, id: 'r9', weightKg: 150, reps: 0 },
+  ]);
+  check('E: only exercises with a real set are treated as performed',
+    [...getPerformedExerciseIds(mixed)], ['squat']);
+  check('E: a routine is not complete while one exercise has only invalid sets',
+    isRoutineCompleted(mixed, routineIds), false);
+
+  const done = build([
+    { ex: 0, id: 'r10', weightKg: 80, reps: 5 },
+    { ex: 1, id: 'r11', weightKg: 120, reps: 8 },
+  ]);
+  check('F: a genuinely finished routine still earns the bonus',
+    isRoutineCompleted(done, routineIds), true);
+  check('F: an empty routine is never complete', isRoutineCompleted(done, []), false);
+  check('F: a routine with an exercise the session never had is not complete',
+    isRoutineCompleted(done, [...routineIds, 'deadlift']), false);
 }
 
 console.log(failures === 0 ? '\nAll CORE LOOP checks passed.' : `\n${failures} CORE LOOP check(s) FAILED.`);

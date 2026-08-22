@@ -2,6 +2,7 @@ import type { ExerciseDefinition, MuscleGroup } from '@/types/exercise';
 import type { WorkoutRecord, WorkoutSetEntry } from '@/types/workout';
 import type { WorkoutSession } from '@/types/workout-session';
 import { isEffectiveSet } from '@/utils/workout-session';
+import { effectiveSetDetails } from '@/utils/workout-stats';
 
 export interface PreviousPerformance {
   date: string;
@@ -26,14 +27,17 @@ export function findPreviousPerformance(
     const match = record.exercises?.find((exercise) => exercise.exerciseId === exerciseId);
     if (!match) continue;
 
+    // 과거 버전이 저장한 무효 세트(횟수 없음/0회)는 "지난번 값"이 될 수 없다 —
+    // 통계와 같은 기준으로 읽는 순간에만 거른다. 저장된 기록은 그대로 둔다.
+    // setDetails가 아예 없는 옛 기록은 기존 요약값 근사 계약을 그대로 쓴다(값을 만들지 않는다).
     const sets: WorkoutSetEntry[] =
-      match.setDetails ??
+      effectiveSetDetails(match) ??
       (match.weightKg !== undefined || match.reps !== undefined
         ? [{ id: `${match.id}-legacy`, weightKg: match.weightKg, reps: match.reps, completed: true }]
         : []);
 
-    // 세션에 담기만 하고 한 세트도 채우지 않은 운동은 기록으로 남아도 "지난번 값"이 없다.
-    // 이런 항목에서 멈춰버리면 그 위의 진짜 마지막 수행 기록을 놓친다 (화면에는 빈 줄이 뜬다).
+    // 유효한 세트가 하나도 없으면 그 기록은 건너뛰고 더 이전 기록을 찾는다 —
+    // 여기서 멈추면 진짜 마지막 수행 기록을 놓치고 화면에 빈 줄이 뜬다.
     if (sets.length === 0) continue;
 
     const maxWeightKg = sets.reduce<number | undefined>(
@@ -56,7 +60,9 @@ export function findAllTimeBestWeight(exerciseId: string, records: WorkoutRecord
   for (const record of records) {
     const match = record.exercises?.find((exercise) => exercise.exerciseId === exerciseId);
     if (!match) continue;
-    const sets = match.setDetails ?? (match.weightKg !== undefined ? [{ weightKg: match.weightKg }] : []);
+    // 저장된 무효 세트(횟수 없음)는 최고 기록 후보에서 뺀다 — 원본 기록은 그대로 둔다.
+    const sets =
+      effectiveSetDetails(match) ?? (match.weightKg !== undefined ? [{ weightKg: match.weightKg }] : []);
     for (const set of sets) {
       if (set.weightKg !== undefined && (best === undefined || set.weightKg > best)) {
         best = set.weightKg;
@@ -98,7 +104,8 @@ export function countPeriodPRs(periodRecords: WorkoutRecord[], allRecords: Worko
     for (const exercise of record.exercises ?? []) {
       if (!exercise.exerciseId) continue;
       const sets =
-        exercise.setDetails ?? (exercise.weightKg !== undefined ? [{ weightKg: exercise.weightKg }] : []);
+        effectiveSetDetails(exercise) ??
+        (exercise.weightKg !== undefined ? [{ weightKg: exercise.weightKg }] : []);
       const maxInRecord = sets.reduce(
         (max, set) => (set.weightKg !== undefined && set.weightKg > max ? set.weightKg : max),
         0
@@ -145,7 +152,8 @@ export function listPRs(records: WorkoutRecord[]): PrRecordEvent[] {
     for (const exercise of record.exercises ?? []) {
       if (!exercise.exerciseId) continue;
       const sets =
-        exercise.setDetails ?? (exercise.weightKg !== undefined ? [{ weightKg: exercise.weightKg }] : []);
+        effectiveSetDetails(exercise) ??
+        (exercise.weightKg !== undefined ? [{ weightKg: exercise.weightKg }] : []);
       const maxInRecord = sets.reduce(
         (max, set) => (set.weightKg !== undefined && set.weightKg > max ? set.weightKg : max),
         0

@@ -380,5 +380,116 @@ const squatRecord = record({
   check('the brief includes the PR line when a PR exists', brief.some((line) => line.includes('벤치프레스')), true);
 }
 
+
+// ── 저장된 무효 세트는 PT에게 말하는 세트 수에도 들어가지 않는다 ────────────
+{
+  const pollutedRecord = record({
+    id: 'pt-invalid', date: '2026-08-21',
+    exercises: [
+      { id: 'pi1', exerciseId: 'squat', name: '스쿼트', sets: 3, setDetails: [
+        { id: 'q1', weightKg: 100, reps: 5, completed: true },
+        { id: 'q2', weightKg: 140, reps: 0, completed: true },
+        { id: 'q3', completed: true },
+      ] },
+      { id: 'pi2', exerciseId: 'pull-up', name: '풀업', sets: 2, setDetails: [
+        { id: 'u1', weightKg: 0, reps: 12, completed: true },
+      ] },
+      { id: 'pi3', exerciseId: 'deadlift', name: '데드리프트', sets: 1, setDetails: [
+        { id: 'd1', reps: 0, completed: true },
+      ] },
+    ],
+  });
+  const snapshot = JSON.stringify(pollutedRecord);
+  const context = buildPtContext({
+    profile: null,
+    bodyHistory: [],
+    workoutRecords: [pollutedRecord],
+    streak: { currentStreakDays: 0, longestStreakDays: 0, rewardClaimed: false },
+    routines: [],
+    activeSession: null,
+    today: TODAY,
+  });
+
+  const squat = context.recentTraining.recentExercises.find((exercise) => exercise.exerciseId === 'squat');
+  check('F: an invalid stored set is left out of the PT set count', squat?.setCount, 1);
+  check('F: the 140kg x 0 set never becomes the top set', squat?.topSet, { weightKg: 100, reps: 5 });
+
+  const pullUp = context.recentTraining.recentExercises.find((exercise) => exercise.exerciseId === 'pull-up');
+  check('G: a 0kg x 12 bodyweight set is still reported', pullUp?.setCount, 1);
+
+  check('F: an exercise with only invalid sets is not reported at all',
+    context.recentTraining.recentExercises.some((exercise) => exercise.exerciseId === 'deadlift'), false);
+  check('I: building the PT context never rewrites the stored record', JSON.stringify(pollutedRecord), snapshot);
+
+  // H: 정상 기록은 그대로다.
+  const healthyContext = buildPtContext({
+    profile: null,
+    bodyHistory: [],
+    workoutRecords: [benchRecord],
+    streak: { currentStreakDays: 0, longestStreakDays: 0, rewardClaimed: false },
+    routines: [],
+    activeSession: null,
+    today: TODAY,
+  });
+  const bench = healthyContext.recentTraining.recentExercises.find((exercise) => exercise.exerciseId === 'bench-press');
+  check('H: a healthy record keeps its PT set count', bench?.setCount, 2);
+}
+
+
+// ── topSet 자체도 유효 세트만 고른다 (호출부 필터와 별개로 함수 자체 방어) ──
+{
+  const ctx = (setDetails: unknown[]) => buildPtContext({
+    profile: null,
+    bodyHistory: [],
+    workoutRecords: [record({
+      id: 'pt-top', date: '2026-08-21',
+      exercises: [{ id: 'pt-e', exerciseId: 'squat', name: '스쿼트', sets: setDetails.length, setDetails: setDetails as never }],
+    })],
+    streak: { currentStreakDays: 0, longestStreakDays: 0, rewardClaimed: false },
+    routines: [],
+    activeSession: null,
+    today: TODAY,
+  }).recentTraining.recentExercises.find((exercise) => exercise.exerciseId === 'squat');
+
+  const heavyInvalid = ctx([
+    { id: 't1', weightKg: 90, reps: 6, completed: true },
+    { id: 't2', weightKg: 140, reps: 0, completed: true },
+  ]);
+  check('G: a 140kg x 0 set is never chosen as the top set', heavyInvalid?.topSet, { weightKg: 90, reps: 6 });
+
+  const repsLess = ctx([
+    { id: 't3', weightKg: 90, reps: 6, completed: true },
+    { id: 't4', weightKg: 200, completed: true },
+  ]);
+  check('H: a reps-less heavy set is excluded from the top set', repsLess?.topSet, { weightKg: 90, reps: 6 });
+
+  const bodyweight = ctx([
+    { id: 't5', weightKg: 0, reps: 12, completed: true },
+  ]);
+  check('I: a 0kg x 12 set is a valid top set', bodyweight?.topSet, { weightKg: 0, reps: 12 });
+
+  const mixed = ctx([
+    { id: 't6', weightKg: 60, reps: 10, completed: true },
+    { id: 't7', weightKg: 100, reps: 3, completed: true },
+    { id: 't8', weightKg: 180, reps: 0, completed: true },
+    { id: 't9', completed: true },
+  ]);
+  check('J: the heaviest effective set still wins', mixed?.topSet, { weightKg: 100, reps: 3 });
+  check('J: invalid sets are excluded from the reported count', mixed?.setCount, 2);
+
+  const tie = ctx([
+    { id: 't10', weightKg: 80, reps: 10, completed: true },
+    { id: 't11', weightKg: 80, reps: 4, completed: true },
+  ]);
+  check('J: an equal weight keeps the first set (ordering contract unchanged)', tie?.topSet, { weightKg: 80, reps: 10 });
+
+  const healthy = ctx([
+    { id: 't12', weightKg: 70, reps: 8, completed: true },
+    { id: 't13', weightKg: 75, reps: 6, completed: true },
+  ]);
+  check('K: a healthy record keeps its top set', healthy?.topSet, { weightKg: 75, reps: 6 });
+  check('K: a healthy record keeps its set count', healthy?.setCount, 2);
+}
+
 console.log(failures === 0 ? '\nAll PT context checks passed.' : `\n${failures} PT context check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);

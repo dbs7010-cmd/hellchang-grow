@@ -2,12 +2,19 @@
 // previous-performance lookup, PR detection, mock recommendation, routine scheduling, PASS xp/level.
 // Run: npm run verify:weight-core
 import { Exercises } from '@/config/exercises';
-import { detectPRs, findMostRecentRecordForMuscleGroup, findPreviousPerformance } from '@/utils/exercise-history';
+import {
+  countPeriodPRs,
+  detectPRs,
+  findAllTimeBestWeight,
+  findMostRecentRecordForMuscleGroup,
+  findPreviousPerformance,
+  listPRs,
+} from '@/utils/exercise-history';
 import { addXp, computePassLevelProgress } from '@/utils/pass';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { recommendMuscleGroup } from '@/utils/workout-recommendation';
 import { createSession, addExerciseToSession, addSetToExercise, completeSet } from '@/utils/workout-session';
-import { countCompletedSets, sumVolumeKg } from '@/utils/workout-stats';
+import { countCompletedExercises, countCompletedSets, sumVolumeKg } from '@/utils/workout-stats';
 import type { WorkoutRecord } from '@/types/workout';
 import type { Routine } from '@/types/routine';
 
@@ -258,6 +265,151 @@ function record(overrides: Partial<WorkoutRecord>): WorkoutRecord {
   const manual = record({ title: '러닝', category: 'running' });
   check('a record with no exercises has no sets', countCompletedSets(manual), 0);
   check('a non-weight record contributes nothing to kg volume', sumVolumeKg([manual]), 0);
+}
+
+
+// ── 과거 버전이 저장한 무효 세트는 HISTORY 통계에서 읽을 때만 제외한다 ──────
+// (저장된 기록 자체는 사용자의 히스토리이므로 절대 수정/삭제하지 않는다.)
+{
+  const legacyInvalid = record({
+    id: 'legacy-invalid',
+    date: '2026-08-01',
+    exercises: [{
+      id: 'e-inv', exerciseId: 'bench-press', name: '벤치프레스', sets: 3, setDetails: [
+        { id: 'x1', completed: true },
+        { id: 'x2', reps: 0, completed: true },
+        { id: 'x3', weightKg: 100, reps: 0, completed: true },
+      ],
+    }],
+  });
+  const snapshot = JSON.stringify(legacyInvalid);
+
+  check('A: a stored set with no reps is left out of the history set count', countCompletedSets(legacyInvalid), 0);
+  check('B: a stored 0-rep set is left out too', legacyInvalid.exercises?.[0].setDetails?.length, 3);
+  check('C: 100kg x 0 reps adds no volume', sumVolumeKg([legacyInvalid]), 0);
+  check('C: 100kg x 0 reps is not an all-time best', findAllTimeBestWeight('bench-press', [legacyInvalid]), undefined);
+  check('C: 100kg x 0 reps produces no period PR', countPeriodPRs([legacyInvalid], [legacyInvalid]), 0);
+  check('C: 100kg x 0 reps produces no PR event', listPRs([legacyInvalid]).length, 0);
+  check('A/B: an all-invalid record reports no completed exercises', countCompletedExercises(legacyInvalid), 0);
+  check('H: reading statistics never rewrites the stored record', JSON.stringify(legacyInvalid), snapshot);
+
+  const bodyweight = record({
+    id: 'legacy-bodyweight',
+    date: '2026-08-02',
+    exercises: [{
+      id: 'e-bw', exerciseId: 'pull-up', name: '풀업', sets: 2, setDetails: [
+        { id: 'b1', weightKg: 0, reps: 10, completed: true },
+        { id: 'b2', reps: 12, completed: true },
+      ],
+    }],
+  });
+  check('D: a stored 0kg x 10 set still counts', countCompletedSets(bodyweight), 2);
+  check('E: a stored set with no weight but 12 reps still counts', bodyweight.exercises?.[0].setDetails?.[1].reps, 12);
+  check('D/E: bodyweight sets add no kg volume', sumVolumeKg([bodyweight]), 0);
+
+  const mixed = record({
+    id: 'legacy-mixed',
+    date: '2026-08-03',
+    exercises: [{
+      id: 'e-mix', exerciseId: 'squat', name: '스쿼트', sets: 3, setDetails: [
+        { id: 'm1', weightKg: 80, reps: 5, completed: true },
+        { id: 'm2', weightKg: 120, reps: 0, completed: true },
+        { id: 'm3', weightKg: 80, completed: true },
+      ],
+    }],
+  });
+  check('F: only the effective set is counted in a mixed record', countCompletedSets(mixed), 1);
+  check('F: only the effective set adds volume', sumVolumeKg([mixed]), 400);
+  check('F: the 120kg x 0 set never becomes the best weight', findAllTimeBestWeight('squat', [mixed]), 80);
+  check('F: the exercise still counts because one real set remains', countCompletedExercises(mixed), 1);
+
+  // G: 정상 기록의 기존 통계는 그대로다.
+  const healthy = record({
+    id: 'legacy-healthy',
+    date: '2026-08-04',
+    exercises: [{
+      id: 'e-ok', exerciseId: 'deadlift', name: '데드리프트', sets: 2, setDetails: [
+        { id: 'h1', weightKg: 100, reps: 5, completed: true },
+        { id: 'h2', weightKg: 110, reps: 3, completed: true },
+      ],
+    }],
+  });
+  check('G: a healthy record keeps its set count', countCompletedSets(healthy), 2);
+  check('G: a healthy record keeps its volume', sumVolumeKg([healthy]), 100 * 5 + 110 * 3);
+  check('G: a healthy record keeps its best weight', findAllTimeBestWeight('deadlift', [healthy]), 110);
+  check('G: a healthy record still reports its PR', listPRs([healthy]).length, 1);
+  check('G: a healthy record keeps its exercise count', countCompletedExercises(healthy), 1);
+
+  // setDetails가 없는 옛 기록(WEIGHT CORE 이전)은 요약값 근사를 그대로 쓴다.
+  const summaryOnly = record({
+    id: 'legacy-summary',
+    date: '2026-07-01',
+    exercises: [{ id: 'e-sum', exerciseId: 'squat', name: '스쿼트', sets: 3, reps: 10, weightKg: 60 }],
+  });
+  check('G: pre-setDetails records keep their summary set count', countCompletedSets(summaryOnly), 3);
+  check('G: pre-setDetails records keep their summary volume', sumVolumeKg([summaryOnly]), 60 * 10 * 3);
+  check('G: pre-setDetails records keep their best weight', findAllTimeBestWeight('squat', [summaryOnly]), 60);
+  check('G: pre-setDetails records keep their exercise count', countCompletedExercises(summaryOnly), 1);
+}
+
+
+// ── 지난 기록 조회도 같은 유효 세트 기준을 쓴다 ─────────────────────────────
+{
+  const invalidThenValid: WorkoutRecord[] = [
+    record({
+      id: 'prev-valid', date: '2026-08-10',
+      exercises: [{ id: 'p1', exerciseId: 'bench-press', name: '벤치프레스', setDetails: [
+        { id: 'v1', weightKg: 70, reps: 10, completed: true },
+        { id: 'v2', weightKg: 75, reps: 8, completed: true },
+      ] }],
+    }),
+    record({
+      id: 'prev-invalid', date: '2026-08-14',
+      exercises: [{ id: 'p2', exerciseId: 'bench-press', name: '벤치프레스', setDetails: [
+        { id: 'i1', weightKg: 100, reps: 0, completed: true },
+        { id: 'i2', completed: true },
+      ] }],
+    }),
+  ];
+  const snapshot = JSON.stringify(invalidThenValid);
+  const previous = findPreviousPerformance('bench-press', invalidThenValid);
+  check('A: a 100kg x 0 set is not offered as the previous performance', previous?.date, '2026-08-10');
+  check('A: its 100kg never becomes the previous max', previous?.maxWeightKg, 75);
+  check('B: a reps-less stored set is skipped as well', previous?.sets.length, 2);
+  check('D: the most recent effective record still wins', previous?.sets.map((set) => set.id), ['v1', 'v2']);
+  check('I: looking up the previous performance never rewrites the records', JSON.stringify(invalidThenValid), snapshot);
+
+  const bodyweightPrev = [record({
+    id: 'prev-bw', date: '2026-08-12',
+    exercises: [{ id: 'p3', exerciseId: 'pull-up', name: '풀업', setDetails: [
+      { id: 'bw1', weightKg: 0, reps: 10, completed: true },
+      { id: 'bw2', reps: 12, completed: true },
+    ] }],
+  })];
+  const bwPrevious = findPreviousPerformance('pull-up', bodyweightPrev);
+  check('C: 0kg x 10 is a valid previous performance', bwPrevious?.sets.length, 2);
+  // 맨몸 세트는 최고 중량이 없다 — 0kg를 최고 기록처럼 보여주지 않는 기존 동작이다.
+  check('C: bodyweight sets report no max weight at all', bwPrevious?.maxWeightKg, undefined);
+
+  const mixedPrev = [record({
+    id: 'prev-mixed', date: '2026-08-13',
+    exercises: [{ id: 'p4', exerciseId: 'squat', name: '스쿼트', setDetails: [
+      { id: 'mx1', weightKg: 60, reps: 5, completed: true },
+      { id: 'mx2', weightKg: 150, reps: 0, completed: true },
+    ] }],
+  })];
+  const mixedPrevious = findPreviousPerformance('squat', mixedPrev);
+  check('E: only the effective set is offered from a mixed record', mixedPrevious?.sets.map((set) => set.id), ['mx1']);
+  check('E: the invalid heavy set never sets the suggestion', mixedPrevious?.maxWeightKg, 60);
+
+  // H: setDetails가 없는 옛 요약 기록은 기존 근사 계약 그대로.
+  const summaryPrev = [record({
+    id: 'prev-summary', date: '2026-07-20',
+    exercises: [{ id: 'p5', exerciseId: 'deadlift', name: '데드리프트', sets: 3, reps: 5, weightKg: 120 }],
+  })];
+  const summaryPrevious = findPreviousPerformance('deadlift', summaryPrev);
+  check('H: a pre-setDetails record still approximates one previous set', summaryPrevious?.sets.length, 1);
+  check('H: and keeps its summary weight', summaryPrevious?.maxWeightKg, 120);
 }
 
 console.log(

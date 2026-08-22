@@ -439,6 +439,25 @@ export function computeCompletedExerciseCount(session: WorkoutSession): number {
   return session.exercises.filter((exercise) => exercise.sets.some(isEffectiveSet)).length;
 }
 
+/** 이번 세션에서 실제로 수행한(유효 세트가 있는) 운동 ID. 루틴 완료 판정의 근거다. */
+export function getPerformedExerciseIds(session: WorkoutSession): Set<string> {
+  return new Set(
+    session.exercises
+      .filter((exercise) => exercise.sets.some(isEffectiveSet))
+      .map((exercise) => exercise.exerciseId)
+  );
+}
+
+/**
+ * 루틴의 모든 운동을 실제로 수행했는가 — 루틴 완료 보너스 XP의 유일한 조건이다.
+ * 담기만 하고 횟수를 채우지 않은 운동은 수행으로 치지 않는다. 빈 루틴은 완료가 아니다.
+ */
+export function isRoutineCompleted(session: WorkoutSession, routineExerciseIds: string[]): boolean {
+  if (routineExerciseIds.length === 0) return false;
+  const performed = getPerformedExerciseIds(session);
+  return routineExerciseIds.every((id) => performed.has(id));
+}
+
 /** 총 볼륨 = weight × reps 기반으로 계산 가능한(완료된, 중량/횟수 모두 있는) 세트만 포함한다. */
 export function computeTotalVolumeKg(session: WorkoutSession): number {
   return session.exercises.reduce((sum, exercise) => {

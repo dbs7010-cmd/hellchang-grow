@@ -1,4 +1,19 @@
-import type { WorkoutRecord } from '@/types/workout';
+import type { WorkoutExercise, WorkoutRecord, WorkoutSetEntry } from '@/types/workout';
+import { isEffectiveSet } from '@/utils/workout-session';
+
+/**
+ * 저장된 기록 한 항목에서 **통계에 쓸 세트**를 뽑는다.
+ *
+ * 예전 버전은 체크만 하고 횟수가 없는 세트도 그대로 저장했다. 그 기록은 사용자의 실제
+ * 히스토리이므로 손대지 않고(마이그레이션/삭제 없음), 읽는 순간에만 유효 세트 기준
+ * (isEffectiveSet)으로 걸러 통계에서 제외한다.
+ *
+ * setDetails가 아예 없는 옛 기록(WEIGHT CORE 이전)은 undefined를 돌려준다 — 세트 단위
+ * 근거가 없어 판단할 수 없으므로, 호출부가 기존 요약값 근사를 그대로 쓰도록 둔다.
+ */
+export function effectiveSetDetails(exercise: WorkoutExercise): WorkoutSetEntry[] | undefined {
+  return exercise.setDetails?.filter(isEffectiveSet);
+}
 
 /**
  * 완료된 세트(무게 x 횟수)만 합산한 총 볼륨(kg).
@@ -10,13 +25,13 @@ import type { WorkoutRecord } from '@/types/workout';
 export function sumVolumeKg(records: WorkoutRecord[]): number {
   return records.reduce((total, record) => {
     const recordVolume = (record.exercises ?? []).reduce((sum, exercise) => {
-      const sets = exercise.setDetails;
+      const sets = effectiveSetDetails(exercise);
       if (sets) {
         return (
           sum +
           sets.reduce(
             (setSum, set) =>
-              set.completed && set.weightKg !== undefined && set.reps !== undefined
+              set.weightKg !== undefined && set.reps !== undefined
                 ? setSum + set.weightKg * set.reps
                 : setSum,
             0
@@ -38,11 +53,24 @@ export function sumVolumeKg(records: WorkoutRecord[]): number {
  */
 export function countCompletedSets(record: WorkoutRecord): number {
   return (record.exercises ?? []).reduce((sum, exercise) => {
-    if (exercise.setDetails) {
-      return sum + exercise.setDetails.filter((set) => set.completed).length;
+    const sets = effectiveSetDetails(exercise);
+    if (sets) {
+      return sum + sets.length;
     }
     return sum + (exercise.sets ?? 0);
   }, 0);
+}
+
+/**
+ * 기록 하나에서 실제로 수행한 운동 수. 세션에 담기만 하고 세트를 채우지 않은 운동은
+ * 세지 않는다 — 세션 종료 요약(computeCompletedExerciseCount)과 같은 기준이라,
+ * 같은 운동이 결과 화면과 히스토리에서 다른 개수로 보이지 않는다.
+ */
+export function countCompletedExercises(record: WorkoutRecord): number {
+  return (record.exercises ?? []).filter((exercise) => {
+    const sets = effectiveSetDetails(exercise);
+    return sets ? sets.length > 0 : (exercise.sets ?? 0) > 0;
+  }).length;
 }
 
 /** 1,250 처럼 천 단위 구분 기호를 넣은 볼륨 표기. */

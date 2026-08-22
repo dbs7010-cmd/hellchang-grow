@@ -12,7 +12,7 @@ import type { WorkoutRecord, WorkoutSetEntry } from '@/types/workout';
 import type { WorkoutSession } from '@/types/workout-session';
 import { todayDateString } from '@/utils/date';
 import { listPRs } from '@/utils/exercise-history';
-import { sumVolumeKg } from '@/utils/workout-stats';
+import { effectiveSetDetails, sumVolumeKg } from '@/utils/workout-stats';
 
 /**
  * PT(스탠리)에게 넘기는 압축 컨텍스트.
@@ -85,11 +85,16 @@ export interface PtContext {
   } | null;
 }
 
+/**
+ * 가장 무거운 유효 세트 하나. 호출부가 이미 걸러 넘기더라도 함수 자체가 무효 세트를
+ * 통과시키지 않도록 같은 기준(isEffectiveSet)을 여기서도 확인한다.
+ * 선택 규칙은 그대로다 — 더 무거운 세트가 이기고, 같은 무게면 먼저 나온 세트가 남는다.
+ */
 function topCompletedSet(sets: WorkoutSetEntry[] | undefined): PtContextSetSummary | null {
   if (!sets) return null;
   let best: PtContextSetSummary | null = null;
   for (const set of sets) {
-    if (!set.completed || set.weightKg === undefined || set.reps === undefined) continue;
+    if (!isEffectiveSet(set) || set.weightKg === undefined || set.reps === undefined) continue;
     if (!best || set.weightKg > best.weightKg) best = { weightKg: set.weightKg, reps: set.reps };
   }
   return best;
@@ -107,12 +112,14 @@ function collectRecentExercises(records: WorkoutRecord[], limit: number): PtCont
   for (const record of byDateDesc) {
     for (const exercise of record.exercises ?? []) {
       if (!exercise.exerciseId || seen.has(exercise.exerciseId)) continue;
-      const completed = (exercise.setDetails ?? []).filter((set) => set.completed);
+      // 과거 버전이 저장한 무효 세트(횟수 없음/0회)는 PT에게 말하는 세트 수에서 뺀다 —
+      // 히스토리 통계와 같은 기준이며, 저장된 기록은 건드리지 않는다.
+      const completed = effectiveSetDetails(exercise);
       // setDetails가 없는 옛 기록은 요약값(sets/weightKg/reps)으로 근사한다.
-      const setCount = exercise.setDetails ? completed.length : (exercise.sets ?? 0);
+      const setCount = completed ? completed.length : (exercise.sets ?? 0);
       if (setCount === 0) continue;
       const topSet =
-        topCompletedSet(exercise.setDetails) ??
+        topCompletedSet(completed) ??
         (exercise.weightKg !== undefined && exercise.reps !== undefined
           ? { weightKg: exercise.weightKg, reps: exercise.reps }
           : null);
