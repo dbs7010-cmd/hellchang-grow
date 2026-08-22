@@ -2,8 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ProgressBar } from '@/components/ui/progress-bar';
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { HomeColors, Spacing } from '@/constants/theme';
 
 export interface GrowthHudProps {
   passLevel: number;
@@ -30,8 +29,6 @@ export function GrowthHud({
   passProgress,
   onPress,
 }: GrowthHudProps) {
-  const theme = useTheme();
-
   return (
     <Pressable
       onPress={onPress}
@@ -39,22 +36,22 @@ export function GrowthHud({
       hitSlop={6}
       accessibilityRole="button"
       accessibilityLabel={`HELL PASS 레벨 ${passLevel}, 성장 리포트 열기`}>
-      <ThemedText type="caption" themeColor="textSecondary">
+      <ThemedText type="caption" style={styles.label}>
         HELL PASS
       </ThemedText>
-      <ThemedText type="captionBold">Lv.{passLevel}</ThemedText>
+      <ThemedText type="captionBold" style={styles.level}>Lv.{passLevel}</ThemedText>
       <View style={styles.bar}>
         <ProgressBar
           progress={passProgress}
-          height={4}
-          color={theme.gold}
-          trackColor={theme.backgroundSelected}
+          height={5}
+          color={HomeColors.goldStrong}
+          trackColor={HomeColors.surfaceGold}
         />
       </View>
-      <ThemedText type="caption" themeColor="textSecondary">
+      <ThemedText type="captionBold" style={styles.xpValue}>
         {passXpIntoLevel}/{passXpForLevel}
       </ThemedText>
-      <ThemedText type="caption" themeColor="textSecondary">
+      <ThemedText type="caption" style={styles.arrow}>
         ›
       </ThemedText>
     </Pressable>
@@ -70,4 +67,8 @@ const styles = StyleSheet.create({
   bar: {
     flex: 1,
   },
+  label: { color: HomeColors.textSecondary },
+  level: { color: HomeColors.goldStrong, fontWeight: 800 },
+  xpValue: { color: HomeColors.goldStrong, fontVariant: ['tabular-nums'] },
+  arrow: { color: HomeColors.textSecondary },
 });

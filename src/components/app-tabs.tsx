@@ -1,6 +1,7 @@
+import { usePathname } from 'expo-router';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 
-import { Colors } from '@/constants/theme';
+import { Colors, HomeColors } from '@/constants/theme';
 
 /**
  * Bottom navigation.
@@ -11,16 +12,18 @@ import { Colors } from '@/constants/theme';
  * 시스템 내비게이션 영역과의 간섭은 NativeTabs가 처리한다.
  */
 export default function AppTabs() {
-  const colors = Colors.dark;
+  const isHome = usePathname() === '/';
+  const colors = isHome ? HomeColors : Colors.dark;
+  const defaultColor = isHome ? HomeColors.navMuted : colors.textSecondary;
 
   return (
     <NativeTabs
       backgroundColor={colors.background}
       disableIndicator
-      iconColor={{ default: colors.textSecondary, selected: colors.gold }}
+      iconColor={{ default: defaultColor, selected: colors.gold }}
       labelStyle={{
-        default: { color: colors.textSecondary },
-        selected: { color: colors.text },
+        default: { color: defaultColor },
+        selected: { color: colors.gold },
       }}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>홈</NativeTabs.Trigger.Label>

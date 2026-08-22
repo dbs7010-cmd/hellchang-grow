@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { ImageSourcePropType, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Radius, Spacing } from '@/constants/theme';
+import { HomeColors, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export interface GoldsunBubbleProps {
@@ -14,6 +14,7 @@ export interface GoldsunBubbleProps {
   name: string;
   text: string;
   onPress?: () => void;
+  homeLight?: boolean;
 }
 
 /**
@@ -22,20 +23,23 @@ export interface GoldsunBubbleProps {
  * 말풍선 안에 "- 이름 -" 서명을 넣지 않는다 — 옆의 portrait가 이미 화자를 말해준다.
  * name은 화면에 그리지 않고 접근성 라벨로만 쓴다.
  */
-export function GoldsunBubble({ portrait, name, text, onPress }: GoldsunBubbleProps) {
+export function GoldsunBubble({ portrait, name, text, onPress, homeLight = false }: GoldsunBubbleProps) {
   const theme = useTheme();
+  const bubbleColors = homeLight
+    ? { background: HomeColors.surface, border: HomeColors.border, text: HomeColors.text }
+    : { background: theme.backgroundElement, border: theme.border, text: theme.text };
   return (
     <Pressable
       onPress={onPress}
       style={styles.row}
       hitSlop={8}
       accessibilityLabel={`${name}: ${text}`}>
-      <View style={[styles.bubble, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-        <ThemedText type="small" style={styles.bubbleText} numberOfLines={3}>
+      <View style={[styles.bubble, { backgroundColor: bubbleColors.background, borderColor: bubbleColors.border }, homeLight && styles.homeBubble]}>
+        <ThemedText type="small" style={[styles.bubbleText, { color: bubbleColors.text }]} numberOfLines={3}>
           {text}
         </ThemedText>
       </View>
-      <View style={[styles.portrait, { borderColor: theme.border, backgroundColor: theme.backgroundSelected }]}>
+      <View style={[styles.portrait, { borderColor: bubbleColors.border, backgroundColor: homeLight ? HomeColors.surfaceMuted : theme.backgroundSelected }]}>
         {typeof portrait === 'string' ? (
           <ThemedText style={styles.portraitEmoji}>{portrait}</ThemedText>
         ) : (
@@ -73,6 +77,10 @@ const styles = StyleSheet.create({
   },
   bubbleText: {
     lineHeight: 18,
+  },
+  homeBubble: {
+    borderWidth: 0,
+    boxShadow: HomeColors.shadow,
   },
   // 말풍선과 같은 테두리 색/두께를 써서 두 조각이 하나의 덩어리로 보이게 한다.
   // gold 링을 두르면 작은 아이콘 하나가 플레이어 캐릭터보다 먼저 눈에 들어왔다.

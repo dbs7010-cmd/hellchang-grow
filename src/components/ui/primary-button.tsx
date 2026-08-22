@@ -4,10 +4,10 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Layout, Motion, Radius, Spacing } from '@/constants/theme';
+import { HomeColors, Layout, Motion, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-export type PrimaryButtonVariant = 'primary' | 'secondary' | 'gold';
+export type PrimaryButtonVariant = 'primary' | 'secondary' | 'gold' | 'homeGold';
 export type PrimaryButtonSize = 'default' | 'large';
 export type PrimaryButtonHaptic = 'light' | 'medium' | 'success' | 'none';
 
@@ -28,6 +28,7 @@ const DEFAULT_HAPTIC: Record<PrimaryButtonVariant, PrimaryButtonHaptic> = {
   gold: 'medium',
   primary: 'light',
   secondary: 'none',
+  homeGold: 'medium',
 };
 
 function triggerHaptic(kind: PrimaryButtonHaptic) {
@@ -64,6 +65,7 @@ export function PrimaryButton({
   };
 
   const isGold = variant === 'gold';
+  const isHomeGold = variant === 'homeGold';
 
   return (
     <Pressable
@@ -88,14 +90,18 @@ export function PrimaryButton({
             styles.button,
             size === 'large' && styles.buttonLarge,
             isGold && { borderWidth: 2, borderColor: theme.gold },
+            isHomeGold && styles.homeGold,
           ]}>
           <ThemedText
             type={size === 'large' ? 'heading' : 'smallBold'}
-            style={isGold ? { color: theme.gold } : undefined}>
+            style={isGold ? { color: theme.gold } : isHomeGold ? styles.homeGoldLabel : undefined}>
             {label}
           </ThemedText>
           {subLabel && (
-            <ThemedText type="small" themeColor="textSecondary" style={styles.subLabel}>
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              style={[styles.subLabel, isHomeGold && styles.homeGoldSubLabel]}>
               {subLabel}
             </ThemedText>
           )}
@@ -116,6 +122,16 @@ const styles = StyleSheet.create({
   buttonLarge: {
     minHeight: Layout.ctaHeightLarge,
     borderRadius: Radius.large,
+  },
+  homeGold: {
+    backgroundColor: HomeColors.gold,
+    boxShadow: '0 6px 16px rgba(149, 96, 25, 0.20)',
+  },
+  homeGoldLabel: {
+    color: HomeColors.onGold,
+  },
+  homeGoldSubLabel: {
+    color: HomeColors.onGoldSecondary,
   },
   subLabel: {
     marginTop: Spacing.half,

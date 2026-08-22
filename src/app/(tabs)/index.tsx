@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Dimensions, LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import { LayoutChangeEvent, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PlayerCharacter } from '@/components/character/player-character';
@@ -16,7 +16,7 @@ import { hasPlayerCharacterModel, StanleyPortraitImage } from '@/config/characte
 import { Exercises, getExerciseById, getExercisesByMuscleGroup } from '@/config/exercises';
 import { MuscleGroups } from '@/config/muscle-groups';
 import { StanleyTrainer } from '@/config/trainers';
-import { BottomTabInset, Layout, Radius, Spacing } from '@/constants/theme';
+import { BottomTabInset, HomeColors, Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { getThisWeekRecords } from '@/data/workout-repository';
 import { useTheme } from '@/hooks/use-theme';
@@ -27,6 +27,11 @@ import { recommendMuscleGroup } from '@/utils/workout-recommendation';
 import { formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
 
 /**
+ * V1 HOME VISUAL CANON — LOCKED.
+ * Warm White, Character Stage tonal field/ground, HELL PASS hierarchy, Gold CTA,
+ * borderless body HUD, Gold-tinted recommendations, Stanley bubble, bottom navigation,
+ * 그리고 412x915 / 390x844 / 360x800 responsive 배치를 함께 고정한다.
+ *
  * 01 HOME — 기존 기능/레이아웃 계약을 유지하면서 MASTER CANON의 HUD 밀도만 복원한다.
  * Header → HELL PASS/주간 기록 → 캐릭터(좌측 신체 HUD + 우측 스탠리) → CTA → 추천 운동.
  * 신체 HUD는 실제 입력값만 표시하며 없는 값은 '-'로 둔다.
@@ -66,7 +71,7 @@ export default function HomeScreen() {
     bodyParameters,
   } = useAppData();
 
-  const windowHeight = Dimensions.get('window').height;
+  const { height: windowHeight } = useWindowDimensions();
   /** 실제 3D 모델이 등록돼 있을 때만 360 진입점을 노출한다 (V1은 아직 없다). */
   const canView360 = hasPlayerCharacterModel();
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -155,16 +160,16 @@ export default function HomeScreen() {
   return (
     <ThemedView style={styles.root}>
       <View style={[styles.topBar, { paddingTop: insets.top + Spacing.one }]}>
-        <ThemedText type="smallBold">🏋 헬창키우기</ThemedText>
+        <ThemedText type="smallBold" style={styles.brand}>🏋 헬창키우기</ThemedText>
         <View style={styles.topActions}>
           <Pressable onPress={() => router.push('/trainer')} hitSlop={10}>
-            <ThemedText type="captionBold" style={{ color: theme.gold }}>
+            <ThemedText type="captionBold" style={styles.trainerLink}>
               스탠리 PT ›
             </ThemedText>
           </Pressable>
           <Pressable onPress={() => router.push('/notifications')} hitSlop={10} style={styles.bellButton}>
             <ThemedText style={styles.topActionIcon}>🔔</ThemedText>
-            {noticeAvailable && <View style={[styles.badgeDot, { backgroundColor: theme.mutedRed }]} />}
+            {noticeAvailable && <View style={styles.badgeDot} />}
           </Pressable>
           <Pressable onPress={() => router.push('/settings')} hitSlop={10}>
             <ThemedText style={styles.topActionIcon}>⚙️</ThemedText>
@@ -181,7 +186,7 @@ export default function HomeScreen() {
         플랫폼별 탭바 여유는 BottomTabInset 하나로만 관리한다.
       */}
       <View style={[styles.content, { paddingBottom: BottomTabInset + Spacing.two }]}>
-        <View style={[styles.progressBlock, { borderColor: theme.border }]}>
+        <View style={styles.progressBlock}>
           <GrowthHud
             passLevel={passProgress.level}
             passXpIntoLevel={passProgress.xpIntoLevel}
@@ -205,6 +210,7 @@ export default function HomeScreen() {
               name={StanleyTrainer.displayName}
               text={greeting.text}
               onPress={() => router.push('/trainer')}
+              homeLight
             />
           </View>
 
@@ -214,6 +220,9 @@ export default function HomeScreen() {
             height(측정값)는 에셋이 없을 때의 도형 placeholder에만 쓰인다.
           */}
           <View style={styles.characterArea}>
+            <View pointerEvents="none" style={styles.characterAtmosphere} />
+            <View pointerEvents="none" style={styles.characterBackdrop} />
+            <View pointerEvents="none" style={styles.characterGround} />
             <Pressable
               onPress={canView360 ? () => setViewerOpen(true) : undefined}
               onLayout={handleStageLayout}
@@ -238,10 +247,7 @@ export default function HomeScreen() {
             {/* 보조 HUD. pointerEvents none이라 캐릭터 터치/360 진입을 막지 않는다. */}
             <View
               pointerEvents="none"
-              style={[
-                styles.bodyHud,
-                { backgroundColor: theme.background + 'D9', borderColor: theme.border },
-              ]}>
+              style={styles.bodyHud}>
               <BodyHudMetric label="체중" value={`${latestBody?.weightKg ?? profile.weightKg}kg`} />
               <BodyHudMetric
                 label="골격근량"
@@ -251,7 +257,7 @@ export default function HomeScreen() {
                 label="체지방률"
                 value={latestBody?.bodyFatPercent !== undefined ? `${latestBody.bodyFatPercent}%` : '-'}
               />
-              <BodyHudMetric label="운동 기록" value={`${workoutRecords.length}회`} last />
+              <BodyHudMetric label="운동 기록" value={`${workoutRecords.length}회`} />
             </View>
 
             {/* 실제 3D 모델이 등록되기 전에는 360을 아예 노출하지 않는다 — 눌러봐야 도형
@@ -284,7 +290,7 @@ export default function HomeScreen() {
                 ? '오늘 · ' + scheduledRoutine.name
                 : '바로 시작할 수 있어요'
           }
-          variant="gold"
+          variant="homeGold"
           size="large"
           onPress={handleStartPress}
         />
@@ -325,10 +331,10 @@ function describePreviousPerformance(
 function HomeStat({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.stat}>
-      <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+      <ThemedText type="caption" style={styles.statLabel} numberOfLines={1}>
         {label}
       </ThemedText>
-      <ThemedText type="smallBold" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+      <ThemedText type="smallBold" style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
         {value}
       </ThemedText>
     </View>
@@ -338,19 +344,16 @@ function HomeStat({ label, value }: { label: string; value: string }) {
 function BodyHudMetric({
   label,
   value,
-  last = false,
 }: {
   label: string;
   value: string;
-  last?: boolean;
 }) {
-  const theme = useTheme();
   return (
-    <View style={[styles.bodyHudMetric, !last && { borderBottomColor: theme.border, borderBottomWidth: 1 }]}>
-      <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+    <View style={styles.bodyHudMetric}>
+      <ThemedText type="caption" style={styles.bodyHudLabel} numberOfLines={1}>
         {label}
       </ThemedText>
-      <ThemedText type="smallBold" numberOfLines={1}>
+      <ThemedText type="smallBold" style={styles.bodyHudValue} numberOfLines={1}>
         {value}
       </ThemedText>
     </View>
@@ -360,6 +363,7 @@ function BodyHudMetric({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: HomeColors.background,
   },
   topBar: {
     flexDirection: 'row',
@@ -375,6 +379,7 @@ const styles = StyleSheet.create({
   },
   topActionIcon: {
     fontSize: 18,
+    color: HomeColors.text,
   },
   bellButton: {
     position: 'relative',
@@ -386,6 +391,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+    backgroundColor: HomeColors.danger,
   },
   content: {
     flex: 1,
@@ -414,6 +420,35 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   },
+  characterBackdrop: {
+    position: 'absolute',
+    left: '28%',
+    right: '28%',
+    bottom: '9%',
+    height: '48%',
+    borderRadius: Radius.pill,
+    backgroundColor: HomeColors.surfaceMuted,
+    opacity: 0.52,
+  },
+  characterAtmosphere: {
+    position: 'absolute',
+    left: '8%',
+    right: '8%',
+    top: '2%',
+    bottom: '2%',
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(182, 121, 30, 0.018)',
+  },
+  characterGround: {
+    position: 'absolute',
+    left: '34%',
+    right: '34%',
+    bottom: '10%',
+    height: 10,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(182, 121, 30, 0.09)',
+    boxShadow: HomeColors.groundShadow,
+  },
   characterFill: {
     position: 'absolute',
     top: 0,
@@ -428,10 +463,12 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     width: 76,
-    borderWidth: 1,
+    borderWidth: 0,
+    backgroundColor: 'rgba(255,255,255,0.72)',
     borderRadius: Radius.medium,
     overflow: 'hidden',
     zIndex: 2,
+    boxShadow: HomeColors.hudShadow,
   },
   bodyHudMetric: {
     paddingHorizontal: Spacing.two,
@@ -455,9 +492,14 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   progressBlock: {
-    borderBottomWidth: 1,
-    paddingBottom: Spacing.two,
-    gap: Spacing.one,
+    borderWidth: 1,
+    borderColor: HomeColors.border,
+    borderRadius: Radius.large,
+    backgroundColor: HomeColors.surface,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    gap: Spacing.two,
+    boxShadow: HomeColors.shadow,
   },
   statsRow: {
     flexDirection: 'row',
@@ -470,4 +512,10 @@ const styles = StyleSheet.create({
     gap: Spacing.half,
     paddingHorizontal: Spacing.half,
   },
+  brand: { color: HomeColors.text },
+  trainerLink: { color: HomeColors.goldStrong },
+  statLabel: { color: HomeColors.textSecondary },
+  statValue: { color: HomeColors.text, fontWeight: 800, fontVariant: ['tabular-nums'] },
+  bodyHudLabel: { color: HomeColors.textSecondary },
+  bodyHudValue: { color: HomeColors.text, fontWeight: 800, fontVariant: ['tabular-nums'] },
 });

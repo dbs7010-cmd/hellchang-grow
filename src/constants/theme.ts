@@ -45,6 +45,30 @@ export const Colors = {
   },
 } as const;
 
+/** HOME 전용 밝은 캐릭터 육성 팔레트. 다른 LOCKED 화면의 고정 다크 테마에는 전파하지 않는다. */
+export const HomeColors = {
+  background: '#F7F5EF',
+  surface: '#FFFFFF',
+  surfaceMuted: '#F0EEE8',
+  surfaceGold: '#F4E7CB',
+  questSurface: '#FFFCF5',
+  questBorder: '#E8D5AE',
+  text: '#20211F',
+  textSecondary: '#74736E',
+  navMuted: '#AAA69E',
+  navBackground: '#FBFAF6',
+  border: '#E3DED3',
+  gold: '#B6791E',
+  goldStrong: '#956019',
+  onGold: '#FFFFFF',
+  onGoldSecondary: '#FFF4DC',
+  danger: '#A54136',
+  shadow: '0 4px 16px rgba(44, 39, 29, 0.07)',
+  hudShadow: '0 2px 10px rgba(44, 39, 29, 0.05)',
+  questShadow: '0 3px 12px rgba(149, 96, 25, 0.08)',
+  groundShadow: '0 7px 16px rgba(87, 68, 35, 0.14)',
+} as const;
+
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const Fonts = Platform.select({

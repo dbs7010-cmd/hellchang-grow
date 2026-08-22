@@ -1,9 +1,10 @@
+import { usePathname } from 'expo-router';
 import { Tabs, TabList, TabTrigger, TabSlot, TabTriggerSlotProps, TabListProps } from 'expo-router/ui';
 import { Pressable, View, StyleSheet } from 'react-native';
 
 import { ThemedText } from './themed-text';
 
-import { Colors, Layout, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Colors, HomeColors, Layout, MaxContentWidth, Spacing } from '@/constants/theme';
 
 /**
  * 웹 미리보기용 탭바. 네이티브 NativeTabs와 같은 규칙을 따른다 —
@@ -40,11 +41,13 @@ export function TabButton({
   icon,
   ...props
 }: TabTriggerSlotProps & { icon?: string }) {
-  const colors = Colors.dark;
+  const isHome = usePathname() === '/';
+  const colors = isHome ? HomeColors : Colors.dark;
+  const mutedColor = isHome ? HomeColors.navMuted : colors.textSecondary;
   return (
     <Pressable {...props} style={({ pressed }) => [styles.tabButton, pressed && styles.pressed]}>
-      <ThemedText style={[styles.icon, !isFocused && styles.iconMuted]}>{icon}</ThemedText>
-      <ThemedText type="caption" style={{ color: isFocused ? colors.text : colors.textSecondary }}>
+      <ThemedText style={[styles.icon, { color: isFocused ? colors.gold : mutedColor }, !isFocused && styles.iconMuted]}>{icon}</ThemedText>
+      <ThemedText type="caption" style={{ color: isFocused ? colors.gold : mutedColor }}>
         {children}
       </ThemedText>
       <View
@@ -55,11 +58,12 @@ export function TabButton({
 }
 
 export function CustomTabList(props: TabListProps) {
-  const colors = Colors.dark;
+  const isHome = usePathname() === '/';
+  const colors = isHome ? HomeColors : Colors.dark;
   return (
     <View
       {...props}
-      style={[styles.tabListContainer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+      style={[styles.tabListContainer, { backgroundColor: isHome ? HomeColors.navBackground : colors.background, borderTopColor: colors.border }]}>
       <View style={styles.inner}>{props.children}</View>
     </View>
   );
@@ -88,10 +92,10 @@ const styles = StyleSheet.create({
     minHeight: Layout.compactRowHeight,
   },
   icon: {
-    fontSize: 18,
+    fontSize: 17,
   },
   iconMuted: {
-    opacity: 0.45,
+    opacity: 0.35,
   },
   activeBar: {
     marginTop: 2,
