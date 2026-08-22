@@ -1,0 +1,32 @@
+{
+  "status": "REVIEW_REQUIRED",
+  "source": "user-approved Danbaek growth system image",
+  "identityLocked": true,
+  "heightLocked": true,
+  "limbLengthLocked": true,
+  "style": "white body + black hand-drawn outline",
+  "normalized": {
+    "height": 100,
+    "stages": [
+      {"stage":1,"headH":21,"headW":20,"shoulder":31,"chest":25,"waist":20,"pelvis":22,"armLength":44,"armThickness":6,"legLength":40,"thigh":7,"calf":6},
+      {"stage":2,"headH":21,"headW":20,"shoulder":33,"chest":27,"waist":20,"pelvis":23,"armLength":44,"armThickness":7,"legLength":40,"thigh":8,"calf":7},
+      {"stage":3,"headH":20,"headW":20,"shoulder":35,"chest":30,"waist":21,"pelvis":24,"armLength":44,"armThickness":8,"legLength":40,"thigh":9,"calf":8},
+      {"stage":4,"headH":20,"headW":19,"shoulder":39,"chest":34,"waist":22,"pelvis":26,"armLength":44,"armThickness":10,"legLength":40,"thigh":11,"calf":10},
+      {"stage":5,"headH":19,"headW":19,"shoulder":44,"chest":39,"waist":24,"pelvis":29,"armLength":43,"armThickness":12,"legLength":40,"thigh":13,"calf":12},
+      {"stage":6,"headH":19,"headW":18,"shoulder":51,"chest":45,"waist":27,"pelvis":33,"armLength":43,"armThickness":15,"legLength":40,"thigh":16,"calf":14},
+      {"stage":7,"headH":18,"headW":18,"shoulder":58,"chest":52,"waist":29,"pelvis":38,"armLength":43,"armThickness":18,"legLength":40,"thigh":19,"calf":17},
+      {"stage":8,"headH":18,"headW":17,"shoulder":65,"chest":59,"waist":31,"pelvis":42,"armLength":42,"armThickness":21,"legLength":40,"thigh":22,"calf":19},
+      {"stage":9,"headH":17,"headW":17,"shoulder":72,"chest":66,"waist":34,"pelvis":47,"armLength":42,"armThickness":24,"legLength":40,"thigh":25,"calf":22},
+      {"stage":10,"headH":17,"headW":16,"shoulder":79,"chest":73,"waist":37,"pelvis":52,"armLength":42,"armThickness":27,"legLength":40,"thigh":29,"calf":25}
+    ]
+  },
+  "rules": [
+    "Never add hair, clothing, shoes, accessories or skin-tone shading.",
+    "Keep the same Danbaek face and head identity at every stage.",
+    "Do not increase character height as growth progresses.",
+    "Do not lengthen arms or legs as growth progresses.",
+    "Increase horizontal muscle volume and muscle-line detail only.",
+    "Keep early stages simple with minimal muscle lines.",
+    "Late stages must still read as the same awkward hand-drawn Danbaek, not a redesigned bodybuilder character."
+  ]
+}
