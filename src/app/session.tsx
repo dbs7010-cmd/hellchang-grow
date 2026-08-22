@@ -47,6 +47,8 @@ import { formatVolumeKg } from '@/utils/workout-stats';
 import {
   deriveWorkoutCharacterState,
   getExerciseReactionCopy,
+  isSetCompletePresenting,
+  SetCompletePresentationMs,
   willCountAsEffectiveSet,
 } from '@/utils/workout-character-motion';
 import {
@@ -169,6 +171,15 @@ export default function SessionScreen() {
    */
   const [setReaction, setSetReaction] = useState<string | null>(null);
   const setReactionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * 세트 완료 반응을 운동 화면에서 마저 보여 주는 중인지.
+   *
+   * **표현 전용이고 저장되지 않는다.** 세트 기록과 휴식 종료 시각은 이 플래그와 무관하게
+   * 완료를 누른 즉시 확정되므로, 연출 도중 앱이 죽거나 화면을 벗어나도 완료한 세트는 남는다.
+   * 돌아오면 이 값이 꺼져 있으니 축하를 다시 재생하지 않고 남은 휴식으로 바로 들어간다.
+   */
+  const [setCompletePresenting, setSetCompletePresenting] = useState(false);
+  const presentationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [confirmExit, setConfirmExit] = useState(false);
   /** 사용자가 [세션 유지하고 나가기]를 눌렀다는 표시. 이때만 뒤로가기를 통과시킨다. */
   const exitConfirmedRef = useRef(false);
@@ -264,11 +275,13 @@ export default function SessionScreen() {
   useEffect(() => {
     if (!activeSession?.restUntilMs) return;
     restHapticFiredRef.current = false;
+    // 세트를 끝낸 직후에는 단백이 한 줄이 주 피드백이다 — 그 줄이 사라진 뒤에 스탠리가
+    // 말하도록 미룬다. 예전에는 둘이 동시에 떠서 두 사람이 한꺼번에 말을 걸었다.
     const timer = setTimeout(() => {
       if (Math.random() < 0.5) {
         showReaction(pickTrainerLine(StanleyTrainer.dialogueSet.restReaction).text);
       }
-    }, 0);
+    }, SET_REACTION_MS);
     return () => clearTimeout(timer);
   }, [activeSession?.restUntilMs]);
 
@@ -276,6 +289,7 @@ export default function SessionScreen() {
   useEffect(
     () => () => {
       if (setReactionTimerRef.current) clearTimeout(setReactionTimerRef.current);
+      if (presentationTimerRef.current) clearTimeout(presentationTimerRef.current);
     },
     []
   );
@@ -373,13 +387,19 @@ export default function SessionScreen() {
     : undefined);
   // 종료 처리/결과 화면으로 넘어가는 중에는 일시 반응을 남기지 않는다.
   const activeSetReaction = ending || summary ? null : setReaction;
+  /** 방금 끝낸 세트를 **누른 그 화면에서** 잠깐 더 보여 주는 중인가. */
+  const presentingSetComplete = isSetCompletePresenting({
+    presenting: setCompletePresenting,
+    paused: isPaused,
+    ending: ending || Boolean(summary),
+  });
   const characterState = deriveWorkoutCharacterState({
     ending,
     paused: isPaused,
     resting: isResting,
     hasExercise: Boolean(currentExercise),
     hasPendingSet: Boolean(pendingSet),
-    setJustCompleted: Boolean(activeSetReaction),
+    setJustCompleted: presentingSetComplete,
     restJustEnded,
   });
   // DB에 없는 [직접 추가] 운동은 판단할 근거가 없으므로 중량 입력을 그대로 열어 둔다.
@@ -417,7 +437,19 @@ export default function SessionScreen() {
         setSetReaction(null);
         setReactionTimerRef.current = null;
       }, SET_REACTION_MS);
+      // 이 순간의 주 피드백은 단백이다. 떠 있던 스탠리 말풍선은 접어 두고, 휴식 문구는
+      // 위 effect가 단백이 한 줄이 끝난 뒤에 다시 띄운다 (스탠리 시스템 자체는 그대로다).
+      setReactionVisible(false);
+      // 휴식 화면으로 넘어가기 전, 방금 누른 이 화면에서 반응을 마저 보여 줄 시간.
+      // 연타로 다시 들어와도 이전 타이머를 지우므로 창은 언제나 하나다.
+      if (presentationTimerRef.current) clearTimeout(presentationTimerRef.current);
+      setSetCompletePresenting(true);
+      presentationTimerRef.current = setTimeout(() => {
+        setSetCompletePresenting(false);
+        presentationTimerRef.current = null;
+      }, SetCompletePresentationMs);
     }
+    // 연출과 무관하게 기록은 지금 확정된다 — 세트 completed, 세션 저장, 휴식 종료 절대시각까지.
     await completeSessionSet(currentExercise.id, setId, {
       restSeconds: getAutoRestSeconds(activeSession, currentExercise.id, AppConfig.defaultRestSeconds),
     });
@@ -512,7 +544,10 @@ export default function SessionScreen() {
     />
   );
 
-  if (isResting) {
+  // 휴식 시계는 이미 돌고 있지만, 세트 완료 연출이 끝날 때까지 화면은 운동 화면 그대로다 —
+  // 반응이 방금 누른 자리에서, 같은 크기의 단백이에게서 일어나게 하기 위해서다.
+  // (연출은 휴식을 미루지 않는다. restUntilMs는 완료 시점에 확정돼 그대로 흐른다.)
+  if (isResting && !presentingSetComplete) {
     return (
       <RestScreen
         session={activeSession}
@@ -614,7 +649,9 @@ export default function SessionScreen() {
             <SetHero
               set={pendingSet}
               usesWeight={usesWeight}
-              disabled={isPaused}
+              // 연출 0.5초 동안은 다음 세트 입력을 잠근다 — 연타가 세트 두 개로 기록되지
+              // 않게 하고, 반응이 끝나면 사용자가 아무것도 하지 않아도 저절로 풀린다.
+              disabled={isPaused || presentingSetComplete}
               onChange={(patch) => handleUpdateSet(pendingSet.id, patch)}
               onAdjust={(delta) => handleAdjustSet(pendingSet.id, delta)}
               onComplete={() => handleCompleteSet(pendingSet.id)}
