@@ -1,0 +1,24 @@
+{
+  "source": "../danbaek_growth_system_canon.png",
+  "sourceSize": [1024, 1536],
+  "status": "EXACT_CROP_FROM_LOCKED_MASTER",
+  "topRowY": [108, 240],
+  "stages": [
+    {"stage":1,"x":32,"y":108,"width":37,"height":132},
+    {"stage":2,"x":108,"y":108,"width":41,"height":132},
+    {"stage":3,"x":198,"y":108,"width":41,"height":132},
+    {"stage":4,"x":294,"y":108,"width":52,"height":132},
+    {"stage":5,"x":394,"y":108,"width":53,"height":132},
+    {"stage":6,"x":493,"y":108,"width":65,"height":132},
+    {"stage":7,"x":592,"y":108,"width":73,"height":132},
+    {"stage":8,"x":695,"y":108,"width":82,"height":132},
+    {"stage":9,"x":801,"y":108,"width":88,"height":132},
+    {"stage":10,"x":897,"y":108,"width":114,"height":132}
+  ],
+  "rules": {
+    "redraw": false,
+    "reinterpret": false,
+    "preserveMasterPixels": true,
+    "runtimeIntegrationRequiresApproval": true
+  }
+}
