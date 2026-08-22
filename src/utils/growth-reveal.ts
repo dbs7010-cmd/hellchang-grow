@@ -62,3 +62,39 @@ export function hasPermanentBodyChange(
     (key) => before[key] !== after[key]
   );
 }
+
+// ── Result reveal 순서 ──────────────────────────────────────────────────────
+
+export type GrowthRevealPhase = 'pump' | 'before' | 'after';
+
+/**
+ * Result가 거치는 단계. **항상 실제(영구) 몸으로 끝난다.**
+ *
+ * 영구 변화가 없는 날에도 펌핑 상태로 끝내면, 사용자는 부푼 몸을 오늘의 결과로 이해한 뒤
+ * 홈에서 작아진 몸을 보고 혼란스러워한다. 그래서 영구 변화가 없으면 BEFORE를 건너뛰고
+ * PUMP → AFTER로, 있으면 기존처럼 PUMP → BEFORE → AFTER로 간다.
+ *
+ * 순수 함수다. 새 BodyParameters를 만들지 않고 어떤 스냅샷을 보여줄지 순서만 정한다.
+ */
+export function buildGrowthRevealSequence(input: {
+  permanentChanged: boolean;
+  reducedMotion: boolean;
+}): GrowthRevealPhase[] {
+  // 모션을 줄인 사용자는 연출 없이 결론(실제 몸)만 본다.
+  if (input.reducedMotion) return ['after'];
+  return input.permanentChanged ? ['pump', 'before', 'after'] : ['pump', 'after'];
+}
+
+/** 각 단계에서 그릴 몸. 전부 세션 완료 스냅샷에 이미 있는 값이며 다시 계산하지 않는다. */
+export function revealBodyParameters(
+  phase: GrowthRevealPhase,
+  snapshot: {
+    bodyParametersWithPump: DanbaekBodyParameters;
+    bodyParametersBefore: DanbaekBodyParameters;
+    bodyParametersAfter: DanbaekBodyParameters;
+  }
+): DanbaekBodyParameters {
+  if (phase === 'pump') return snapshot.bodyParametersWithPump;
+  if (phase === 'before') return snapshot.bodyParametersBefore;
+  return snapshot.bodyParametersAfter;
+}

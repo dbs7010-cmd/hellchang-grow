@@ -1,4 +1,4 @@
-import { useRootNavigationState, useRouter } from 'expo-router';
+import { useNavigation, useRootNavigationState, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,7 +31,14 @@ import { WorkoutRecord, WorkoutSetEntry } from '@/types/workout';
 import { SessionExerciseEntry, WorkoutSession } from '@/types/workout-session';
 import { detectPRs, findPreviousPerformance, PrEvent } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
-import { buildGrowthRevealMuscles, hasPermanentBodyChange } from '@/utils/growth-reveal';
+import {
+  buildGrowthRevealMuscles,
+  buildGrowthRevealSequence,
+  hasPermanentBodyChange,
+  revealBodyParameters,
+  type GrowthRevealPhase,
+} from '@/utils/growth-reveal';
+import { shouldConfirmSessionExit } from '@/utils/session-exit';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import { formatVolumeKg } from '@/utils/workout-stats';
 import { deriveWorkoutCharacterState } from '@/utils/workout-character-motion';
@@ -113,6 +120,7 @@ export default function SessionScreen() {
    */
   const rootNavigationState = useRootNavigationState();
   const navigatorReady = Boolean(rootNavigationState?.key);
+  const navigation = useNavigation();
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [summary, setSummary] = useState<SessionSummaryWithLine | null>(null);
@@ -145,6 +153,55 @@ export default function SessionScreen() {
   const [customRestSeconds, setCustomRestSeconds] = useState('');
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
+  /** 뒤로가기를 가로챈 상태인지. 확인 바를 띄우는 동안 화면은 그대로 남는다. */
+  const [confirmExit, setConfirmExit] = useState(false);
+  /** 사용자가 [세션 유지하고 나가기]를 눌렀다는 표시. 이때만 뒤로가기를 통과시킨다. */
+  const exitConfirmedRef = useRef(false);
+  /** 가로챈 뒤로가기 동작. 확인 후 그대로 다시 보내 원래 가려던 화면으로 나간다. */
+  const blockedExitActionRef = useRef<Parameters<typeof navigation.dispatch>[0] | null>(null);
+
+  /**
+   * 운동 중 뒤로가기(Android 하드웨어 back / 브라우저 back)를 한 번 잡아 확인을 받는다.
+   *
+   * **뒤로가기는 운동 종료가 아니다.** 여기서는 어떤 저장도 하지 않는다 — 세션은 그대로
+   * 남고, 확인 후 나가더라도 기록/XP/streak/Growth는 만들어지지 않는다. 사용자는 홈의
+   * [운동으로 돌아가기]로 같은 세션에 복귀한다. 완료는 오직 [운동 종료] 경로에서만 일어난다.
+   */
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove' as never, ((event: {
+      preventDefault: () => void;
+      data: { action: Parameters<typeof navigation.dispatch>[0] };
+    }) => {
+      const shouldConfirm = shouldConfirmSessionExit({
+        hasActiveSession: Boolean(activeSession),
+        hasSummary: Boolean(summary),
+        isEnding: ending,
+        exitConfirmed: exitConfirmedRef.current,
+      });
+      if (!shouldConfirm) return;
+      event.preventDefault();
+      blockedExitActionRef.current = event.data.action;
+      setConfirmEnd(false);
+      setConfirmExit(true);
+    }) as never);
+    return unsubscribe;
+  }, [navigation, activeSession, summary, ending]);
+
+  /** [세션 유지하고 나가기] — 저장은 그대로 두고 화면만 벗어난다. */
+  const handleKeepSessionAndExit = useCallback(() => {
+    exitConfirmedRef.current = true;
+    setConfirmExit(false);
+    const blocked = blockedExitActionRef.current;
+    blockedExitActionRef.current = null;
+    if (blocked) navigation.dispatch(blocked);
+    else exitToHome();
+  }, [navigation, exitToHome]);
+
+  /** [계속 운동] — 가로챈 이동을 버리고 세션 화면에 그대로 머문다. */
+  const handleStayInSession = useCallback(() => {
+    blockedExitActionRef.current = null;
+    setConfirmExit(false);
+  }, []);
 
   useEffect(() => {
     if (!activeSession || activeSession.status === 'completed') return;
@@ -637,7 +694,35 @@ export default function SessionScreen() {
 
       {/* 하단 조작 바: 운동 추가 / 운동 종료. 종료는 2단계 확인을 거친다 — 세트 완료 옆에서
           잘못 눌러 세션이 날아가는 사고를 막는다. Gold는 [세트 완료]에만 쓴다. */}
-      {confirmEnd ? (
+      {/*
+        뒤로가기 확인이 종료 확인보다 먼저다 — 둘은 다른 결정이다.
+        나가기는 세션을 남긴 채 화면만 벗어나고, 종료는 기록/보상을 확정한다.
+      */}
+      {confirmExit ? (
+        <View style={styles.confirmBar}>
+          <ThemedText type="small" style={styles.confirmText}>
+            운동이 아직 진행 중이에요. 세션을 그대로 두고 나갈까요?
+          </ThemedText>
+          <ThemedText type="caption" themeColor="textSecondary" style={styles.confirmText}>
+            나가도 기록되지 않아요. 홈의 [운동으로 돌아가기]로 이어서 할 수 있어요.
+          </ThemedText>
+          <View style={styles.inlineRow}>
+            <PrimaryButton
+              label="계속 운동"
+              variant="secondary"
+              style={styles.flexItem}
+              onPress={handleStayInSession}
+            />
+            <PrimaryButton
+              label="세션 유지하고 나가기"
+              variant="gold"
+              haptic="medium"
+              style={styles.flexItem}
+              onPress={handleKeepSessionAndExit}
+            />
+          </View>
+        </View>
+      ) : confirmEnd ? (
         <View style={styles.confirmBar}>
           <ThemedText type="small" style={styles.confirmText}>
             {endError
@@ -806,21 +891,25 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
     [summary.growth, growthAfter]
   );
   const stageChanges = muscles.filter((muscle) => muscle.stageChanged);
-  const [revealPhase, setRevealPhase] = useState<'pump' | 'before' | 'after'>(
-    permanentChanged && reducedMotion ? 'after' : 'pump'
+  /**
+   * 항상 실제(영구) 몸으로 끝나는 순서. 영구 변화가 없으면 BEFORE를 건너뛰고 PUMP → AFTER다 —
+   * 펌핑 상태로 끝내면 홈에서 보는 실제 몸과 달라 사용자가 혼란스러워진다.
+   */
+  const revealSequence = useMemo(
+    () => buildGrowthRevealSequence({ permanentChanged, reducedMotion }),
+    [permanentChanged, reducedMotion]
   );
+  const [revealPhase, setRevealPhase] = useState<GrowthRevealPhase>(revealSequence[0]);
   const revealScale = useSharedValue(1);
   const revealOpacity = useSharedValue(1);
 
   useEffect(() => {
-    if (!permanentChanged || reducedMotion) return;
-    const beforeTimer = setTimeout(() => setRevealPhase('before'), 650);
-    const afterTimer = setTimeout(() => setRevealPhase('after'), 1050);
-    return () => {
-      clearTimeout(beforeTimer);
-      clearTimeout(afterTimer);
-    };
-  }, [permanentChanged, reducedMotion]);
+    // 첫 단계는 이미 그리고 있으므로 그 다음 단계들만 순서대로 넘긴다.
+    const timers = revealSequence.slice(1).map((phase, index) =>
+      setTimeout(() => setRevealPhase(phase), 650 + index * 400)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [revealSequence]);
 
   useEffect(() => {
     if (revealPhase !== 'after' || reducedMotion) return;
@@ -832,12 +921,7 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
     opacity: revealOpacity.get(),
     transform: [{ scale: revealScale.get() }],
   }));
-  const displayedBody =
-    revealPhase === 'pump'
-      ? summary.bodyParametersWithPump
-      : revealPhase === 'before'
-        ? summary.bodyParametersBefore
-        : summary.bodyParametersAfter;
+  const displayedBody = revealBodyParameters(revealPhase, summary);
   const revealTitle =
     revealPhase === 'pump'
       ? '운동 직후 펌핑'
@@ -845,7 +929,15 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
         ? '운동 전 단백이'
         : stageChanges.length > 0
           ? '오늘의 성장 반영 완료!'
-          : '오늘의 성장 반영';
+          : '지금 단백이 실제 몸';
+
+  /** 펌핑과 영구 성장의 관계를 한 줄로 짚어 준다 (보조 계층 문구). */
+  const revealCaption =
+    revealPhase === 'pump'
+      ? '지금은 펌핑 상태예요. 잠시 뒤 가라앉아요.'
+      : revealPhase === 'after'
+        ? '펌핑이 빠진 실제 몸이에요. 오늘 쌓은 SP는 그대로 남습니다.'
+        : null;
 
   const skipReveal = () => setRevealPhase('after');
 
@@ -876,7 +968,13 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
           <ThemedText type="captionBold" style={[styles.centered, { color: theme.gold }]}>
             {revealTitle}
           </ThemedText>
-          {permanentChanged && revealPhase !== 'after' && (
+          {revealCaption && (
+            <ThemedText type="caption" themeColor="textSecondary" style={styles.centered}>
+              {revealCaption}
+            </ThemedText>
+          )}
+          {/* 영구 변화가 없는 날에도 펌핑을 건너뛰고 실제 몸을 바로 볼 수 있다. */}
+          {revealPhase !== 'after' && (
             <Pressable onPress={skipReveal} hitSlop={12} accessibilityRole="button">
               <ThemedText type="caption" themeColor="textSecondary">바로 보기</ThemedText>
             </Pressable>
@@ -917,6 +1015,10 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
                 </ThemedText>
               </View>
             </ThemedView>
+            {/* 진행도 숫자가 무엇을 향한 것인지 한 줄로 알려 준다. */}
+            <ThemedText type="caption" themeColor="textSecondary">
+              100%가 되면 Stage가 올라 단백이 몸이 실제로 커져요.
+            </ThemedText>
           </Section>
         )}
 

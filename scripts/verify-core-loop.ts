@@ -1,4 +1,6 @@
 import { mutateSessionIfActive, runSessionCompletion } from '@/utils/core-loop';
+import { shouldConfirmSessionExit } from '@/utils/session-exit';
+import * as sessionExitModule from '@/utils/session-exit';
 import type {
   SessionCompletionReceipt,
   SessionCompletionResultSnapshot,
@@ -250,6 +252,53 @@ async function expectFirstFailure(run: () => Promise<unknown>) {
     harness.effects.rewards.size,
   ], [1, 1, 1]);
   check('Receipt F: successful recovery clears pending receipt', harness.receipt(), null);
+}
+
+
+// ── 뒤로가기 안전 이탈: 세션을 끝내지 않고 화면만 벗어난다 ─────────────────
+{
+  let session = createSession('strength', 'core-exit', START_ISO, {
+    initialExercises: [{ exerciseId: 'squat', exerciseName: '스쿼트' }],
+  });
+  session = addSetToExercise(session, session.exercises[0].id, 'exit-set-1', { weightKg: 60, reps: 5 });
+  session = completeSet(session, session.exercises[0].id, 'exit-set-1');
+  const beforeExit = structuredClone(session);
+
+  check('A1: back during a workout asks for confirmation',
+    shouldConfirmSessionExit({ hasActiveSession: true, hasSummary: false, isEnding: false, exitConfirmed: false }),
+    true);
+  check('A1: a paused session is still a workout in progress',
+    shouldConfirmSessionExit({ hasActiveSession: true, hasSummary: false, isEnding: false, exitConfirmed: false }),
+    true);
+
+  check('A2: staying keeps the guard armed for the next back press',
+    shouldConfirmSessionExit({ hasActiveSession: true, hasSummary: false, isEnding: false, exitConfirmed: false }),
+    true);
+  check('A2: the session object is untouched by the exit decision', session, beforeExit);
+
+  check('A3: a confirmed exit is allowed through navigation',
+    shouldConfirmSessionExit({ hasActiveSession: true, hasSummary: false, isEnding: false, exitConfirmed: true }),
+    false);
+  check('A3: leaving does not clear the completed sets that will be resumed',
+    computeCompletedSetsCount(session), 1);
+  check('A3: leaving keeps the session status untouched', session.status, 'active');
+
+  // A4: 이탈 경로는 저장/보상 파이프라인과 연결돼 있지 않다 — 순수 판단 함수 하나뿐이다.
+  check('A4: the exit module exposes only a pure decision (no persistence, no rewards)',
+    Object.keys(sessionExitModule).sort(),
+    ['shouldConfirmSessionExit']);
+  check('A4: the decision never mutates its input session',
+    computeCompletedExerciseCount(session), 1);
+
+  check('A5: the result screen never blocks back',
+    shouldConfirmSessionExit({ hasActiveSession: true, hasSummary: true, isEnding: false, exitConfirmed: false }),
+    false);
+  check('A5: completion in flight never blocks back',
+    shouldConfirmSessionExit({ hasActiveSession: true, hasSummary: false, isEnding: true, exitConfirmed: false }),
+    false);
+  check('A5: with no session there is nothing to guard',
+    shouldConfirmSessionExit({ hasActiveSession: false, hasSummary: false, isEnding: false, exitConfirmed: false }),
+    false);
 }
 
 console.log(failures === 0 ? '\nAll CORE LOOP checks passed.' : `\n${failures} CORE LOOP check(s) FAILED.`);

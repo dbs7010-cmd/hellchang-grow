@@ -2,7 +2,12 @@ import { MuscleGroupDetails, type MuscleGroupDetail } from '@/types/exercise';
 import type { DanbaekBodyParameters } from '@/types/body-state';
 import type { GrowthApplicationResult } from '@/types/growth';
 import { createDefaultGrowthState } from '@/utils/growth-state';
-import { buildGrowthRevealMuscles, hasPermanentBodyChange } from '@/utils/growth-reveal';
+import {
+  buildGrowthRevealMuscles,
+  buildGrowthRevealSequence,
+  hasPermanentBodyChange,
+  revealBodyParameters,
+} from '@/utils/growth-reveal';
 
 let failures = 0;
 function expect(name: string, condition: boolean) {
@@ -86,6 +91,34 @@ expect('D: tiny SP does not create a stage rise', tiny[0]?.stageChanged === fals
 expect('E: identical permanent parameters suppress BEFORE/AFTER', !hasPermanentBodyChange(params(.1), params(.1)));
 expect('B/E: a real parameter delta enables BEFORE/AFTER', hasPermanentBodyChange(params(.1), params(.2)));
 expect('F: null growth creates no fake reveal rows', buildGrowthRevealMuscles({ growth: null, growthAfter }).length === 0);
+
+
+// ── Result reveal 순서: 항상 실제(영구) 몸으로 끝난다 ──────────────────────
+const pumpBody = params(.9);
+const beforeBody = params(.1);
+const afterBody = params(.2);
+const snapshot = {
+  bodyParametersWithPump: pumpBody,
+  bodyParametersBefore: beforeBody,
+  bodyParametersAfter: afterBody,
+};
+
+const noChangeSequence = buildGrowthRevealSequence({ permanentChanged: false, reducedMotion: false });
+expect('B1: no permanent change still runs PUMP then AFTER', JSON.stringify(noChangeSequence) === JSON.stringify(['pump', 'after']));
+expect('B1: no permanent change never ends on the pumped body', noChangeSequence[noChangeSequence.length - 1] === 'after');
+expect('B1: BEFORE is skipped when nothing changed permanently', !noChangeSequence.includes('before'));
+
+expect('B2: skipping from PUMP lands on the permanent body', revealBodyParameters('after', snapshot) === afterBody);
+
+const changedSequence = buildGrowthRevealSequence({ permanentChanged: true, reducedMotion: false });
+expect('B3: a permanent change keeps PUMP -> BEFORE -> AFTER', JSON.stringify(changedSequence) === JSON.stringify(['pump', 'before', 'after']));
+
+expect('B4: AFTER draws the permanent bodyParametersAfter', revealBodyParameters('after', snapshot) === snapshot.bodyParametersAfter);
+expect('B4: PUMP draws the pumped snapshot only', revealBodyParameters('pump', snapshot) === snapshot.bodyParametersWithPump);
+expect('B4: BEFORE draws the pre-workout snapshot', revealBodyParameters('before', snapshot) === snapshot.bodyParametersBefore);
+
+expect('B5: reduced motion goes straight to the permanent body', JSON.stringify(buildGrowthRevealSequence({ permanentChanged: true, reducedMotion: true })) === JSON.stringify(['after']));
+expect('B5: reveal never invents a body outside the session snapshot', ['pump', 'before', 'after'].every((phase) => [pumpBody, beforeBody, afterBody].includes(revealBodyParameters(phase as never, snapshot))));
 
 console.log(failures === 0 ? '\nAll GROWTH REVEAL checks passed.' : `\n${failures} GROWTH REVEAL check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);
