@@ -2,6 +2,7 @@ import { AppConfig } from '@/config/app-config';
 import { resolveBodyGoal } from '@/config/body-goals';
 import type { BodyGoalId } from '@/config/body-goals';
 import { getThisWeekRecords } from '@/data/workout-repository';
+import { isEffectiveSet } from '@/utils/workout-session';
 import type { BodyHistoryEntry } from '@/types/body';
 import type { ExerciseDefinition } from '@/types/exercise';
 import type { Routine } from '@/types/routine';
@@ -170,7 +171,7 @@ export function buildPtContext(input: {
             status: activeSession!.status,
             currentExerciseName: currentExercise?.exerciseName ?? null,
             completedSets: activeSession!.exercises.reduce(
-              (sum, exercise) => sum + exercise.sets.filter((set) => set.completed).length,
+              (sum, exercise) => sum + exercise.sets.filter(isEffectiveSet).length,
               0
             ),
           }

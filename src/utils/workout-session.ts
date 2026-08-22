@@ -335,7 +335,7 @@ export function getSetProgress(
 ): { completed: number; target?: number } {
   const entry = session.exercises.find((e) => e.id === exerciseEntryId);
   return {
-    completed: entry?.sets.filter((set) => set.completed).length ?? 0,
+    completed: entry?.sets.filter(isEffectiveSet).length ?? 0,
     target: entry?.targetSets,
   };
 }
@@ -413,23 +413,37 @@ export function getRestSecondsRemaining(session: WorkoutSession, nowMs: number):
 
 // ── 세션 → 기존 WorkoutRecord 변환 ──────────────────────────────────────────
 
+/**
+ * 실제로 수행된 것으로 인정하는 세트인가 — 기록/통계/PR/보상의 단일 판정 기준이다.
+ *
+ * 체크만 하고 횟수를 넣지 않은 세트(자동으로 준비된 빈 세트를 그대로 완료한 경우)는
+ * 운동으로 세지 않는다. 그런 세트가 기록에 들어가면 운동 횟수·연속 기록·XP가 실제로
+ * 하지 않은 운동으로 올라간다.
+ *
+ * 중량 0은 무효 조건이 아니다: 맨몸 운동은 0kg x N회가 정상이고, 시간 종목(plank)은
+ * reps 필드를 초로 쓰므로 둘 다 reps > 0이면 유효하다.
+ */
+export function isEffectiveSet(set: WorkoutSetEntry): boolean {
+  return set.completed && (set.reps ?? 0) > 0;
+}
+
 export function computeCompletedSetsCount(session: WorkoutSession): number {
   return session.exercises.reduce(
-    (sum, exercise) => sum + exercise.sets.filter((set) => set.completed).length,
+    (sum, exercise) => sum + exercise.sets.filter(isEffectiveSet).length,
     0
   );
 }
 
 /** Result의 "운동 N개"는 계획에 담긴 수가 아니라 실제 완료 세트가 있는 운동 수다. */
 export function computeCompletedExerciseCount(session: WorkoutSession): number {
-  return session.exercises.filter((exercise) => exercise.sets.some((set) => set.completed)).length;
+  return session.exercises.filter((exercise) => exercise.sets.some(isEffectiveSet)).length;
 }
 
 /** 총 볼륨 = weight × reps 기반으로 계산 가능한(완료된, 중량/횟수 모두 있는) 세트만 포함한다. */
 export function computeTotalVolumeKg(session: WorkoutSession): number {
   return session.exercises.reduce((sum, exercise) => {
     const exerciseVolume = exercise.sets
-      .filter((set) => set.completed && set.weightKg !== undefined && set.reps !== undefined)
+      .filter((set) => isEffectiveSet(set) && set.weightKg !== undefined)
       .reduce((setSum, set) => setSum + (set.weightKg as number) * (set.reps as number), 0);
     return sum + exerciseVolume;
   }, 0);
@@ -441,7 +455,9 @@ export function sessionToWorkoutRecordInput(
   titleLabel: string
 ): Omit<WorkoutRecord, 'id' | 'createdAt'> {
   const exercises: WorkoutExercise[] = session.exercises.map((entry) => {
-    const completedSets = entry.sets.filter((set) => set.completed);
+    // 무효 세트는 저장 자체를 하지 않는다 — 한 번 기록에 들어가면 히스토리 통계와 PR이
+    // 계속 그 값을 사실로 취급한다.
+    const completedSets = entry.sets.filter(isEffectiveSet);
     const lastSet = completedSets[completedSets.length - 1];
     const exercise: WorkoutExercise = {
       id: entry.id,

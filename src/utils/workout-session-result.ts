@@ -8,6 +8,7 @@ import type { WorkoutRecord } from '@/types/workout';
 import type { WorkoutSession } from '@/types/workout-session';
 import { findAllTimeBestWeight } from '@/utils/exercise-history';
 import { estimateOneRepMax } from '@/utils/growth-calculation';
+import { isEffectiveSet } from '@/utils/workout-session';
 import { resolveExercise } from '@/utils/exercise-spec';
 import { inferMotionFamily } from '@/config/motion-families';
 
@@ -38,7 +39,8 @@ export function buildWorkoutSessionResult(input: {
   const personalRecords: WorkoutSessionResult['personalRecords'] = [];
 
   for (const entry of session.exercises) {
-    const completed = entry.sets.filter((set) => set.completed);
+    // 체크만 하고 횟수가 없는 세트는 결과가 아니다 — PR/볼륨/부위 배분 전부에서 빠진다.
+    const completed = entry.sets.filter(isEffectiveSet);
     if (completed.length === 0) continue;
 
     const sets: SessionSetResult[] = completed.map((set) => ({

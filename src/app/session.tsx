@@ -43,7 +43,9 @@ import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import { formatVolumeKg } from '@/utils/workout-stats';
 import { deriveWorkoutCharacterState } from '@/utils/workout-character-motion';
 import {
+  computeCompletedSetsCount,
   computeElapsedSeconds,
+  isEffectiveSet,
   formatElapsedTime,
   getAutoRestSeconds,
   getCurrentExercise,
@@ -317,11 +319,10 @@ export default function SessionScreen() {
   const nextExercise = getNextExercise(activeSession);
   const previousExercise = currentIndex > 0 ? activeSession.exercises[currentIndex - 1] : undefined;
   const pendingSet = currentExercise?.sets.find((set) => !set.completed);
-  const completedSets = currentExercise?.sets.filter((set) => set.completed) ?? [];
-  const sessionCompletedSets = activeSession.exercises.reduce(
-    (total, exercise) => total + exercise.sets.filter((set) => set.completed).length,
-    0
-  );
+  const completedSets = currentExercise?.sets.filter(isEffectiveSet) ?? [];
+  // 화면에 보이는 완료 세트 수도 기록과 같은 기준을 쓴다 — 체크만 하고 횟수가 없는
+  // 세트는 어디에서도 1세트로 세지 않는다.
+  const sessionCompletedSets = computeCompletedSetsCount(activeSession);
   const setProgress = currentExercise
     ? getSetProgress(activeSession, currentExercise.id)
     : { completed: 0, target: undefined };
@@ -1181,6 +1182,12 @@ function SetHero({
   const weight = set.weightKg ?? 0;
   const reps = set.reps ?? 0;
   const [weightOpen, setWeightOpen] = useState(false);
+  /**
+   * 횟수가 없는 세트는 완료할 수 없다 — 체크만 된 빈 세트가 기록/연속/XP를 만들지
+   * 않게 하는 첫 번째 차단이다(데이터 계층에서도 같은 기준으로 한 번 더 막는다).
+   * 중량 0은 막지 않는다: 맨몸 운동은 0kg가 정상이고, 시간 종목은 이 값이 초다.
+   */
+  const canComplete = reps > 0;
   const showWeight = usesWeight || weightOpen || weight > 0;
 
   const stepWeight = (delta: number) => onAdjust({ weightKg: delta });
@@ -1229,12 +1236,17 @@ function SetHero({
         </View>
         <StepperButton label="+" disabled={disabled} onPress={() => stepReps(AppConfig.setRepsStep)} />
       </View>
+      {!canComplete && (
+        <ThemedText type="caption" themeColor="textSecondary">
+          횟수를 입력하면 세트를 완료할 수 있어요.
+        </ThemedText>
+      )}
       <PrimaryButton
         label="✓ 세트 완료"
         variant="gold"
         size="large"
         haptic="medium"
-        disabled={disabled}
+        disabled={disabled || !canComplete}
         style={styles.fullWidth}
         onPress={onComplete}
       />

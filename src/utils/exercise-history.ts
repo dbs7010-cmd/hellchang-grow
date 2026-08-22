@@ -1,6 +1,7 @@
 import type { ExerciseDefinition, MuscleGroup } from '@/types/exercise';
 import type { WorkoutRecord, WorkoutSetEntry } from '@/types/workout';
 import type { WorkoutSession } from '@/types/workout-session';
+import { isEffectiveSet } from '@/utils/workout-session';
 
 export interface PreviousPerformance {
   date: string;
@@ -182,7 +183,7 @@ export function detectPRs(session: WorkoutSession, records: WorkoutRecord[]): Pr
   const prs: PrEvent[] = [];
   for (const exercise of session.exercises) {
     const completedWeights = exercise.sets
-      .filter((set) => set.completed && set.weightKg !== undefined)
+      .filter((set) => isEffectiveSet(set) && set.weightKg !== undefined)
       .map((set) => set.weightKg as number);
     if (completedWeights.length === 0) continue;
 

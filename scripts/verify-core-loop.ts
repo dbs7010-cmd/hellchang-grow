@@ -1,5 +1,6 @@
 import { mutateSessionIfActive, runSessionCompletion } from '@/utils/core-loop';
 import { shouldConfirmSessionExit } from '@/utils/session-exit';
+import { detectPRs } from '@/utils/exercise-history';
 import * as sessionExitModule from '@/utils/session-exit';
 import type {
   SessionCompletionReceipt,
@@ -9,8 +10,11 @@ import {
   addExerciseToSession,
   addSetToExercise,
   completeSet,
+  isEffectiveSet,
+  sessionToWorkoutRecordInput,
   computeCompletedExerciseCount,
   computeCompletedSetsCount,
+  computeTotalVolumeKg,
   createSession,
   getRestSecondsRemaining,
   pauseSession,
@@ -299,6 +303,63 @@ async function expectFirstFailure(run: () => Promise<unknown>) {
   check('A5: with no session there is nothing to guard',
     shouldConfirmSessionExit({ hasActiveSession: false, hasSummary: false, isEnding: false, exitConfirmed: false }),
     false);
+}
+
+
+// ── 무효 세트(체크만 하고 횟수 없음)는 어떤 기록/보상도 만들지 않는다 ─────────
+{
+  const set = (over: Record<string, unknown>) => ({ id: 's', completed: true, ...over }) as never;
+  check('A: a completed set with no reps is not an effective set', isEffectiveSet(set({})), false);
+  check('B: a completed set with 0 reps is not an effective set', isEffectiveSet(set({ reps: 0 })), false);
+  check('H: bodyweight 0kg x 10 reps is a real set', isEffectiveSet(set({ weightKg: 0, reps: 10 })), true);
+  check('I: a duration set counts its seconds as reps', isEffectiveSet(set({ reps: 45 })), true);
+  check('K: a normal weighted set stays effective', isEffectiveSet(set({ weightKg: 60, reps: 8 })), true);
+  check('an unchecked set is never effective', isEffectiveSet({ id: 's', weightKg: 60, reps: 8, completed: false }), false);
+
+  // 무효 세트만 있는 세션
+  let empty = createSession('strength', 'core-invalid', START_ISO, {
+    initialExercises: [{ exerciseId: 'squat', exerciseName: '스쿼트' }],
+  });
+  empty = addSetToExercise(empty, empty.exercises[0].id, 'inv-1');
+  empty = completeSet(empty, empty.exercises[0].id, 'inv-1');
+  empty = addSetToExercise(empty, empty.exercises[0].id, 'inv-2', { weightKg: 100, reps: 0 });
+  empty = completeSet(empty, empty.exercises[0].id, 'inv-2');
+  check('D: a session of invalid sets reports zero completed sets', computeCompletedSetsCount(empty), 0);
+  check('E: a session of invalid sets reports zero completed exercises', computeCompletedExerciseCount(empty), 0);
+  const emptyRecord = sessionToWorkoutRecordInput(empty, '하체');
+  check('F: invalid sets are never written into the record', emptyRecord.exercises?.[0]?.setDetails, undefined);
+  check('F: the record keeps no set summary for them', emptyRecord.exercises?.[0]?.sets, undefined);
+  /**
+   * G: 무효 세트만 있는 세션은 기존 0세트 세션과 같은 경로다. endWorkoutSession이
+   * completedSets === 0에서 되돌아가므로 record/XP/streak/Growth 어느 것도 실행되지 않는다.
+   */
+  check('G: an invalid-only session takes the same path as a zero-set session',
+    computeCompletedSetsCount(empty) === 0, true);
+
+  // C: 중량만 있고 횟수가 없으면 PR이 되지 않는다
+  check('C: a 100kg set with 0 reps produces no PR', detectPRs(empty, []).length, 0);
+
+  // J: 유효/무효가 섞이면 유효한 것만 남는다
+  let mixed = createSession('strength', 'core-mixed', START_ISO, {
+    initialExercises: [
+      { exerciseId: 'squat', exerciseName: '스쿼트' },
+      { exerciseId: 'pull-up', exerciseName: '풀업' },
+    ],
+  });
+  mixed = addSetToExercise(mixed, mixed.exercises[0].id, 'mix-1', { weightKg: 60, reps: 10 });
+  mixed = completeSet(mixed, mixed.exercises[0].id, 'mix-1');
+  mixed = addSetToExercise(mixed, mixed.exercises[0].id, 'mix-2', { weightKg: 60 });
+  mixed = completeSet(mixed, mixed.exercises[0].id, 'mix-2');
+  mixed = addSetToExercise(mixed, mixed.exercises[1].id, 'mix-3', { weightKg: 0, reps: 12 });
+  mixed = completeSet(mixed, mixed.exercises[1].id, 'mix-3');
+  check('J: only the effective sets are counted', computeCompletedSetsCount(mixed), 2);
+  check('J: both exercises with a real set are counted', computeCompletedExerciseCount(mixed), 2);
+  const mixedRecord = sessionToWorkoutRecordInput(mixed, '하체');
+  check('J: the record stores only the effective squat set',
+    mixedRecord.exercises?.[0]?.setDetails?.map((entry) => entry.id), ['mix-1']);
+  check('H: the bodyweight set is stored as a real set',
+    mixedRecord.exercises?.[1]?.setDetails?.map((entry) => entry.id), ['mix-3']);
+  check('K: a normal session still reports its volume', computeTotalVolumeKg(mixed), 600);
 }
 
 console.log(failures === 0 ? '\nAll CORE LOOP checks passed.' : `\n${failures} CORE LOOP check(s) FAILED.`);
