@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 280" data-danbaek-canon-stage="1">
+  <!-- CANON derivative from user-approved Danbaek growth guide. Identity/height/limb-length locked. -->
+  <g fill="#fff" stroke="#111" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <g id="head"><path d="M100 38 C111 38 119 46 119 57 C119 68 112 75 100 76 C88 76 81 69 81 57 C81 46 89 38 100 38 Z"/></g>
+    <g id="body">
+      <g id="torso-base"><path d="M99 76 C92 74 86 77 79 84 C78 95 78 103 82 116 C84 128 86 138 88 150 C88 159 89 167 86 171 C92 175 108 175 114 170 C112 165 112 159 112 150 C114 138 116 128 118 116 C122 103 122 95 121 84 C114 77 108 74 101 76 Z"/></g>
+      <g id="arm-left"><path d="M83 87 C75 91 72 104 72 117 C71 128 74 138 73 149 C73 157 77 165 81 167 C85 168 88 164 87 157 C86 146 90 133 89 120 C89 105 87 95 83 87 Z"/></g>
+      <g id="arm-right"><path d="M117 87 C125 91 128 104 128 117 C129 128 126 138 127 149 C127 157 123 165 119 167 C115 168 112 164 113 157 C114 146 110 133 111 120 C111 105 113 95 117 87 Z"/></g>
+      <g id="leg-left"><path d="M90 168 C86 178 84 194 87 208 C87 220 86 236 88 248 C89 254 91 256 95 254 C97 247 99 232 98 219 C99 203 100 183 99 169 Z"/></g>
+      <g id="leg-right"><path d="M110 168 C114 178 116 194 113 208 C113 220 114 236 112 248 C111 254 109 256 105 254 C103 247 101 232 102 219 C101 203 100 183 101 169 Z"/></g>
+    </g>
+  </g>
+  <g id="muscle-lines" fill="none" stroke="#111" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+  <g id="face" fill="#111"><circle id="eye-left" cx="94" cy="54" r="1.2"/><circle id="eye-right" cx="106" cy="54" r="1.2"/></g>
+  <path id="mouth" d="M96.5 64 Q100 65.5 103.5 63.5" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>
+</svg>
