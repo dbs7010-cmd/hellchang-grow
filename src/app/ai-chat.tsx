@@ -65,15 +65,21 @@ export default function AiChatScreen() {
             {StanleyTrainer.portraitPlaceholder} {pickTrainerLine(StanleyTrainer.dialogueSet.adPitch).text}
           </ThemedText>
           <ThemedText type="caption" themeColor="textSecondary">
-            광고를 보거나 구독하면 AI PT를 이용할 수 있어요. 어느 쪽이든 AI 기능은 똑같아요 — 접근
-            방식만 달라요.
+            광고를 보면 AI PT를 이용할 수 있어요. 구독과 AI 기능은 똑같아요 — 접근 방식만 달라요.
           </ThemedText>
           <PrimaryButton label="광고 보고 이용하기" variant="gold" onPress={handleWatchAd} />
-          <PrimaryButton label="구독하기" variant="secondary" onPress={handleSubscribe} />
+          {/*
+            결제 SDK가 붙기 전까지 출시 빌드에 구독 버튼을 두지 않는다 — 누르면 결제된 것처럼
+            보이는 버튼은 거짓말이고, 그 경로가 곧 premium 우회가 된다.
+          */}
           {__DEV__ && (
-            <ThemedText type="caption" themeColor="textSecondary">
-              DEV: 광고/결제 SDK 연동 전이라 mock으로 동작해요.
-            </ThemedText>
+            <>
+              <PrimaryButton label="구독하기 (DEV)" variant="secondary" onPress={handleSubscribe} />
+              <ThemedText type="caption" themeColor="textSecondary">
+                DEV: 광고/결제 SDK 연동 전이라 mock으로 동작해요. mock 구독은 출시 빌드에서
+                인정되지 않아요.
+              </ThemedText>
+            </>
           )}
         </>
       )}
