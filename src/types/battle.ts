@@ -99,6 +99,16 @@ export type BattleProgressionState = Readonly<{
   coins: number;
   /** 획득한 해금 토큰. 아직 무엇과도 교환하지 않는다 (표현과 무관한 ID). */
   unlockTokens: readonly string[];
+  /**
+   * 저장된 `battle.fatigue`가 정확했던 시각(epoch ms). 시간 경과 회복의 기준점이다.
+   *
+   * `null`이면 기준을 모른다는 뜻이고, 그때는 회복을 주지 않고 다음 조회 시각을 기준으로
+   * 삼는다 — 손상된 timestamp가 공짜 회복이 되지 않게 한다.
+   *
+   * **도메인이 시계를 읽어서 채우지 않는다.** 현재 시각은 언제나 바깥(orchestration)에서
+   * 주입된다.
+   */
+  fatigueUpdatedAt: number | null;
 }>;
 
 /** 화면이 그대로 읽을 수 있는 전투 결과. 저장되지 않는 표시용 값이다. */
@@ -159,6 +169,7 @@ export const INITIAL_BATTLE_PROGRESSION: BattleProgressionState = Object.freeze(
   battle: INITIAL_BATTLE_STATE,
   coins: 0,
   unlockTokens: Object.freeze([]) as readonly string[],
+  fatigueUpdatedAt: null,
 });
 
 export const NO_BATTLE_REWARD: BattleReward = Object.freeze({ coins: 0, unlockToken: null });

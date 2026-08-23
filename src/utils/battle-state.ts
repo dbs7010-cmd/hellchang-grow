@@ -86,8 +86,23 @@ export function sanitizeUnlockTokens(value: unknown): readonly string[] {
   return [...unique];
 }
 
+/**
+ * 저장된 timestamp를 믿을 수 있는 값으로 되돌린다.
+ *
+ * 유한한 양수만 통과한다. NaN / Infinity / 음수 / 0 / 문자열은 **null**(기준 없음)이다 —
+ * 손상된 값을 epoch(0)로 읽으면 "수십 년이 흘렀다"가 되어 공짜 회복을 주게 된다.
+ */
+export function safeTimestamp(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
+}
+
 export function createInitialBattleProgression(): BattleProgressionState {
-  return { ...INITIAL_BATTLE_PROGRESSION, battle: createInitialBattleState(), unlockTokens: [] };
+  return {
+    ...INITIAL_BATTLE_PROGRESSION,
+    battle: createInitialBattleState(),
+    unlockTokens: [],
+    fatigueUpdatedAt: null,
+  };
 }
 
 /**
@@ -117,6 +132,7 @@ export function migrateBattleProgression(
     battle: migrateBattleState(battleSource),
     coins: clampCoins(wrapped.coins),
     unlockTokens: sanitizeUnlockTokens(wrapped.unlockTokens),
+    fatigueUpdatedAt: safeTimestamp(wrapped.fatigueUpdatedAt),
   };
 }
 
@@ -125,10 +141,15 @@ export function migrateBattleProgression(
  *
  * 전투 진행과 재화를 **함께** 갱신하는 것이 요점이다 — 이 결과를 한 번 저장하면 피해도,
  * 피로도도, stage도, 재화도, 토큰도 모두 반영되거나 모두 반영되지 않는다.
+ *
+ * `nowMs`는 전투가 일어난 시각이다. 피로도가 이때 올랐으므로 회복 기준점도 여기로 옮긴다 —
+ * **시계는 바깥에서 주입한다**(도메인이 직접 읽지 않는다). 중복 전투는 아무것도 바꾸지
+ * 않으므로 회복 기준점도 그대로 남는다.
  */
 export function applyBattleResolution(
   progression: BattleProgressionState,
-  resolution: BattleResolution
+  resolution: BattleResolution,
+  nowMs: number
 ): BattleProgressionState {
   const safe = migrateBattleProgression(progression);
   if (resolution.outcome === 'duplicate') return safe;
@@ -142,6 +163,8 @@ export function applyBattleResolution(
     battle: resolution.nextState,
     coins: clampCoins(safe.coins + clampCoins(resolution.reward.coins)),
     unlockTokens: tokens,
+    // 시각을 믿을 수 없으면 기준을 세우지 않는다 — 다음 조회가 그때를 기준으로 다시 잡는다.
+    fatigueUpdatedAt: safeTimestamp(nowMs) ?? safe.fatigueUpdatedAt,
   };
 }
 

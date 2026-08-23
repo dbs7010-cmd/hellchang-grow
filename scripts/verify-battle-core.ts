@@ -1,10 +1,16 @@
 import { BattleConfig } from '@/config/battle-config';
 import { BattleStages, getBattleStage, isFinalBattleStage, MaxBattleStage } from '@/config/battle-stages';
-import { INITIAL_BATTLE_STATE, type BattleInput, type BattleState } from '@/types/battle';
+import {
+  INITIAL_BATTLE_STATE,
+  type BattleInput,
+  type BattleProgressionState,
+  type BattleState,
+} from '@/types/battle';
 import type { SessionCompletionResultSnapshot } from '@/types/session-completion';
 import type { WorkoutRecord } from '@/types/workout';
 import { battleEnemyRemainingHp, isBattleWorkoutAlreadyResolved, resolveBattle } from '@/utils/battle';
 import { battleInputFromCompletion, battleInputFromWorkoutRecord } from '@/utils/battle-input';
+import { describeBattleFatigue, recoverBattleProgression } from '@/utils/battle-recovery';
 import {
   calculateBattlePower,
   fatiguePowerMultiplier,
@@ -20,7 +26,11 @@ import {
   migrateBattleState,
   sanitizeUnlockTokens,
 } from '@/utils/battle-state';
-import { syncCompletedWorkoutToBattle, type BattleSyncOperations } from '@/utils/battle-sync';
+import {
+  loadRecoveredBattleProgression,
+  syncCompletedWorkoutToBattle,
+  type BattleSyncOperations,
+} from '@/utils/battle-sync';
 
 let failures = 0;
 function expect(name: string, condition: boolean) {
@@ -38,6 +48,19 @@ const state = (over: Partial<BattleState> = {}): BattleState =>
   ({ ...createInitialBattleState(), ...over });
 /** 6세트 × 2 + floor(sqrt(4000/100)) = 12 + 6 = 18 */
 const BASE_POWER = 18;
+/** 테스트 기준 시각. 도메인은 시계를 읽지 않으므로 언제나 바깥에서 넣어 준다. */
+const T0 = 1_700_000_000_000;
+const HOUR = 60 * 60 * 1000;
+const sync = (
+  battleInput: Parameters<typeof syncCompletedWorkoutToBattle>[0],
+  operations: BattleSyncOperations,
+  nowMs: number = T0
+) => syncCompletedWorkoutToBattle(battleInput, operations, nowMs);
+const applyBattleResolutionAt = (
+  progression: Parameters<typeof applyBattleResolution>[0],
+  resolution: Parameters<typeof applyBattleResolution>[1],
+  nowMs: number = T0
+) => applyBattleResolution(progression, resolution, nowMs);
 
 // ── 1. 결정성 ────────────────────────────────────────────────────────────────
 {
@@ -253,7 +276,7 @@ const BASE_POWER = 18;
     const { store, ops } = makeStore();
 
     // 1/2. 보상이 실제로 저장된다. stage 1 적 HP 10, 18 피해 → clear (+20) → 38 coin.
-    const first = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-t1' }), ops());
+    const first = await sync(input({ workoutId: 'w-t1' }), ops());
     expect('12: 처음 반영은 applied다', first.status === 'applied');
     expect('12-1: 전투 재화가 저장 문서에 반영된다',
       first.progression?.coins === BASE_POWER + stage1.reward.clearCoins);
@@ -262,7 +285,7 @@ const BASE_POWER = 18;
     expect('12: 한 번의 반영은 한 번의 쓰기다 (부분 저장 창이 없다)', store.writes === 1);
 
     // 3. 못 잡은 전투는 피해만큼만 받고 토큰은 없다.
-    const noClear = await syncCompletedWorkoutToBattle(
+    const noClear = await sync(
       input({ workoutId: 'w-t2', completedSetCount: 1, totalVolumeKg: 0 }), ops());
     expect('12-3: 못 잡은 전투에서는 토큰이 나오지 않는다',
       noClear.progression?.unlockTokens.length === 0);
@@ -277,7 +300,7 @@ const BASE_POWER = 18;
     store.raw = JSON.stringify({
       version: 1, battle: { ...createInitialBattleState(), currentStage: 3 }, coins: 0, unlockTokens: [],
     });
-    const tokenRun = await syncCompletedWorkoutToBattle(
+    const tokenRun = await sync(
       input({ workoutId: 'w-token', completedSetCount: 20, totalVolumeKg: 0 }), ops());
     check('12-2: 해금 토큰이 저장된다', tokenRun.progression?.unlockTokens, [stage3.reward.unlockToken]);
     expect('12-2: 저장된 토큰을 조회할 수 있다',
@@ -293,12 +316,12 @@ const BASE_POWER = 18;
     store.raw = JSON.stringify({
       version: 1, battle: { ...createInitialBattleState(), currentStage: 3 }, coins: 0, unlockTokens: [],
     });
-    const applied = await syncCompletedWorkoutToBattle(
+    const applied = await sync(
       input({ workoutId: 'w-once', completedSetCount: 20, totalVolumeKg: 0 }), ops());
     const writesAfterFirst = store.writes;
 
     // 앱 재시작을 흉내낸다 — 메모리를 버리고 저장된 문서에서만 다시 판단한다.
-    const again = await syncCompletedWorkoutToBattle(
+    const again = await sync(
       input({ workoutId: 'w-once', completedSetCount: 20, totalVolumeKg: 0 }), ops());
     expect('13-6: 재시작 후 같은 운동은 duplicate다', again.status === 'duplicate');
     expect('13-4: 재처리로 재화가 늘지 않는다', again.progression?.coins === applied.progression?.coins);
@@ -318,20 +341,20 @@ const BASE_POWER = 18;
     const before = await ops().loadProgression();
 
     store.failNext = 1;
-    const failed = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-retry' }), ops());
+    const failed = await sync(input({ workoutId: 'w-retry' }), ops());
     expect('13-7: 저장 실패는 예외를 던지지 않고 failed로 알린다', failed.status === 'failed');
     check('13-7: 실패 후 문서는 통째로 이전 상태다 (진행도도 재화도 그대로)',
       await ops().loadProgression(), before);
     expect('13-7: 실패했으므로 재화도 저장되지 않았다',
       (await ops().loadProgression()).coins === 0);
 
-    const retry = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-retry' }), ops());
+    const retry = await sync(input({ workoutId: 'w-retry' }), ops());
     expect('13-7: 실패한 운동은 그대로 재시도된다', retry.status === 'applied');
     expect('13-7: 재시도로 보상이 정확히 한 번 들어간다',
       retry.progression?.coins === BASE_POWER + stage1.reward.clearCoins);
 
     const afterRetry = await ops().loadProgression();
-    const third = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-retry' }), ops());
+    const third = await sync(input({ workoutId: 'w-retry' }), ops());
     expect('13-8: 성공 후 또 재시도해도 중복 보상이 없다', third.status === 'duplicate');
     check('13-8: 문서가 그대로다', await ops().loadProgression(), afterRetry);
   })();
@@ -347,28 +370,31 @@ const BASE_POWER = 18;
     const recordSnapshot = JSON.stringify(workoutRecord);
 
     store.failNext = 1;
-    const stateFail = await syncCompletedWorkoutToBattle(battleInputFromWorkoutRecord(workoutRecord), ops());
+    const stateFail = await sync(battleInputFromWorkoutRecord(workoutRecord), ops());
     expect('13-9: 저장 실패해도 예외가 운동 쪽으로 새지 않는다', stateFail.status === 'failed');
     check('13-9/10: 저장 실패가 WorkoutRecord를 건드리지 않는다',
       JSON.stringify(workoutRecord), recordSnapshot);
 
     store.failLoad = true;
-    const unreadable = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-x' }), ops());
+    const unreadable = await sync(input({ workoutId: 'w-x' }), ops());
     expect('13-10: 문서를 읽지 못하면 아무것도 하지 않는다',
       unreadable.status === 'failed' && unreadable.progression === null);
     expect('13-10: 읽기 실패로 쓰기가 일어나지 않는다', store.writes === 0);
     store.failLoad = false;
 
-    const skipped = await syncCompletedWorkoutToBattle(null, ops());
-    expect('13: 반영할 입력이 없으면 skipped다 (저장하지 않는다)',
-      skipped.status === 'skipped' && store.writes === 0);
+    // 입력이 없으면 전투는 없다. 다만 회복 기준 시각이 아직 없으면 그것만 한 번 세운다.
+    const skipped = await sync(null, ops());
+    expect('13: 반영할 입력이 없으면 전투가 일어나지 않는다',
+      skipped.status === 'skipped' && skipped.resolution === null);
+    expect('13: skipped는 전투 진행/재화를 건드리지 않는다',
+      skipped.progression?.battle.stageProgress === 0 && skipped.progression?.coins === 0);
   })();
 
   // 16. 재시도가 결정적이다 — 같은 문서에서 같은 운동은 언제나 같은 결과.
   await (async () => {
     const runOnce = async () => {
       const { ops } = makeStore();
-      const result = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-det' }), ops());
+      const result = await sync(input({ workoutId: 'w-det' }), ops());
       return JSON.stringify(result.progression);
     };
     const runs = [await runOnce(), await runOnce(), await runOnce()];
@@ -380,7 +406,7 @@ const BASE_POWER = 18;
     const { ops } = makeStore();
     const results = [];
     for (let i = 0; i < 5; i += 1) {
-      results.push(await syncCompletedWorkoutToBattle(input({ workoutId: 'w-exactly-once' }), ops()));
+      results.push(await sync(input({ workoutId: 'w-exactly-once' }), ops()));
     }
     const final = await ops().loadProgression();
     expect('13-20: 다섯 번 불러도 applied는 한 번뿐이다',
@@ -406,7 +432,7 @@ const BASE_POWER = 18;
       migrateBattleProgression({ coins: Number.MAX_SAFE_INTEGER } as never).coins ===
       BattleConfig.economy.maxCoins);
     expect('13-12: 누적으로도 상한을 넘지 않는다',
-      applyBattleResolution(
+      applyBattleResolutionAt(
         { ...createInitialBattleProgression(), coins: BattleConfig.economy.maxCoins },
         resolveBattle(input({ workoutId: 'w-cap' }), createInitialBattleState(), stage1)
       ).coins === BattleConfig.economy.maxCoins);
@@ -419,7 +445,7 @@ const BASE_POWER = 18;
     check('13-14: 토큰 목록에서 문자열이 아닌 값과 중복이 걸러진다',
       sanitizeUnlockTokens(['a', 'a', '', 3, null, 'b']), ['a', 'b']);
     check('13-14: 같은 토큰을 두 번 얻어도 하나만 남는다',
-      applyBattleResolution(
+      applyBattleResolutionAt(
         { ...createInitialBattleProgression(), unlockTokens: ['title.persistent'] },
         resolveBattle(input({ workoutId: 'w-dup-token', completedSetCount: 20, totalVolumeKg: 0 }),
           { ...createInitialBattleState(), currentStage: 3 }, getBattleStage(3))
@@ -428,7 +454,7 @@ const BASE_POWER = 18;
     check('13-15: 저장값이 없으면 초기 문서다', migrateBattleProgression(null), {
       version: 1,
       battle: { version: 1, currentStage: 1, stageProgress: 0, fatigue: 0, lastResolvedWorkoutId: null },
-      coins: 0, unlockTokens: [],
+      coins: 0, unlockTokens: [], fatigueUpdatedAt: null,
     });
     // 경제가 생기기 전 스키마(BattleState가 그대로 저장돼 있던 형태)도 진행도를 잃지 않는다.
     const legacy = migrateBattleProgression({
@@ -454,7 +480,7 @@ const BASE_POWER = 18;
     const resolution = resolveBattle(battleInput, progression.battle, stage1);
     const stateSnapshot = JSON.stringify(progression.battle);
 
-    const next = applyBattleResolution(progression, resolution);
+    const next = applyBattleResolutionAt(progression, resolution);
     check('13-17: BattleInput 원본이 바뀌지 않는다', JSON.stringify(battleInput), inputSnapshot);
     check('13-18: BattleState 원본이 바뀌지 않는다', JSON.stringify(progression.battle), stateSnapshot);
     check('13-18: 진행 문서 원본이 바뀌지 않는다', JSON.stringify(progression), progressionSnapshot);
@@ -462,8 +488,8 @@ const BASE_POWER = 18;
     check('13-18: 기존 토큰은 그대로 유지된다', next.unlockTokens, ['keep']);
     expect('13-19: 진행 문서에는 XP/SP/streak이 없다',
       !/xp|streak|muscleSp|passLevel|hellPass/i.test(JSON.stringify(Object.keys(next))));
-    check('13-19: 저장 문서 키는 정해진 네 개뿐이다',
-      Object.keys(next).sort(), ['battle', 'coins', 'unlockTokens', 'version']);
+    check('13-19: 저장 문서 키는 정해진 다섯 개뿐이다',
+      Object.keys(next).sort(), ['battle', 'coins', 'fatigueUpdatedAt', 'unlockTokens', 'version']);
     expect('13-19: 재화는 Battle 문서에만 있고 다른 보상 계약을 건드리지 않는다',
       typeof next.coins === 'number' && !('xp' in next) && !('sp' in next));
   }
@@ -663,6 +689,242 @@ const BASE_POWER = 18;
   expect('18: Battle 상태에는 실제 신체 수치가 없다',
     !/weightKg|bodyFat|skeletalMuscle|bodyParameters/i.test(
       JSON.stringify(Object.keys(createInitialBattleState()))));
+}
+
+// ── 19. 시간 경과 피로도 회복 ────────────────────────────────────────────────
+// 도메인은 시계를 읽지 않는다 — 현재 시각은 전부 인자로 들어온다. 그래서 오프라인 10시간도
+// 테스트로 그대로 재현된다.
+{
+  const rested = (fatigue: number, anchor: number | null): BattleProgressionState => ({
+    ...createInitialBattleProgression(),
+    battle: { ...createInitialBattleState(), fatigue },
+    fatigueUpdatedAt: anchor,
+  });
+
+  // 0시간 / 30분 / 1시간 / 10시간
+  expect('19: 0시간이면 회복이 없다',
+    recoverBattleProgression(rested(60, T0), T0).recovered === 0);
+  expect('19: 0시간이면 저장할 것도 없다',
+    !recoverBattleProgression(rested(60, T0), T0).changed);
+  expect('19: 0.5시간이면 정책대로 1 회복한다 (시간당 2)',
+    recoverBattleProgression(rested(60, T0), T0 + HOUR / 2).progression.battle.fatigue === 59);
+  expect('19: 1시간이면 2 회복한다',
+    recoverBattleProgression(rested(60, T0), T0 + HOUR).progression.battle.fatigue === 58);
+  expect('19: 오프라인 10시간이면 20 회복한다 (60 → 40)',
+    recoverBattleProgression(rested(60, T0), T0 + 10 * HOUR).progression.battle.fatigue === 40);
+  expect('19: 회복량이 결과에 그대로 보고된다',
+    recoverBattleProgression(rested(60, T0), T0 + 10 * HOUR).recovered === 20);
+
+  // 0 아래로 내려가지 않는다.
+  expect('19: 아무리 오래 쉬어도 0 아래로 내려가지 않는다',
+    recoverBattleProgression(rested(10, T0), T0 + 1000 * HOUR).progression.battle.fatigue === 0);
+  expect('19: 이미 0이면 회복량도 0이다',
+    recoverBattleProgression(rested(0, T0), T0 + 100 * HOUR).recovered === 0);
+  expect('19: 회복으로 피로도가 늘어나는 일은 없다',
+    [0, 1, 30, 99, 100].every((f) =>
+      recoverBattleProgression(rested(f, T0), T0 + 3 * HOUR).progression.battle.fatigue <= f));
+
+  // 자투리 시간이 사라지지 않는다 — 앱을 자주 열었다 닫아도 손실이 없다.
+  {
+    // 29분씩 세 번 조회 = 87분. 정책상 2 회복(60분에 2)이 나와야 한다.
+    let doc = rested(60, T0);
+    let at = T0;
+    for (let i = 0; i < 3; i += 1) {
+      at += 29 * 60 * 1000;
+      doc = recoverBattleProgression(doc, at).progression;
+    }
+    expect('19: 29분씩 세 번 열어도 회복이 손실되지 않는다 (87분 → 2 회복)',
+      doc.battle.fatigue === 58);
+    const once = recoverBattleProgression(rested(60, T0), T0 + 87 * 60 * 1000).progression;
+    expect('19: 자주 열든 한 번에 열든 결과가 같다', doc.battle.fatigue === once.battle.fatigue);
+  }
+  expect('19: 30분이 안 되면 저장하지 않는다 (조회마다 쓰지 않는다)',
+    !recoverBattleProgression(rested(60, T0), T0 + 10 * 60 * 1000).changed);
+
+  // 같은 시각에 다시 조회해도 중복 회복이 없다.
+  {
+    const first = recoverBattleProgression(rested(60, T0), T0 + 5 * HOUR);
+    const second = recoverBattleProgression(first.progression, T0 + 5 * HOUR);
+    expect('19: 같은 시각 재조회는 추가 회복이 없다', second.recovered === 0 && !second.changed);
+    check('19: 같은 시각 재조회는 문서를 바꾸지 않는다', second.progression, first.progression);
+    const later = recoverBattleProgression(first.progression, T0 + 6 * HOUR);
+    expect('19: 시간이 더 흐르면 이어서 회복한다 (50 → 48)',
+      later.progression.battle.fatigue === 48);
+  }
+
+  // 시계 이상.
+  expect('19: 기준 시각이 미래면 회복이 0이다 (기기 시간이 뒤로 감)',
+    recoverBattleProgression(rested(60, T0 + 10 * HOUR), T0).recovered === 0);
+  expect('19: 미래 기준은 지금으로 당겨 회복이 영영 멈추지 않게 한다',
+    recoverBattleProgression(rested(60, T0 + 10 * HOUR), T0).progression.fatigueUpdatedAt === T0);
+  expect('19: 기준을 당긴 뒤에는 정상적으로 회복된다', (() => {
+    const fixed = recoverBattleProgression(rested(60, T0 + 10 * HOUR), T0).progression;
+    return recoverBattleProgression(fixed, T0 + HOUR).progression.battle.fatigue === 58;
+  })());
+  expect('19: 기준 시각이 없으면 회복 없이 지금을 기준으로 삼는다', (() => {
+    const anchored = recoverBattleProgression(rested(60, null), T0);
+    return anchored.recovered === 0 && anchored.progression.fatigueUpdatedAt === T0 &&
+      anchored.progression.battle.fatigue === 60;
+  })());
+
+  // 손상된 시각 방어.
+  const badNow: unknown[] = [NaN, Infinity, -Infinity, -1, 0, '1700000000000', null, undefined, {}];
+  badNow.forEach((value) => {
+    const result = recoverBattleProgression(rested(60, T0), value as number);
+    expect(`19: now=${String(value)} 는 상태를 오염시키지 않는다`,
+      Number.isFinite(result.progression.battle.fatigue) &&
+      result.progression.battle.fatigue >= 0 && result.progression.battle.fatigue <= 100);
+    expect(`19: now=${String(value)} 로는 회복을 주지 않는다`, result.recovered === 0);
+  });
+  const badAnchor: unknown[] = [NaN, Infinity, -1, 0, 'x', null, undefined, {}];
+  badAnchor.forEach((value) => {
+    const doc = migrateBattleProgression({ fatigueUpdatedAt: value } as never);
+    expect(`19: 손상된 기준 시각(${String(value)})은 null로 떨어진다`, doc.fatigueUpdatedAt === null);
+  });
+  expect('19: 손상된 기준 시각으로 공짜 회복이 생기지 않는다', (() => {
+    const doc = { ...rested(60, null), fatigueUpdatedAt: NaN as unknown as number };
+    return recoverBattleProgression(doc, T0).progression.battle.fatigue === 60;
+  })());
+  expect('19: 회복은 결정적이다 (같은 인자 = 같은 결과)',
+    JSON.stringify(recoverBattleProgression(rested(77, T0), T0 + 3.5 * HOUR)) ===
+    JSON.stringify(recoverBattleProgression(rested(77, T0), T0 + 3.5 * HOUR)));
+  expect('19: 회복이 원본 문서를 바꾸지 않는다', (() => {
+    const doc = rested(60, T0);
+    const snapshot = JSON.stringify(doc);
+    recoverBattleProgression(doc, T0 + 10 * HOUR);
+    return JSON.stringify(doc) === snapshot;
+  })());
+
+  // 화면이 물어보는 값.
+  {
+    const view = describeBattleFatigue(rested(60, T0), T0 + 90 * 60 * 1000);
+    expect('19: 화면은 저장값과 회복 후 값을 함께 받는다',
+      view.storedFatigue === 60 && view.currentFatigue === 57 && view.recovered === 3);
+    expect('19: 다음 1 회복까지 남은 시간을 알 수 있다', view.msUntilNextRecovery === 30 * 60 * 1000);
+    expect('19: 완전 회복까지 남은 시간을 알 수 있다 (57 × 30분)',
+      view.msUntilFullRecovery === 57 * 30 * 60 * 1000);
+    const done = describeBattleFatigue(rested(0, T0), T0 + HOUR);
+    expect('19: 피로도가 0이면 다음 회복 시각이 없다',
+      done.msUntilNextRecovery === null && done.msUntilFullRecovery === 0);
+  }
+}
+
+// ── 20. 회복 + 전투 트랜잭션 통합 ────────────────────────────────────────────
+{
+  const makeStore = (initial?: unknown) => {
+    const store = {
+      raw: initial === undefined ? null : JSON.stringify(initial),
+      writes: 0, failNext: 0, failLoad: false,
+    };
+    const ops = (): BattleSyncOperations => ({
+      loadProgression: async () => {
+        if (store.failLoad) throw new Error('unreadable');
+        return migrateBattleProgression(JSON.parse(store.raw ?? 'null'));
+      },
+      saveProgression: async (next) => {
+        if (store.failNext > 0) { store.failNext -= 1; throw new Error('storage full'); }
+        store.writes += 1;
+        store.raw = JSON.stringify(next);
+      },
+    });
+    return { store, ops };
+  };
+  const tired = (fatigue: number, anchor: number | null) => ({
+    version: 1,
+    battle: { ...createInitialBattleState(), fatigue },
+    coins: 0, unlockTokens: [], fatigueUpdatedAt: anchor,
+  });
+
+  await (async () => {
+    // 전투가 피로도를 올리면 회복 기준도 그때로 옮겨진다.
+    const { ops } = makeStore();
+    const applied = await sync(input({ workoutId: 'w-clock' }), ops(), T0);
+    expect('20: 전투가 반영되면 회복 기준 시각이 그때로 갱신된다',
+      applied.progression?.fatigueUpdatedAt === T0);
+    expect('20: 전투로 피로도가 올랐다', applied.progression?.battle.fatigue === stage1.fatigueCost);
+
+    // 같은 운동 재시도는 기준을 리셋하지 않는다.
+    const duplicate = await sync(input({ workoutId: 'w-clock' }), ops(), T0 + 20 * 60 * 1000);
+    expect('20: 중복 전투는 duplicate다', duplicate.status === 'duplicate');
+    expect('20: 중복 전투가 회복 기준을 리셋하지 않는다',
+      duplicate.progression?.fatigueUpdatedAt === T0);
+    expect('20: 중복 전투는 피로도를 다시 올리지 않는다',
+      duplicate.progression?.battle.fatigue === stage1.fatigueCost);
+  })();
+
+  await (async () => {
+    // 오프라인 회복 → 다음 전투가 회복된 피로도로 판정된다.
+    const { store, ops } = makeStore(tired(90, T0));
+    const before = await loadRecoveredBattleProgression(ops(), T0 + 10 * HOUR);
+    expect('20: 앱 재시작 시 조회만으로 회복이 반영된다',
+      before.progression?.battle.fatigue === 70 && before.fatigueRecovered === 20);
+    check('20: 회복이 저장되어 다시 읽어도 남아 있다',
+      (await ops().loadProgression()).battle.fatigue, 70);
+    const writesAfterRecovery = store.writes;
+
+    const again = await loadRecoveredBattleProgression(ops(), T0 + 10 * HOUR);
+    expect('20: 같은 시각 재조회는 중복 회복도 추가 저장도 없다',
+      again.fatigueRecovered === 0 && store.writes === writesAfterRecovery);
+
+    const later = await loadRecoveredBattleProgression(ops(), T0 + 15 * HOUR);
+    expect('20: 시간이 더 흐르면 이어서 회복한다 (70 → 60)',
+      later.progression?.battle.fatigue === 60);
+  })();
+
+  await (async () => {
+    // 쉬고 오면 더 세게 때린다 — 회복이 전투 판정 앞에 적용된다.
+    const rest = makeStore(tired(90, T0));
+    const tiredRun = makeStore(tired(90, T0));
+    const recoveredRun = await sync(input({ workoutId: 'w-rested' }), rest.ops(), T0 + 40 * HOUR);
+    const tiredRunResult = await sync(input({ workoutId: 'w-tired' }), tiredRun.ops(), T0);
+    expect('20: 회복은 전투 판정 전에 적용된다 (쉬고 오면 패널티가 줄어든다)',
+      (recoveredRun.resolution?.power.fatigueMultiplier ?? 0) >
+      (tiredRunResult.resolution?.power.fatigueMultiplier ?? 0));
+    expect('20: 그래서 같은 운동이라도 쉬고 오면 피해가 더 크다',
+      (recoveredRun.resolution?.progressGained ?? 0) >
+      (tiredRunResult.resolution?.progressGained ?? 0));
+  })();
+
+  await (async () => {
+    // 회복 저장 실패 — 잃어버리지 않고 다음 조회에서 다시 계산된다.
+    const { store, ops } = makeStore(tired(60, T0));
+    store.failNext = 1;
+    const failed = await loadRecoveredBattleProgression(ops(), T0 + 10 * HOUR);
+    expect('20: 회복 저장에 실패해도 예외를 던지지 않는다', failed.status === 'skipped');
+    expect('20: 실패했으므로 회복분을 보고하지 않는다', failed.fatigueRecovered === 0);
+    check('20: 저장된 문서는 손상되지 않고 그대로다', (await ops().loadProgression()).battle.fatigue, 60);
+
+    const retry = await loadRecoveredBattleProgression(ops(), T0 + 10 * HOUR);
+    expect('20: 다음 조회에서 같은 회복이 그대로 다시 계산된다',
+      retry.progression?.battle.fatigue === 40 && retry.fatigueRecovered === 20);
+  })();
+
+  await (async () => {
+    // 회복 계산이 운동/성장 데이터를 건드리지 않는다.
+    const record = {
+      id: 'r', sessionId: 'w-recovery-guard', date: '2026-08-23', category: 'strength', title: 't',
+      completed: true, createdAt: '2026-08-23T00:00:00.000Z',
+      exercises: [{ id: 'e', name: 'n', setDetails: [{ id: 's', weightKg: 60, reps: 10, completed: true }] }],
+    } as WorkoutRecord;
+    const snapshot = JSON.stringify(record);
+    const { ops } = makeStore(tired(80, T0));
+    await sync(battleInputFromWorkoutRecord(record), ops(), T0 + 20 * HOUR);
+    check('20: 회복/전투가 WorkoutRecord를 건드리지 않는다', JSON.stringify(record), snapshot);
+    expect('20: 진행 문서에는 실제 몸 회복 데이터가 없다',
+      !/recoveryState|nutrition|bodyFat|skeletalMuscle|muscleSp/i.test(
+        JSON.stringify(await ops().loadProgression())));
+  })();
+
+  await (async () => {
+    // 읽기 실패 시 회복도 시도하지 않는다.
+    const { store, ops } = makeStore(tired(60, T0));
+    store.failLoad = true;
+    const unreadable = await loadRecoveredBattleProgression(ops(), T0 + 10 * HOUR);
+    expect('20: 문서를 읽지 못하면 회복도 하지 않는다',
+      unreadable.status === 'failed' && unreadable.progression === null &&
+      unreadable.fatigueRecovered === 0);
+    expect('20: 읽기 실패로 쓰기가 일어나지 않는다', store.writes === 0);
+  })();
 }
 
 console.log(failures === 0 ? '\nAll BATTLE CORE checks passed.' : `\n${failures} BATTLE CORE check(s) FAILED.`);
