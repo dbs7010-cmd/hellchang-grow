@@ -23,9 +23,12 @@ export const CharacterBodyConfig = {
     legLeft: [87, 168], legRight: [113, 168], centerX: 100,
   },
   fixedIdentity: {
-    headPath: 'M100 38 C111 38 119 46 119 57 C119 68 112 75 100 76 C88 76 81 69 81 57 C81 46 89 38 100 38 Z',
-    eyes: { leftX: 94, rightX: 106, y: 54, radius: 1.2 },
-    mouth: 'M96.5 64 Q100 65.5 103.5 63.5',
+    // FINAL FACE CANON v3: rounded crown/cheeks taper into a small rounded jaw.
+    // This identity is fixed across every body stage; only the body grows.
+    headPath: 'M100 38 C111.5 38 120 46.5 120 57 C120 67 114 74 106 77 C103 78.5 101 79 100 79 C99 79 97 78.5 94 77 C86 74 80 67 80 57 C80 46.5 88.5 38 100 38 Z',
+    eyes: { leftX: 92, rightX: 108, y: 54, radius: 1.6 },
+    mouth: 'M91 63 Q100 70 109 63',
+    mouthStrokeWidth: 2.2,
   },
   basePaths: {
     torso: 'M99 76 C90 74 82 77 79 83 C76 95 78 111 80 126 C82 139 81 151 83 160 C84 165 86 168 90 170 C95 172 105 172 111 169 C115 166 116 163 117 159 C119 150 118 139 120 126 C122 111 124 95 121 83 C118 77 110 74 101 76 Z',

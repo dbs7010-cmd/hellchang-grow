@@ -10,7 +10,9 @@
 - Stage 0 및 이후 성장 시각 구현은 `danbaek_growth_system_canon.webp`를 기준으로 맞춘다.
 
 ## 현재 자료
-- `danbaek_growth_system_canon.webp`: 사용자가 직접 확정한 MASTER CANON 원본의 저장소용 고품질 사본.
+- `reference_v3/danbaek_growth_master_v3.png`: 사용자가 최종 승인한 얼굴·턱선과 Lv.1~10 성장 MASTER CANON.
+- `reference_v3/levels/danbaek-lv01.png` ~ `danbaek-lv10.png`: 동일 캔버스의 투명 단계별 검수 레퍼런스. 런타임 전신 교체용이 아니다.
+- `danbaek_growth_system_canon.webp`: 이전 MASTER CANON 보존본.
 - `manifest.json`: CANON 상태와 구현 규칙.
 - 기존 SVG/stages 자료는 보조 참고이며 MASTER보다 우선할 수 없다.
 
@@ -25,6 +27,13 @@ Codex는 이 이미지를 참고해 새 캐릭터를 디자인하는 것이 아�
 - Stage 0의 작고 둔하며 약간 엉성한 인상을 유지한다.
 - Stage 0에 성장 단계용 근육선을 미리 추가하지 않는다.
 - Stage 0 비율을 길쭉한 사람형, 이모티콘 머리 + 사람 몸, 깔끔한 벡터 마스코트로 재해석하지 않는다.
+
+## FINAL FACE CANON v3 — LOCKED
+
+- 둥근 이마와 볼에서 작은 둥근 턱으로 완만하게 좁아지는 외곽선을 사용한다.
+- 두 점눈은 기존보다 넓게 배치하고, 입은 넓고 단순한 위쪽 미소로 고정한다.
+- 눈·입·턱선·머리 크기는 모든 성장 단계에서 동일한 정체성으로 유지한다.
+- PNG 단계 전환으로 캐릭터 몸 전체를 교체하지 않는다. 얼굴 v3는 공통 Renderer의 `fixedIdentity`에서 한 번만 정의한다.
 
 ## Lv.1~Lv.10 성장 불변 규칙 — LOCKED
 

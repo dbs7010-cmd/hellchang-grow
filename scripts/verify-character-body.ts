@@ -29,6 +29,13 @@ same('approved regions match the LOCKED layer contract', CharacterBodyConfig.reg
   calf: { x: 76, y: 214, width: 48, height: 44 },
 });
 expect('Stage 0 uses the restored layered master torso path verbatim', CharacterBodyConfig.basePaths.torso.startsWith('M99 76 C90 74'));
+same('fixed face uses FINAL FACE CANON v3 head and jaw', CharacterBodyConfig.fixedIdentity, {
+  headPath: 'M100 38 C111.5 38 120 46.5 120 57 C120 67 114 74 106 77 C103 78.5 101 79 100 79 C99 79 97 78.5 94 77 C86 74 80 67 80 57 C80 46.5 88.5 38 100 38 Z',
+  eyes: { leftX: 92, rightX: 108, y: 54, radius: 1.6 },
+  mouth: 'M91 63 Q100 70 109 63',
+  mouthStrokeWidth: 2.2,
+});
+expect('fixed face remains outside every parametric body overlay', !Object.values(CharacterBodyConfig.regions).some((region) => region.y < 78));
 expect('neutral body adds no local overlay', geometry().overlays.length === 0);
 expect('neutral body has no invented detail lines', geometry().detailOpacity === 0 && geometry().abdomenLineOpacity === 0);
 

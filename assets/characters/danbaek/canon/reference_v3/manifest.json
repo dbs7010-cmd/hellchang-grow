@@ -1,0 +1,23 @@
+{
+  "assetSet": "danbaek-character-canon-v3",
+  "status": "locked-reference",
+  "master": {
+    "file": "danbaek-growth-master-v1.png",
+    "width": 1536,
+    "height": 1024,
+    "format": "PNG",
+    "alpha": true
+  },
+  "levels": [
+    { "level": 1, "file": "levels/danbaek-lv01.png", "width": 320, "height": 512 },
+    { "level": 2, "file": "levels/danbaek-lv02.png", "width": 320, "height": 512 },
+    { "level": 3, "file": "levels/danbaek-lv03.png", "width": 320, "height": 512 },
+    { "level": 4, "file": "levels/danbaek-lv04.png", "width": 320, "height": 512 },
+    { "level": 5, "file": "levels/danbaek-lv05.png", "width": 320, "height": 512 },
+    { "level": 6, "file": "levels/danbaek-lv06.png", "width": 320, "height": 512 },
+    { "level": 7, "file": "levels/danbaek-lv07.png", "width": 320, "height": 512 },
+    { "level": 8, "file": "levels/danbaek-lv08.png", "width": 320, "height": 512 },
+    { "level": 9, "file": "levels/danbaek-lv09.png", "width": 320, "height": 512 },
+    { "level": 10, "file": "levels/danbaek-lv10.png", "width": 320, "height": 512 }
+  ]
+}

@@ -1,8 +1,8 @@
 {
-  "canonVersion": 2,
+  "canonVersion": 3,
   "status": "LOCKED",
   "source": "user-approved Danbaek growth system image",
-  "master": "danbaek_growth_system_canon.webp",
+  "master": "reference_v3/danbaek_growth_master_v3.png",
   "rules": {
     "redesign": false,
     "reinterpretation": false,
@@ -16,7 +16,10 @@
     "muscleLineProgression": "Muscle lines increase gradually with growth stage and definition and remain minimal at Stage 0.",
     "styleIdentity": "white body + black hand-drawn outline + simple hands/feet + slightly awkward loose drawing",
     "stage0Master": "layered/danbaek_stage0_layered_master.svg",
-    "notes": "MASTER image and the user-approved Stage 0 renderer are LOCKED. Do not replace them with player_main.png, graphite/geometric silhouettes, 3D, semi-realistic art, or a cleaner mascot redesign. Stage 1-10 remain reference-only until separately approved for implementation."
+    "fixedFaceVersion": 3,
+    "fixedFaceRule": "Use the v3 rounded crown and cheeks, gently tapered jaw, rounded chin, wide dot-eye spacing, and broad upward smile at every stage.",
+    "runtimeAssetPolicy": "The v3 PNG stages are visual references, not full-body runtime replacements. Runtime growth remains the parametric layered renderer.",
+    "notes": "The v3 PNG master and the user-approved parametric renderer are LOCKED together. Do not replace runtime growth with full-body PNG switching, player_main.png, graphite/geometric silhouettes, 3D, semi-realistic art, or a cleaner mascot redesign."
   },
   "bodyParametersContract": [
     "chestScale",
