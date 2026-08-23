@@ -55,6 +55,7 @@
     "verify:workout-character-motion": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-workout-character-motion.ts",
     "verify:core-loop": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-core-loop.ts",
     "verify:battle": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-battle-core.ts",
+    "verify:cosmetics": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-cosmetics.ts",
     "verify:pt": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-pt-context.ts"
   },
   "private": true

@@ -97,8 +97,16 @@ export type BattleProgressionState = Readonly<{
   battle: BattleState;
   /** 누적 전투 재화. 정수 ≥ 0이며 상한이 있다. */
   coins: number;
-  /** 획득한 해금 토큰. 아직 무엇과도 교환하지 않는다 (표현과 무관한 ID). */
+  /**
+   * 아직 쓰지 않은 해금 토큰. stage clear로 하나씩 들어오고, 그 토큰을 요구하는
+   * cosmetic을 열 때 **소비된다**. 서로 교환되지 않는 id별 이용권이다.
+   */
   unlockTokens: readonly string[];
+  /**
+   * 보유한 cosmetic id 목록. **id만 저장한다** — 이름도 가격도 이미지도 카탈로그가 갖고
+   * 있고, 저장 문서는 "무엇을 가졌는가"만 안다. 카탈로그가 바뀌어도 소유 기록은 남는다.
+   */
+  ownedCosmeticIds: readonly string[];
   /**
    * 저장된 `battle.fatigue`가 정확했던 시각(epoch ms). 시간 경과 회복의 기준점이다.
    *
@@ -169,6 +177,7 @@ export const INITIAL_BATTLE_PROGRESSION: BattleProgressionState = Object.freeze(
   battle: INITIAL_BATTLE_STATE,
   coins: 0,
   unlockTokens: Object.freeze([]) as readonly string[],
+  ownedCosmeticIds: Object.freeze([]) as readonly string[],
   fatigueUpdatedAt: null,
 });
 

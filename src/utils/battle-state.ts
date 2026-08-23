@@ -1,4 +1,5 @@
 import { BattleConfig } from '@/config/battle-config';
+import { DefaultCosmeticIds } from '@/config/cosmetics';
  import {
   BattleProgressionVersion,
   BattleStateVersion,
@@ -96,11 +97,29 @@ export function safeTimestamp(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
 }
 
+/**
+ * 보유 cosmetic 목록을 믿을 수 있는 모양으로 되돌린다 — 문자열만, 중복 제거, 개수 상한.
+ *
+ * **카탈로그에 없는 id도 버리지 않는다.** 앱이 하위 버전으로 내려갔다가 다시 올라올 때
+ * 소유 기록이 사라지면 안 되기 때문이다. 기본 항목은 언제나 포함된다.
+ */
+export function sanitizeOwnedCosmeticIds(value: unknown): readonly string[] {
+  const owned = new Set<string>(DefaultCosmeticIds);
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (typeof entry === 'string' && entry.length > 0) owned.add(entry);
+      if (owned.size >= BattleConfig.economy.maxOwnedCosmetics) break;
+    }
+  }
+  return [...owned];
+}
+
 export function createInitialBattleProgression(): BattleProgressionState {
   return {
     ...INITIAL_BATTLE_PROGRESSION,
     battle: createInitialBattleState(),
     unlockTokens: [],
+    ownedCosmeticIds: sanitizeOwnedCosmeticIds([]),
     fatigueUpdatedAt: null,
   };
 }
@@ -132,6 +151,7 @@ export function migrateBattleProgression(
     battle: migrateBattleState(battleSource),
     coins: clampCoins(wrapped.coins),
     unlockTokens: sanitizeUnlockTokens(wrapped.unlockTokens),
+    ownedCosmeticIds: sanitizeOwnedCosmeticIds(wrapped.ownedCosmeticIds),
     fatigueUpdatedAt: safeTimestamp(wrapped.fatigueUpdatedAt),
   };
 }

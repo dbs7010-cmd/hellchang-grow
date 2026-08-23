@@ -31,6 +31,8 @@ Merge order: push 5404243 to main first; then rebase/merge this branch; preserve
 | `src/config/battle-stages.ts` | Stage = 적 정의 + 조회 | `types/battle` |
 | `src/utils/battle-power.ts` | 전투력·피로도 패널티·회복량 (순수) | config + `types/battle` |
 | `src/utils/battle-recovery.ts` | 시간 경과 회복 반영 (순수, 시계 미사용) | config + power + state |
+| `src/types/cosmetic.ts` / `src/config/cosmetics.ts` | 외형 카탈로그 (표현과 분리된 id만) | 없음 |
+| `src/utils/cosmetics.ts` | 해금 판정 (순수) | 카탈로그 + state |
 | `src/utils/battle.ts` | **순수 resolver** | Battle 도메인만 |
 | `src/utils/battle-state.ts` | 저장값 정규화/마이그레이션 | `types/battle` |
 | `src/utils/battle-input.ts` | **경계(adapter)** — 완료된 운동 → BattleInput | workout 타입/헬퍼 + `types/battle` |
@@ -86,8 +88,28 @@ base = 유효 세트 × 2 + floor(sqrt(볼륨 / 100))
 - 매 전투: 준 피해 1당 coin 1. stage clear: + `stage.reward.clearCoins`, 해금 토큰(있으면).
 - 중복 운동은 coin도 토큰도 0.
 - 재화는 정수 0 이상이며 상한이 있다(overflow 안전장치). 토큰은 문자열만, 중복 제거.
-- 토큰은 아직 무엇과도 교환하지 않는다 — 획득/저장/중복 방지까지가 v1이고, 소비(꾸미기·
-  HOME 발전)는 표현과 무관한 ID로 남겨 둔다.
+
+### Cosmetic (보상의 사용처)
+
+Battle 보상은 **외형**으로만 쓴다. 능력치가 되는 경로를 아예 만들지 않는다 —
+`CosmeticItem`에 power/bonus 같은 필드가 없고, cosmetic을 아무리 사도 전투력·Workout·
+Growth·Muscle SP·BodyParameters·XP·streak 어느 것도 변하지 않는다(테스트로 고정).
+
+- **카탈로그 9개**(기본 2 + 재화 5 + 토큰 2). 콘텐츠 양산이 아니라 시스템 검증이 목적이다.
+- slot은 `head | body | accessory` 최소 범위. CANON v3가 아직 없어 캐릭터의 실제 부위
+  구조를 모르므로, 잘못 고정하느니 나중에 늘린다.
+- **표현과 분리**: 카탈로그에 asset 경로도 이미지도 없다. `id`만 계약이고
+  `cosmeticId → asset` 매핑은 CANON 병합 후 별도 레이어에서 붙인다.
+- 해금 방식은 두 가지뿐이다(복합 조건 없음).
+  - `coins` — 가격은 카탈로그 데이터에만 있다. 도메인 로직에 숫자를 박지 않는다.
+    가격 기준은 실측 수입: 일반 세션 첫 운동 약 51 coin(맨몸 40)이라 최저가 60이면
+    **실제 운동 한두 번에 첫 항목** 하나가 열린다. 이후 120 / 180 / 260 / 400.
+  - `token` — stage clear로 나오는 **그 id**를 가져야 하고, 열면 그 토큰이 소비된다.
+    토큰은 서로 교환되지 않는다(stage 3 토큰으로 보스 보상을 열 수 없다).
+- 기본 항목은 migration이 언제나 소유로 만든다. 저장 목록이 비었거나 손상돼도 복구된다.
+- 카탈로그에 없는 소유 id도 버리지 않는다 — 하위 버전으로 내려갔다 올라와도 잃지 않게.
+- **장착은 이번 범위가 아니다.** CANON 미병합·렌더러 미연결이라 `equippedCosmetics`를
+  미리 저장하지 않는다. 실제 presentation slice에서 추가한다.
 
 ### 저장과 exactly-once
 
@@ -140,8 +162,14 @@ base = 유효 세트 × 2 + floor(sqrt(볼륨 / 100))
   — 회복 · 판정 · 진행도 저장 · 보상 저장이 한 번에 끝난다.
 - `loadRecoveredBattleProgression(operations, nowMs)` — 전투 없이 현재 피로도만 조회
   (그동안의 회복 반영). 바뀐 것이 있을 때만 저장한다.
+- `purchaseCosmetic(cosmeticId, operations)` — 재화 차감 · 토큰 소비 · 소유 추가가
+  **한 번의 쓰기**로 끝난다. "재화만 빠지고 항목은 없는" 상태가 존재할 수 없다. 저장
+  실패는 `failed`로 명확히 돌아오고 문서는 통째로 이전 상태다(성공 오인 불가).
+  조회는 `getCosmeticCatalog()` / `getOwnedCosmetics(progression)` /
+  `isCosmeticOwned(progression, id)`.
 
 resolveBattle / recover / saveState / addCoins / saveToken을 각각 부르게 하지 않는다.
+화면이 `coins -= price`를 직접 하지 않는다.
 트랜잭션 경계는 domain/data 쪽에 있다. **시계는 이 경계에서만 주입된다** — 도메인은
 `Date.now`를 읽지 않는다. 표시용 파생값은 `describeBattleFatigue(progression, nowMs)`가
 따로 계산한다(저장하지 않는다).

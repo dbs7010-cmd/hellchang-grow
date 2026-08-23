@@ -1,5 +1,6 @@
 import { BattleConfig } from '@/config/battle-config';
 import { BattleStages, getBattleStage, isFinalBattleStage, MaxBattleStage } from '@/config/battle-stages';
+import { DefaultCosmeticIds } from '@/config/cosmetics';
 import {
   INITIAL_BATTLE_STATE,
   type BattleInput,
@@ -454,7 +455,7 @@ const applyBattleResolutionAt = (
     check('13-15: 저장값이 없으면 초기 문서다', migrateBattleProgression(null), {
       version: 1,
       battle: { version: 1, currentStage: 1, stageProgress: 0, fatigue: 0, lastResolvedWorkoutId: null },
-      coins: 0, unlockTokens: [], fatigueUpdatedAt: null,
+      coins: 0, unlockTokens: [], ownedCosmeticIds: DefaultCosmeticIds, fatigueUpdatedAt: null,
     });
     // 경제가 생기기 전 스키마(BattleState가 그대로 저장돼 있던 형태)도 진행도를 잃지 않는다.
     const legacy = migrateBattleProgression({
@@ -488,8 +489,9 @@ const applyBattleResolutionAt = (
     check('13-18: 기존 토큰은 그대로 유지된다', next.unlockTokens, ['keep']);
     expect('13-19: 진행 문서에는 XP/SP/streak이 없다',
       !/xp|streak|muscleSp|passLevel|hellPass/i.test(JSON.stringify(Object.keys(next))));
-    check('13-19: 저장 문서 키는 정해진 다섯 개뿐이다',
-      Object.keys(next).sort(), ['battle', 'coins', 'fatigueUpdatedAt', 'unlockTokens', 'version']);
+    check('13-19: 저장 문서 키는 정해진 여섯 개뿐이다',
+      Object.keys(next).sort(),
+      ['battle', 'coins', 'fatigueUpdatedAt', 'ownedCosmeticIds', 'unlockTokens', 'version']);
     expect('13-19: 재화는 Battle 문서에만 있고 다른 보상 계약을 건드리지 않는다',
       typeof next.coins === 'number' && !('xp' in next) && !('sp' in next));
   }

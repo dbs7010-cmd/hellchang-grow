@@ -1,8 +1,10 @@
 import { getBattleStage, isFinalBattleStage } from '@/config/battle-stages';
 import type { BattleInput, BattleProgressionState, BattleResolution } from '@/types/battle';
+import type { CosmeticItem, CosmeticUnlockOutcome } from '@/types/cosmetic';
 import { resolveBattle } from '@/utils/battle';
 import { recoverBattleProgression } from '@/utils/battle-recovery';
 import { applyBattleResolution } from '@/utils/battle-state';
+import { unlockCosmetic } from '@/utils/cosmetics';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -131,4 +133,68 @@ export async function loadRecoveredBattleProgression(
   nowMs: number
 ): Promise<BattleSyncResult> {
   return syncCompletedWorkoutToBattle(null, operations, nowMs);
+}
+
+// ── Cosmetic 구매 ────────────────────────────────────────────────────────────
+
+export type CosmeticPurchaseStatus = CosmeticUnlockOutcome | 'failed';
+
+export interface CosmeticPurchaseResult {
+  status: CosmeticPurchaseStatus;
+  /**
+   * 호출 후의 진행 문서. 실패했으면 손대지 않은 이전 문서이고,
+   * **읽지도 못했으면 null**이다.
+   */
+  progression: BattleProgressionState | null;
+  item: CosmeticItem | null;
+  spentCoins: number;
+  spentToken: string | null;
+  error?: unknown;
+}
+
+/**
+ * cosmetic 하나를 구매한다 — 재화 차감, 토큰 소비, 소유 추가가 **한 번의 쓰기**로 끝난다.
+ *
+ * 화면이 `coins -= price`를 직접 하지 않게 하려고 있는 함수다. UI는 이 결과만 읽는다.
+ *
+ * 셋이 한 문서에 함께 저장되므로 "재화만 빠지고 항목은 없는" 상태가 존재할 수 없다.
+ * 저장에 실패하면 문서는 통째로 이전 상태이고(`failed`), 그대로 다시 시도하면 된다 —
+ * 성공으로 오인할 여지가 없도록 상태를 명확히 구분해 돌려준다.
+ */
+export async function purchaseCosmetic(
+  cosmeticId: string,
+  operations: BattleSyncOperations
+): Promise<CosmeticPurchaseResult> {
+  let stored: BattleProgressionState;
+  try {
+    stored = await operations.loadProgression();
+  } catch (error) {
+    return { status: 'failed', progression: null, item: null, spentCoins: 0, spentToken: null, error };
+  }
+
+  const result = unlockCosmetic(stored, cosmeticId);
+  if (result.outcome !== 'unlocked') {
+    return {
+      status: result.outcome,
+      progression: result.progression,
+      item: result.item,
+      spentCoins: 0,
+      spentToken: null,
+    };
+  }
+
+  try {
+    await operations.saveProgression(result.progression);
+  } catch (error) {
+    // 저장하지 못했으면 아무것도 일어나지 않은 것이다 — 재화도 토큰도 소유도 그대로.
+    return { status: 'failed', progression: stored, item: result.item, spentCoins: 0, spentToken: null, error };
+  }
+
+  return {
+    status: 'unlocked',
+    progression: result.progression,
+    item: result.item,
+    spentCoins: result.spentCoins,
+    spentToken: result.spentToken,
+  };
 }

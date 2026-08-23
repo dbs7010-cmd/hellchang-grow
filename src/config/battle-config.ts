@@ -65,5 +65,10 @@ export const BattleConfig = {
      * 손상된 저장값이 배열을 무한히 키우는 것만 막는다.
      */
     maxUnlockTokens: 200,
+    /**
+     * 보관하는 cosmetic 소유 id 개수 상한. 카탈로그보다 넉넉히 두어 하위 버전에서 얻은
+     * 항목도 잃지 않게 하고, 손상된 저장값이 배열을 무한히 키우는 것만 막는다.
+     */
+    maxOwnedCosmetics: 500,
   },
 } as const;
