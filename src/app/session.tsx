@@ -41,7 +41,11 @@ import {
   type GrowthComparisonCamera,
   type GrowthRevealPhase,
 } from '@/utils/growth-reveal';
-import { shouldConfirmSessionExit } from '@/utils/session-exit';
+import {
+  resolveSessionConfirm,
+  shouldClearEndConfirm,
+  shouldConfirmSessionExit,
+} from '@/utils/session-exit';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import { formatVolumeKg } from '@/utils/workout-stats';
 import {
@@ -213,7 +217,12 @@ export default function SessionScreen() {
     return unsubscribe;
   }, [navigation, activeSession, summary, ending]);
 
-  /** [세션 유지하고 나가기] — 저장은 그대로 두고 화면만 벗어난다. */
+  /**
+   * [세션 유지하고 나가기] — 저장은 그대로 두고 화면만 벗어난다.
+   *
+   * 보낼 액션은 **지역 변수로 먼저 빼 둔 뒤** ref를 비운다. 너무 일찍 비우면 정상 이탈이
+   * 실패하고, 비우지 않으면 이미 쓴 액션이 나중에 한 번 더 dispatch될 수 있다.
+   */
   const handleKeepSessionAndExit = useCallback(() => {
     exitConfirmedRef.current = true;
     setConfirmExit(false);
@@ -228,6 +237,17 @@ export default function SessionScreen() {
     blockedExitActionRef.current = null;
     setConfirmExit(false);
   }, []);
+
+  /**
+   * 화면을 벗어나면 가로챈 이동은 남기지 않는다 — 답을 받지 못한 액션이 다음 세션 화면까지
+   * 따라가 뒤늦게 dispatch되지 않도록.
+   */
+  useEffect(
+    () => () => {
+      blockedExitActionRef.current = null;
+    },
+    []
+  );
 
   useEffect(() => {
     if (!activeSession || activeSession.status === 'completed') return;
@@ -336,6 +356,42 @@ export default function SessionScreen() {
     exitToHome();
   }, [navigatorReady, loading, ending, activeSession, summary, exitToHome]);
 
+  /*
+   * 아래 네 값은 hook보다 뒤에 쓰이지만, 휴식 화면이 떴는지를 **조기 반환 앞에서** 알아야
+   * 하는 effect가 있어 여기서 한 번만 구한다 (세션이 없으면 전부 비활성값이다).
+   */
+  const isPaused = activeSession?.status === 'paused';
+  /** 방금 끝낸 세트를 **누른 그 화면에서** 잠깐 더 보여 주는 중인가. */
+  const presentingSetComplete = isSetCompletePresenting({
+    presenting: setCompletePresenting,
+    paused: isPaused,
+    ending: ending || Boolean(summary),
+  });
+  const restSecondsRemaining = activeSession ? getRestSecondsRemaining(activeSession, nowMs) : 0;
+  const isResting = restSecondsRemaining > 0;
+  /**
+   * 휴식 화면이 실제로 화면을 차지하는가. 휴식 시계는 이미 돌고 있어도 세트 완료 연출이
+   * 끝날 때까지는 아직 운동 화면이다.
+   */
+  const restScreenShowing = isResting && !presentingSetComplete;
+
+  /**
+   * 휴식 화면으로 넘어가면 종료 확인은 갈 곳이 없다 — 상태까지 꺼 둔다.
+   *
+   * 감추기만 하면 ACTIVE로 돌아왔을 때 그대로 다시 떠서, 같은 자리의 다음 탭이
+   * [종료하고 기록]에 맞는 사고가 난다(실기기 재현). 이탈 확인(confirmExit)은 휴식
+   * 화면에서도 보여야 하므로 정리하지 않는다.
+   * setState를 effect 본문에서 동기 호출하지 않도록 콜백으로 감싼다 — 위 휴식 반응과 같은 방식.
+   */
+  useEffect(() => {
+    if (!shouldClearEndConfirm({ resting: restScreenShowing, confirmEnd })) return;
+    const timer = setTimeout(() => {
+      setConfirmEnd(false);
+      setEndError(null);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [restScreenShowing, confirmEnd]);
+
   if (!activeSession) {
     // 종료 직후에는 결과 화면이 이 자리를 차지한다. 그 밖의 "그릴 것이 없는" 상태는
     // 아래 effect가 홈으로 내보낸다 (여기서 화면을 그리지 않는다).
@@ -343,9 +399,6 @@ export default function SessionScreen() {
   }
 
   const elapsedSeconds = computeElapsedSeconds(activeSession, nowMs);
-  const isPaused = activeSession.status === 'paused';
-  const restSecondsRemaining = getRestSecondsRemaining(activeSession, nowMs);
-  const isResting = restSecondsRemaining > 0;
   /**
    * 휴식이 방금 끝났는가. 세션에 이미 있는 restUntilMs에서 그대로 읽는다 — 추가 상태나
    * 타이머 없이 파생되므로 화면을 벗어났다 돌아와도 남거나 어긋나지 않는다.
@@ -387,12 +440,6 @@ export default function SessionScreen() {
     : undefined);
   // 종료 처리/결과 화면으로 넘어가는 중에는 일시 반응을 남기지 않는다.
   const activeSetReaction = ending || summary ? null : setReaction;
-  /** 방금 끝낸 세트를 **누른 그 화면에서** 잠깐 더 보여 주는 중인가. */
-  const presentingSetComplete = isSetCompletePresenting({
-    presenting: setCompletePresenting,
-    paused: isPaused,
-    ending: ending || Boolean(summary),
-  });
   const characterState = deriveWorkoutCharacterState({
     ending,
     paused: isPaused,
@@ -534,6 +581,48 @@ export default function SessionScreen() {
     }
   };
 
+  /**
+   * 지금 하단이 물어야 하는 것. ACTIVE/REST 어느 화면이든 같은 규칙을 본다 —
+   * 이탈 확인은 두 화면 모두, 종료 확인은 진입점이 있는 ACTIVE에서만.
+   */
+  const sessionConfirm = resolveSessionConfirm({
+    confirmExit,
+    confirmEnd,
+    resting: restScreenShowing,
+    hasSummary: Boolean(summary),
+    isEnding: ending,
+  });
+
+  /**
+   * 뒤로가기 확인 바. **정의는 하나뿐이고** ACTIVE와 REST가 같은 것을 그린다 —
+   * 화면마다 복제하면 한쪽만 고쳐지는 사고가 다시 난다.
+   */
+  const exitConfirmBar = (
+    <View style={styles.confirmBar}>
+      <ThemedText type="small" style={styles.confirmText}>
+        운동이 아직 진행 중이에요. 세션을 그대로 두고 나갈까요?
+      </ThemedText>
+      <ThemedText type="caption" themeColor="textSecondary" style={styles.confirmText}>
+        나가도 기록되지 않아요. 홈의 [운동으로 돌아가기]로 이어서 할 수 있어요.
+      </ThemedText>
+      <View style={styles.inlineRow}>
+        <PrimaryButton
+          label="계속 운동"
+          variant="secondary"
+          style={styles.flexItem}
+          onPress={handleStayInSession}
+        />
+        <PrimaryButton
+          label="세션 유지하고 나가기"
+          variant="gold"
+          haptic="medium"
+          style={styles.flexItem}
+          onPress={handleKeepSessionAndExit}
+        />
+      </View>
+    </View>
+  );
+
   const reaction = (
     <GoldsunReaction
       visible={reactionVisible}
@@ -547,7 +636,7 @@ export default function SessionScreen() {
   // 휴식 시계는 이미 돌고 있지만, 세트 완료 연출이 끝날 때까지 화면은 운동 화면 그대로다 —
   // 반응이 방금 누른 자리에서, 같은 크기의 단백이에게서 일어나게 하기 위해서다.
   // (연출은 휴식을 미루지 않는다. restUntilMs는 완료 시점에 확정돼 그대로 흐른다.)
-  if (isResting && !presentingSetComplete) {
+  if (restScreenShowing) {
     return (
       <RestScreen
         session={activeSession}
@@ -561,6 +650,8 @@ export default function SessionScreen() {
         characterState={characterState}
         reactionCopy={activeSetReaction}
         reaction={reaction}
+        // 휴식 중 뒤로가기도 여기서 답할 수 있어야 한다 — 있으면 [다음 세트 시작] 자리를 대신한다.
+        exitConfirm={sessionConfirm === 'exit' ? exitConfirmBar : null}
         onPauseToggle={handlePauseToggle}
         onSkip={skipSessionRest}
       />
@@ -783,31 +874,9 @@ export default function SessionScreen() {
         뒤로가기 확인이 종료 확인보다 먼저다 — 둘은 다른 결정이다.
         나가기는 세션을 남긴 채 화면만 벗어나고, 종료는 기록/보상을 확정한다.
       */}
-      {confirmExit ? (
-        <View style={styles.confirmBar}>
-          <ThemedText type="small" style={styles.confirmText}>
-            운동이 아직 진행 중이에요. 세션을 그대로 두고 나갈까요?
-          </ThemedText>
-          <ThemedText type="caption" themeColor="textSecondary" style={styles.confirmText}>
-            나가도 기록되지 않아요. 홈의 [운동으로 돌아가기]로 이어서 할 수 있어요.
-          </ThemedText>
-          <View style={styles.inlineRow}>
-            <PrimaryButton
-              label="계속 운동"
-              variant="secondary"
-              style={styles.flexItem}
-              onPress={handleStayInSession}
-            />
-            <PrimaryButton
-              label="세션 유지하고 나가기"
-              variant="gold"
-              haptic="medium"
-              style={styles.flexItem}
-              onPress={handleKeepSessionAndExit}
-            />
-          </View>
-        </View>
-      ) : confirmEnd ? (
+      {sessionConfirm === 'exit' ? (
+        exitConfirmBar
+      ) : sessionConfirm === 'end' ? (
         <View style={styles.confirmBar}>
           <ThemedText type="small" style={styles.confirmText}>
             {endError
@@ -1430,6 +1499,7 @@ function RestScreen({
   characterState,
   reactionCopy,
   reaction,
+  exitConfirm,
   onPauseToggle,
   onSkip,
 }: {
@@ -1445,6 +1515,11 @@ function RestScreen({
   /** 세트 완료 직후의 한 줄. 휴식이 자동으로 시작되므로 그 반응은 이 화면에서 보인다. */
   reactionCopy?: string | null;
   reaction: React.ReactNode;
+  /**
+   * 뒤로가기 확인 바. 세션 화면이 만든 **그 하나**를 그대로 받는다 — 여기서 다시 만들지 않는다.
+   * 있으면 [다음 세트 시작] 자리를 대신한다 (둘을 함께 쌓지 않는다).
+   */
+  exitConfirm?: React.ReactNode;
   onPauseToggle: () => void;
   onSkip: () => void;
 }) {
@@ -1510,13 +1585,16 @@ function RestScreen({
         )}
       </View>
 
-      <PrimaryButton
-        label="다음 세트 시작"
-        variant="gold"
-        size="large"
-        disabled={session.status === 'paused'}
-        onPress={onSkip}
-      />
+      {/* 뒤로가기 확인이 열리면 CTA 자리를 대신한다 — 겹치거나 함께 쌓이지 않는다. */}
+      {exitConfirm ?? (
+        <PrimaryButton
+          label="다음 세트 시작"
+          variant="gold"
+          size="large"
+          disabled={session.status === 'paused'}
+          onPress={onSkip}
+        />
+      )}
     </SessionShell>
   );
 }
