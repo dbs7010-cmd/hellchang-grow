@@ -74,13 +74,31 @@ export type BattleStageReward = Readonly<{
 /**
  * 이번 전투의 보상. **Workout XP/streak/Muscle SP와 완전히 별개의 게임 재화다** —
  * Battle은 기존 보상을 다시 지급하지 않는다.
- *
- * v1에서는 여기까지가 계약이다. 저장(인벤토리/상점)은 다음 slice의 몫이라 BattleState에
- * 넣지 않는다 — 쓸 곳이 없는 값을 미리 저장해 두면 스키마만 굳는다.
  */
 export type BattleReward = Readonly<{
   coins: number;
   unlockToken: string | null;
+}>;
+
+/**
+ * **저장되는 문서 전체.** 전투 진행(`battle`)과 영구 보상(경제)을 한 덩어리로 담는다.
+ *
+ * 개념은 둘로 나뉘어 있지만 **저장은 하나로 묶는 것이 핵심 설계다.** AsyncStorage가 주는
+ * 원자성 단위는 "키 하나 쓰기"뿐이라, 진행도와 재화를 다른 키에 나눠 쓰면 그 사이에서
+ * 앱이 죽었을 때 한쪽만 반영되는 찢어진 상태가 생긴다 — 보상이 영원히 사라지거나 두 번
+ * 들어가는 바로 그 문제다. 한 문서에 함께 두면 "둘 다 적용" 또는 "둘 다 미적용"만 남는다.
+ *
+ * 그래서 중복 방지에 필요한 것은 `battle.lastResolvedWorkoutId` 하나뿐이다 — 재화까지
+ * 같은 쓰기에 실려 있으므로 별도의 claimedWorkoutIds 목록을 무한히 쌓을 이유가 없다.
+ */
+export type BattleProgressionState = Readonly<{
+  version: number;
+  /** 전투 진행 자체. 도메인 타입은 그대로이고 여기 담기기만 한다. */
+  battle: BattleState;
+  /** 누적 전투 재화. 정수 ≥ 0이며 상한이 있다. */
+  coins: number;
+  /** 획득한 해금 토큰. 아직 무엇과도 교환하지 않는다 (표현과 무관한 ID). */
+  unlockTokens: readonly string[];
 }>;
 
 /** 화면이 그대로 읽을 수 있는 전투 결과. 저장되지 않는 표시용 값이다. */
@@ -126,6 +144,7 @@ export type BattleResolution = Readonly<{
 }>;
 
 export const BattleStateVersion = 1;
+export const BattleProgressionVersion = 1;
 
 export const INITIAL_BATTLE_STATE: BattleState = Object.freeze({
   version: BattleStateVersion,
@@ -133,6 +152,13 @@ export const INITIAL_BATTLE_STATE: BattleState = Object.freeze({
   stageProgress: 0,
   fatigue: 0,
   lastResolvedWorkoutId: null,
+});
+
+export const INITIAL_BATTLE_PROGRESSION: BattleProgressionState = Object.freeze({
+  version: BattleProgressionVersion,
+  battle: INITIAL_BATTLE_STATE,
+  coins: 0,
+  unlockTokens: Object.freeze([]) as readonly string[],
 });
 
 export const NO_BATTLE_REWARD: BattleReward = Object.freeze({ coins: 0, unlockToken: null });

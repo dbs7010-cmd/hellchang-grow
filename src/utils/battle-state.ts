@@ -1,6 +1,11 @@
-import {
+import { BattleConfig } from '@/config/battle-config';
+ import {
+  BattleProgressionVersion,
   BattleStateVersion,
+  INITIAL_BATTLE_PROGRESSION,
   INITIAL_BATTLE_STATE,
+  type BattleProgressionState,
+  type BattleResolution,
   type BattleState,
 } from '@/types/battle';
 
@@ -54,4 +59,93 @@ export function migrateBattleState(stored: Partial<BattleState> | null | undefin
     fatigue: clampFatigue(stored.fatigue),
     lastResolvedWorkoutId,
   };
+}
+
+// ── 저장 문서(진행 + 경제) ───────────────────────────────────────────────────
+
+/**
+ * 재화는 정수이고 0 이상이며 상한을 넘지 않는다. NaN/Infinity/음수/문자열은 0으로 떨어진다 —
+ * 손상된 저장값 하나가 경제를 무한대로 밀어 올리지 못하게 하는 안전장치다.
+ */
+export function clampCoins(value: unknown): number {
+  const safe = Math.floor(safeNumber(value, 0));
+  return Math.min(BattleConfig.economy.maxCoins, Math.max(0, safe));
+}
+
+/**
+ * 토큰 목록을 믿을 수 있는 모양으로 되돌린다 — 문자열만, 빈 값 제외, 중복 제거, 개수 상한.
+ * 배열이 아니면 빈 목록이다.
+ */
+export function sanitizeUnlockTokens(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return [];
+  const unique = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry === 'string' && entry.length > 0) unique.add(entry);
+    if (unique.size >= BattleConfig.economy.maxUnlockTokens) break;
+  }
+  return [...unique];
+}
+
+export function createInitialBattleProgression(): BattleProgressionState {
+  return { ...INITIAL_BATTLE_PROGRESSION, battle: createInitialBattleState(), unlockTokens: [] };
+}
+
+/**
+ * 저장된 값 → 항상 완전하고 안전한 진행 문서.
+ *
+ * 두 가지 모양을 모두 받는다.
+ *  - 지금 스키마: `{ version, battle, coins, unlockTokens }`
+ *  - 이전 스키마: BattleState가 그대로 저장돼 있던 형태 (경제가 없던 시절)
+ *
+ * 어느 쪽이든 진행도는 보존하고 빠진 경제 필드만 0에서 시작한다 — 스키마가 늘었다고
+ * 사용자가 이미 깬 stage를 잃지 않게 하는 최소한의 backward-compatible 보정이다.
+ */
+export function migrateBattleProgression(
+  stored: Partial<BattleProgressionState> | Partial<BattleState> | null | undefined
+): BattleProgressionState {
+  if (!stored || typeof stored !== 'object') return createInitialBattleProgression();
+
+  const wrapped = stored as Partial<BattleProgressionState>;
+  // `battle`이 없으면 경제가 생기기 전의 저장값이다 — 문서 전체를 전투 상태로 읽는다.
+  const battleSource =
+    wrapped.battle && typeof wrapped.battle === 'object'
+      ? wrapped.battle
+      : (stored as Partial<BattleState>);
+
+  return {
+    version: BattleProgressionVersion,
+    battle: migrateBattleState(battleSource),
+    coins: clampCoins(wrapped.coins),
+    unlockTokens: sanitizeUnlockTokens(wrapped.unlockTokens),
+  };
+}
+
+/**
+ * 전투 결과 하나를 진행 문서에 반영한 **새 문서**를 만든다. 순수 함수이고 원본을 건드리지 않는다.
+ *
+ * 전투 진행과 재화를 **함께** 갱신하는 것이 요점이다 — 이 결과를 한 번 저장하면 피해도,
+ * 피로도도, stage도, 재화도, 토큰도 모두 반영되거나 모두 반영되지 않는다.
+ */
+export function applyBattleResolution(
+  progression: BattleProgressionState,
+  resolution: BattleResolution
+): BattleProgressionState {
+  const safe = migrateBattleProgression(progression);
+  if (resolution.outcome === 'duplicate') return safe;
+
+  const tokens = resolution.reward.unlockToken
+    ? sanitizeUnlockTokens([...safe.unlockTokens, resolution.reward.unlockToken])
+    : safe.unlockTokens;
+
+  return {
+    ...safe,
+    battle: resolution.nextState,
+    coins: clampCoins(safe.coins + clampCoins(resolution.reward.coins)),
+    unlockTokens: tokens,
+  };
+}
+
+/** 이 토큰을 이미 가지고 있는가. 화면이 해금 여부를 물어볼 때 쓴다. */
+export function hasUnlockToken(progression: BattleProgressionState, token: string): boolean {
+  return migrateBattleProgression(progression).unlockTokens.includes(token);
 }

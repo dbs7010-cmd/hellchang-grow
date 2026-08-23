@@ -11,7 +11,15 @@ import {
   recoverBattleFatigue,
   resolveBattlePower,
 } from '@/utils/battle-power';
-import { createInitialBattleState, migrateBattleState } from '@/utils/battle-state';
+import {
+  applyBattleResolution,
+  createInitialBattleProgression,
+  createInitialBattleState,
+  hasUnlockToken,
+  migrateBattleProgression,
+  migrateBattleState,
+  sanitizeUnlockTokens,
+} from '@/utils/battle-state';
 import { syncCompletedWorkoutToBattle, type BattleSyncOperations } from '@/utils/battle-sync';
 
 let failures = 0;
@@ -220,54 +228,245 @@ const BASE_POWER = 18;
     battleInputFromCompletion({ sessionResult: {} } as unknown as SessionCompletionResultSnapshot) === null);
 }
 
-// ── 12/13. persistence roundtrip + 재시작 후 중복 방지 ───────────────────────
+// ── 12/13. 트랜잭션: 진행 + 보상이 정확히 한 번 ──────────────────────────────
+// 피해/피로도/stage/재화/토큰이 **한 문서에 함께** 저장되므로, 저장소가 주는 원자성
+// (키 하나 쓰기)이 그대로 exactly-once가 된다. "state는 저장됐는데 보상만 날아간" 창이
+// 열리지 않는다는 것을 아래에서 직접 확인한다.
 {
-  const store = new Map<string, string>();
-  const ops = (): BattleSyncOperations => ({
-    loadState: async () => migrateBattleState(JSON.parse(store.get('battle') ?? 'null')),
-    saveState: async (next) => { store.set('battle', JSON.stringify(next)); },
-  });
+  const makeStore = () => {
+    const store = { raw: null as string | null, writes: 0, failNext: 0, failLoad: false };
+    const ops = (): BattleSyncOperations => ({
+      loadProgression: async () => {
+        if (store.failLoad) throw new Error('unreadable');
+        return migrateBattleProgression(JSON.parse(store.raw ?? 'null'));
+      },
+      saveProgression: async (next) => {
+        if (store.failNext > 0) { store.failNext -= 1; throw new Error('storage full'); }
+        store.writes += 1;
+        store.raw = JSON.stringify(next);
+      },
+    });
+    return { store, ops };
+  };
 
   await (async () => {
-    const first = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-persist' }), ops());
-    expect('12: 처음 반영은 applied다', first.status === 'applied');
-    const reloaded = await ops().loadState();
-    check('12: 저장했다 읽어도 같은 상태다 (roundtrip)', reloaded, first.state);
+    const { store, ops } = makeStore();
 
-    // 앱 재시작을 흉내낸다 — 메모리 상태를 버리고 저장된 값에서만 다시 판단한다.
-    const again = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-persist' }), ops());
-    expect('13: 재시작 후 같은 운동은 duplicate다', again.status === 'duplicate');
-    check('13: 재시작 후 재처리해도 상태가 그대로다', again.state, first.state);
+    // 1/2. 보상이 실제로 저장된다. stage 1 적 HP 10, 18 피해 → clear (+20) → 38 coin.
+    const first = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-t1' }), ops());
+    expect('12: 처음 반영은 applied다', first.status === 'applied');
+    expect('12-1: 전투 재화가 저장 문서에 반영된다',
+      first.progression?.coins === BASE_POWER + stage1.reward.clearCoins);
+    expect('12: 전투 진행도 같은 문서에 반영된다', first.progression?.battle.currentStage === 2);
+    check('12: 저장했다 읽어도 같은 문서다 (roundtrip)', await ops().loadProgression(), first.progression);
+    expect('12: 한 번의 반영은 한 번의 쓰기다 (부분 저장 창이 없다)', store.writes === 1);
+
+    // 3. 못 잡은 전투는 피해만큼만 받고 토큰은 없다.
+    const noClear = await syncCompletedWorkoutToBattle(
+      input({ workoutId: 'w-t2', completedSetCount: 1, totalVolumeKg: 0 }), ops());
+    expect('12-3: 못 잡은 전투에서는 토큰이 나오지 않는다',
+      noClear.progression?.unlockTokens.length === 0);
+    expect('12-3: 못 잡아도 피해만큼 재화는 쌓인다',
+      (noClear.progression?.coins ?? 0) > (first.progression?.coins ?? 0));
+  })();
+
+  // 2. stage 3을 잡으면 토큰이 저장된다.
+  await (async () => {
+    const stage3 = getBattleStage(3);
+    const { store, ops } = makeStore();
+    store.raw = JSON.stringify({
+      version: 1, battle: { ...createInitialBattleState(), currentStage: 3 }, coins: 0, unlockTokens: [],
+    });
+    const tokenRun = await syncCompletedWorkoutToBattle(
+      input({ workoutId: 'w-token', completedSetCount: 20, totalVolumeKg: 0 }), ops());
+    check('12-2: 해금 토큰이 저장된다', tokenRun.progression?.unlockTokens, [stage3.reward.unlockToken]);
+    expect('12-2: 저장된 토큰을 조회할 수 있다',
+      hasUnlockToken(tokenRun.progression!, stage3.reward.unlockToken!));
+    check('12-2: 토큰은 저장 후 다시 읽어도 남아 있다',
+      (await ops().loadProgression()).unlockTokens, [stage3.reward.unlockToken]);
+  })();
+
+  // 4/5/6. 같은 운동 재처리 — 재화도 토큰도 늘지 않는다 (앱 재시작 포함).
+  await (async () => {
+    const stage3 = getBattleStage(3);
+    const { store, ops } = makeStore();
+    store.raw = JSON.stringify({
+      version: 1, battle: { ...createInitialBattleState(), currentStage: 3 }, coins: 0, unlockTokens: [],
+    });
+    const applied = await syncCompletedWorkoutToBattle(
+      input({ workoutId: 'w-once', completedSetCount: 20, totalVolumeKg: 0 }), ops());
+    const writesAfterFirst = store.writes;
+
+    // 앱 재시작을 흉내낸다 — 메모리를 버리고 저장된 문서에서만 다시 판단한다.
+    const again = await syncCompletedWorkoutToBattle(
+      input({ workoutId: 'w-once', completedSetCount: 20, totalVolumeKg: 0 }), ops());
+    expect('13-6: 재시작 후 같은 운동은 duplicate다', again.status === 'duplicate');
+    expect('13-4: 재처리로 재화가 늘지 않는다', again.progression?.coins === applied.progression?.coins);
+    check('13-5: 재처리로 토큰이 늘지 않는다',
+      again.progression?.unlockTokens, [stage3.reward.unlockToken]);
     expect('13: 재처리로 피해가 늘지 않는다', again.resolution?.progressGained === 0);
     expect('13: 재처리로 피로도가 늘지 않는다', again.resolution?.fatigueDelta === 0);
-    expect('13: 재처리로 보상이 또 나오지 않는다', again.resolution?.reward.coins === 0);
     expect('13: 재처리로 stage가 중복 상승하지 않는다',
-      again.state?.currentStage === first.state?.currentStage);
+      again.progression?.battle.currentStage === applied.progression?.battle.currentStage);
+    expect('13-8: 재처리는 저장조차 하지 않는다', store.writes === writesAfterFirst);
+    check('13: 재처리 후 문서가 완전히 동일하다', again.progression, applied.progression);
+  })();
 
-    const next = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-persist-2' }), ops());
-    expect('13: 다른 운동은 정상적으로 반영된다', next.status === 'applied');
+  // 7/8. 저장 실패 → 재시도 → 정확히 한 번. 부분 반영이 없다.
+  await (async () => {
+    const { store, ops } = makeStore();
+    const before = await ops().loadProgression();
 
-    // 저장 실패는 Battle만의 문제다 — 상태를 되돌리지 않고 재시도 가능해야 한다.
-    const beforeFailure = await ops().loadState();
-    const failing = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-fail' }), {
-      loadState: ops().loadState,
-      saveState: async () => { throw new Error('storage full'); },
-    });
-    expect('10/13: 저장 실패는 예외를 던지지 않고 failed로 알린다', failing.status === 'failed');
-    check('10/13: 저장 실패 후에도 게임 상태는 이전 그대로다', await ops().loadState(), beforeFailure);
-    const retry = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-fail' }), ops());
-    expect('10/13: 실패한 운동은 그대로 재시도할 수 있다', retry.status === 'applied');
+    store.failNext = 1;
+    const failed = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-retry' }), ops());
+    expect('13-7: 저장 실패는 예외를 던지지 않고 failed로 알린다', failed.status === 'failed');
+    check('13-7: 실패 후 문서는 통째로 이전 상태다 (진행도도 재화도 그대로)',
+      await ops().loadProgression(), before);
+    expect('13-7: 실패했으므로 재화도 저장되지 않았다',
+      (await ops().loadProgression()).coins === 0);
 
-    const unreadable = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-x' }), {
-      loadState: async () => { throw new Error('unreadable'); },
-      saveState: async () => {},
-    });
-    expect('10: 상태를 읽지 못하면 아무것도 하지 않는다',
-      unreadable.status === 'failed' && unreadable.state === null);
+    const retry = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-retry' }), ops());
+    expect('13-7: 실패한 운동은 그대로 재시도된다', retry.status === 'applied');
+    expect('13-7: 재시도로 보상이 정확히 한 번 들어간다',
+      retry.progression?.coins === BASE_POWER + stage1.reward.clearCoins);
+
+    const afterRetry = await ops().loadProgression();
+    const third = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-retry' }), ops());
+    expect('13-8: 성공 후 또 재시도해도 중복 보상이 없다', third.status === 'duplicate');
+    check('13-8: 문서가 그대로다', await ops().loadProgression(), afterRetry);
+  })();
+
+  // 9/10. 저장/읽기 실패가 운동 데이터에 손대지 않는다.
+  await (async () => {
+    const { store, ops } = makeStore();
+    const workoutRecord = {
+      id: 'r', sessionId: 'w-guard', date: '2026-08-23', category: 'strength', title: 't',
+      completed: true, createdAt: '2026-08-23T00:00:00.000Z',
+      exercises: [{ id: 'e', name: 'n', setDetails: [{ id: 's', weightKg: 60, reps: 10, completed: true }] }],
+    } as WorkoutRecord;
+    const recordSnapshot = JSON.stringify(workoutRecord);
+
+    store.failNext = 1;
+    const stateFail = await syncCompletedWorkoutToBattle(battleInputFromWorkoutRecord(workoutRecord), ops());
+    expect('13-9: 저장 실패해도 예외가 운동 쪽으로 새지 않는다', stateFail.status === 'failed');
+    check('13-9/10: 저장 실패가 WorkoutRecord를 건드리지 않는다',
+      JSON.stringify(workoutRecord), recordSnapshot);
+
+    store.failLoad = true;
+    const unreadable = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-x' }), ops());
+    expect('13-10: 문서를 읽지 못하면 아무것도 하지 않는다',
+      unreadable.status === 'failed' && unreadable.progression === null);
+    expect('13-10: 읽기 실패로 쓰기가 일어나지 않는다', store.writes === 0);
+    store.failLoad = false;
 
     const skipped = await syncCompletedWorkoutToBattle(null, ops());
-    expect('10: 반영할 입력이 없으면 skipped다 (저장하지 않는다)', skipped.status === 'skipped');
+    expect('13: 반영할 입력이 없으면 skipped다 (저장하지 않는다)',
+      skipped.status === 'skipped' && store.writes === 0);
   })();
+
+  // 16. 재시도가 결정적이다 — 같은 문서에서 같은 운동은 언제나 같은 결과.
+  await (async () => {
+    const runOnce = async () => {
+      const { ops } = makeStore();
+      const result = await syncCompletedWorkoutToBattle(input({ workoutId: 'w-det' }), ops());
+      return JSON.stringify(result.progression);
+    };
+    const runs = [await runOnce(), await runOnce(), await runOnce()];
+    expect('13-16: 트랜잭션 재시도가 결정적이다', new Set(runs).size === 1);
+  })();
+
+  // 20. 같은 운동 = damage/fatigue/stage/coins/token 전부 정확히 한 번.
+  await (async () => {
+    const { ops } = makeStore();
+    const results = [];
+    for (let i = 0; i < 5; i += 1) {
+      results.push(await syncCompletedWorkoutToBattle(input({ workoutId: 'w-exactly-once' }), ops()));
+    }
+    const final = await ops().loadProgression();
+    expect('13-20: 다섯 번 불러도 applied는 한 번뿐이다',
+      results.filter((r) => r.status === 'applied').length === 1);
+    expect('13-20: 피해가 정확히 한 번 반영됐다',
+      final.battle.stageProgress === BASE_POWER - stage1.progressRequired);
+    expect('13-20: 피로도가 정확히 한 번 반영됐다', final.battle.fatigue === stage1.fatigueCost);
+    expect('13-20: stage가 정확히 한 번 올랐다', final.battle.currentStage === 2);
+    expect('13-20: 재화가 정확히 한 번 들어왔다',
+      final.coins === BASE_POWER + stage1.reward.clearCoins);
+    check('13-20: 토큰도 한 번뿐이다 (stage 1은 토큰 없음)', final.unlockTokens, []);
+  })();
+
+  // 11~15. 손상된 저장값 방어와 마이그레이션.
+  {
+    const badCoins: unknown[] = [NaN, Infinity, -Infinity, -500, '900', null, undefined, {}];
+    badCoins.forEach((value) => {
+      const migrated = migrateBattleProgression({ coins: value } as never);
+      expect(`13-11/12/13: 재화 ${String(value)} 는 안전한 정수로 떨어진다`,
+        Number.isInteger(migrated.coins) && migrated.coins >= 0);
+    });
+    expect('13-12: 재화는 상한을 넘지 않는다',
+      migrateBattleProgression({ coins: Number.MAX_SAFE_INTEGER } as never).coins ===
+      BattleConfig.economy.maxCoins);
+    expect('13-12: 누적으로도 상한을 넘지 않는다',
+      applyBattleResolution(
+        { ...createInitialBattleProgression(), coins: BattleConfig.economy.maxCoins },
+        resolveBattle(input({ workoutId: 'w-cap' }), createInitialBattleState(), stage1)
+      ).coins === BattleConfig.economy.maxCoins);
+
+    const badTokens: unknown[] = ['not-an-array', 42, null, undefined, {}];
+    badTokens.forEach((value) => {
+      expect(`13-14: 토큰 ${String(value)} 는 빈 목록으로 떨어진다`,
+        migrateBattleProgression({ unlockTokens: value } as never).unlockTokens.length === 0);
+    });
+    check('13-14: 토큰 목록에서 문자열이 아닌 값과 중복이 걸러진다',
+      sanitizeUnlockTokens(['a', 'a', '', 3, null, 'b']), ['a', 'b']);
+    check('13-14: 같은 토큰을 두 번 얻어도 하나만 남는다',
+      applyBattleResolution(
+        { ...createInitialBattleProgression(), unlockTokens: ['title.persistent'] },
+        resolveBattle(input({ workoutId: 'w-dup-token', completedSetCount: 20, totalVolumeKg: 0 }),
+          { ...createInitialBattleState(), currentStage: 3 }, getBattleStage(3))
+      ).unlockTokens, ['title.persistent']);
+
+    check('13-15: 저장값이 없으면 초기 문서다', migrateBattleProgression(null), {
+      version: 1,
+      battle: { version: 1, currentStage: 1, stageProgress: 0, fatigue: 0, lastResolvedWorkoutId: null },
+      coins: 0, unlockTokens: [],
+    });
+    // 경제가 생기기 전 스키마(BattleState가 그대로 저장돼 있던 형태)도 진행도를 잃지 않는다.
+    const legacy = migrateBattleProgression({
+      version: 1, currentStage: 3, stageProgress: 7, fatigue: 40, lastResolvedWorkoutId: 'old-workout',
+    } as never);
+    expect('13-15: 옛 스키마에서도 진행도가 보존된다',
+      legacy.battle.currentStage === 3 && legacy.battle.stageProgress === 7 &&
+      legacy.battle.lastResolvedWorkoutId === 'old-workout');
+    expect('13-15: 옛 스키마에는 경제가 없으므로 0에서 시작한다',
+      legacy.coins === 0 && legacy.unlockTokens.length === 0);
+    expect('13-15: 옛 스키마에서 올라온 문서도 중복을 막는다',
+      resolveBattle(input({ workoutId: 'old-workout' }), legacy.battle, stage1).outcome === 'duplicate');
+    check('13-15: 부분 객체도 안전하게 채워진다',
+      migrateBattleProgression({ coins: 12 } as never).battle, createInitialBattleState());
+  }
+
+  // 17/18/19. mutation 없음 + 기존 보상 경계.
+  {
+    const progression = { ...createInitialBattleProgression(), coins: 50, unlockTokens: ['keep'] };
+    const progressionSnapshot = JSON.stringify(progression);
+    const battleInput = input({ workoutId: 'w-no-mutate' });
+    const inputSnapshot = JSON.stringify(battleInput);
+    const resolution = resolveBattle(battleInput, progression.battle, stage1);
+    const stateSnapshot = JSON.stringify(progression.battle);
+
+    const next = applyBattleResolution(progression, resolution);
+    check('13-17: BattleInput 원본이 바뀌지 않는다', JSON.stringify(battleInput), inputSnapshot);
+    check('13-18: BattleState 원본이 바뀌지 않는다', JSON.stringify(progression.battle), stateSnapshot);
+    check('13-18: 진행 문서 원본이 바뀌지 않는다', JSON.stringify(progression), progressionSnapshot);
+    expect('13-18: 새 문서는 원본과 다른 객체다', next !== progression && next.battle !== progression.battle);
+    check('13-18: 기존 토큰은 그대로 유지된다', next.unlockTokens, ['keep']);
+    expect('13-19: 진행 문서에는 XP/SP/streak이 없다',
+      !/xp|streak|muscleSp|passLevel|hellPass/i.test(JSON.stringify(Object.keys(next))));
+    check('13-19: 저장 문서 키는 정해진 네 개뿐이다',
+      Object.keys(next).sort(), ['battle', 'coins', 'unlockTokens', 'version']);
+    expect('13-19: 재화는 Battle 문서에만 있고 다른 보상 계약을 건드리지 않는다',
+      typeof next.coins === 'number' && !('xp' in next) && !('sp' in next));
+  }
 }
 
 // ── 14. 초기 상태 / Stage 데이터 / 마지막 stage ──────────────────────────────

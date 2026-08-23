@@ -53,4 +53,17 @@ export const BattleConfig = {
     /** 적에게 준 피해 1당 전투 재화. Workout XP/SP와 완전히 별개의 게임 재화다. */
     coinsPerDamage: 1,
   },
+
+  economy: {
+    /**
+     * 누적 재화 상한. 경제 시스템을 만드는 값이 아니라 **overflow 안전장치**다 —
+     * 손상된 저장값이나 비정상 입력이 재화를 무한대로 밀어 올리지 못하게 막는 바닥선.
+     */
+    maxCoins: 9_999_999,
+    /**
+     * 보관하는 해금 토큰 개수 상한. 토큰은 stage당 하나뿐이라 실제로 닿을 일이 없고,
+     * 손상된 저장값이 배열을 무한히 키우는 것만 막는다.
+     */
+    maxUnlockTokens: 200,
+  },
 } as const;

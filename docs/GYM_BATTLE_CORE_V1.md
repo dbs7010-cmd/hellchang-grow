@@ -33,7 +33,9 @@ Merge order: push 5404243 to main first; then rebase/merge this branch; preserve
 | `src/utils/battle.ts` | **순수 resolver** | Battle 도메인만 |
 | `src/utils/battle-state.ts` | 저장값 정규화/마이그레이션 | `types/battle` |
 | `src/utils/battle-input.ts` | **경계(adapter)** — 완료된 운동 → BattleInput | workout 타입/헬퍼 + `types/battle` |
-| `src/data/battle-repository.ts` | AsyncStorage 영속화 | 기존 repository 패턴 |
+| `src/utils/battle-state.ts` | 저장 문서 정규화 + 결과 반영(순수) | config + `types/battle` |
+| `src/utils/battle-sync.ts` | **단일 트랜잭션 경계** (화면이 부를 유일한 API) | Battle 도메인만 |
+| `src/data/battle-repository.ts` | AsyncStorage 영속화 (키 하나) | 기존 repository 패턴 |
 
 `utils/battle.ts`는 Workout/Growth/BodyState/Character를 **import하지 않는다**.
 그 경계는 verify가 소스 텍스트로 직접 확인한다. 운동 데이터를 아는 곳은 adapter 하나뿐이다.
@@ -83,8 +85,34 @@ base = 유효 세트 × 2 + floor(sqrt(볼륨 / 100))
 - **기존 XP / streak / Muscle SP를 Battle이 다시 지급하지 않는다.** 완전히 별개의 게임 재화다.
 - 매 전투: 준 피해 1당 coin 1. stage clear: + `stage.reward.clearCoins`, 해금 토큰(있으면).
 - 중복 운동은 coin도 토큰도 0.
-- **BattleState에 저장하지 않는다** — 상점/인벤토리가 없는 지금 저장하면 쓰지도 못할 스키마만
-  굳는다. v1은 `BattleResolution.reward` 계약까지이고, 저장은 인벤토리 slice의 몫이다.
+- 재화는 정수 0 이상이며 상한이 있다(overflow 안전장치). 토큰은 문자열만, 중복 제거.
+- 토큰은 아직 무엇과도 교환하지 않는다 — 획득/저장/중복 방지까지가 v1이고, 소비(꾸미기·
+  HOME 발전)는 표현과 무관한 ID로 남겨 둔다.
+
+### 저장과 exactly-once
+
+**전투 진행과 재화를 한 문서(`BattleProgressionState`)에 담아 키 하나로 쓴다.**
+
+저장소가 주는 원자성 단위는 "키 하나 쓰기"뿐이다. 진행도와 재화를 다른 키로 나누면 그
+사이에서 앱이 죽었을 때 한쪽만 반영된 상태가 남는다 — 보상이 영원히 사라지거나(state만
+저장됨 → 다음엔 duplicate) 두 번 들어간다(재화만 저장됨 → 다음에 재판정). 한 문서면
+"둘 다" 또는 "둘 다 아님"만 존재한다.
+
+그래서 **별도의 BattleCompletionReceipt도, 무한히 쌓이는 `claimedWorkoutIds`도 만들지
+않는다.** 중복 판단은 같은 문서 안의 `battle.lastResolvedWorkoutId` 하나로 끝나고,
+피해·피로도·stage·재화·토큰이 전부 그 한 번의 쓰기에 함께 실린다.
+
+- 쓰기 실패 → 문서는 통째로 이전 상태. 같은 운동으로 다시 부르면 정확히 한 번 반영된다.
+- 읽기 실패 → 아무것도 하지 않는다(`progression: null`). 모르는 상태 위에 쓰지 않는다.
+- 저장된 값이 옛 스키마(경제가 없던 시절의 BattleState)여도 진행도를 잃지 않는다.
+- Stage clear 이력은 만들지 않는다 — `currentStage`로 충분하고, 없어도 되는 상태를
+  중복해서 관리하지 않는다.
+
+### 공개 API
+
+화면은 `syncCompletedWorkoutToBattle(input, { loadProgression, saveProgression })` **하나만**
+부른다. 판정·진행도 저장·보상 저장이 그 안에서 한 번에 끝난다 — resolveBattle / saveState /
+addCoins / saveToken을 각각 부르게 하지 않는다. 트랜잭션 경계는 domain/data 쪽에 있다.
 
 ### 적 / 보스
 
