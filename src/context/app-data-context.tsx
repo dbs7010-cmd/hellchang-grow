@@ -52,7 +52,7 @@ import {
 } from '@/data/workout-session-repository';
 import { clearAllKeys } from '@/services/storage/local-storage';
 import { StorageKeys } from '@/services/storage/keys';
-import { rewardedAdService } from '@/services/ads/mock-rewarded-ad-service';
+import { rewardedAdService } from '@/services/ads';
 import { referralService } from '@/services/referral/mock-referral-service';
 import { subscriptionService } from '@/services/subscription/mock-subscription-service';
 import { growthEngine } from '@/services/growth';
@@ -223,7 +223,8 @@ interface AppDataContextValue extends AppDataState {
   deleteWorkoutRecord: (recordId: string) => Promise<void>;
   addBodyHistoryEntry: (input: Parameters<typeof addBodyHistoryEntryRepo>[0]) => Promise<void>;
   claimStreakReward: () => Promise<void>;
-  watchRewardedAd: () => Promise<void>;
+  /** 보상을 실제로 받았는지 돌려준다. false면 이용권은 늘지 않았다. */
+  watchRewardedAd: () => Promise<boolean>;
   startWorkoutSession: (
     category: WorkoutCategory,
     options?: {
@@ -282,6 +283,8 @@ interface AppDataContextValue extends AppDataState {
   ptContext: PtContext;
   /** 실제 AI 백엔드가 연결돼 있는지. false면 화면이 "AI 연결 전"임을 알린다. */
   aiConnected: boolean;
+  /** 이 빌드에 광고 provider가 연결돼 있는가. 없으면 광고 버튼을 내보내지 않는다. */
+  adProviderAvailable: boolean;
   /**
    * PT에게 한 마디 보낸다. 접근 권한이 없으면 null, 요청이 실패하면 AiTrainerRequestError를
    * 던진다 (화면이 대화를 유지한 채 재시도를 안내한다).
@@ -952,11 +955,26 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, routines }));
   }, []);
 
-  const watchRewardedAd = useCallback(async () => {
-    const result = await rewardedAdService.showRewardedAd();
-    if (result.granted) {
+  /**
+   * 보상형 광고를 보고 이용권을 받는다. **보상이 실제로 승인됐을 때만** 이용권이 늘어난다 —
+   * 광고 provider가 없는 빌드에서는 승인이 나지 않으므로 아무 일도 일어나지 않는다.
+   * 화면이 "성공했다"고 오해하지 않도록 결과를 그대로 돌려준다.
+   */
+  const watchRewardedAd = useCallback(async (): Promise<boolean> => {
+    let result;
+    try {
+      result = await rewardedAdService.showRewardedAd();
+    } catch {
+      // 광고 SDK 실패가 앱을 멈추게 하지 않는다. 이용권도 주지 않는다.
+      return false;
+    }
+    if (!result.granted || result.rewardUnits <= 0) return false;
+    try {
       const trainerUsage = await grantRewardedPtUses(result.rewardUnits);
       setState((prev) => ({ ...prev, trainerUsage }));
+      return true;
+    } catch {
+      return false;
     }
   }, []);
 
@@ -1155,6 +1173,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     removeRoutine,
     ptContext,
     aiConnected: aiTrainerService.isAiConnected,
+    adProviderAvailable: rewardedAdService.isProviderAvailable,
     sendPtMessage,
     subscribeMock,
     cancelSubscriptionMock,

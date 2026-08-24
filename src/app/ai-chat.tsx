@@ -29,6 +29,7 @@ export default function AiChatScreen() {
     hasAiPtAccess,
     trainerUsage,
     aiConnected,
+    adProviderAvailable,
     watchRewardedAd,
     subscribeMock,
     sendPtMessage,
@@ -36,9 +37,15 @@ export default function AiChatScreen() {
 
   const [aiPanelOpened, setAiPanelOpened] = useState(hasAiPtAccess);
 
+  const [adFailed, setAdFailed] = useState(false);
+
+  // 보상을 실제로 받았을 때만 대화를 연다. 예전에는 결과와 무관하게 열려서, 보상이 없으면
+  // 열린 화면에서 메시지를 보내도 아무 답이 오지 않았다.
   const handleWatchAd = async () => {
-    await watchRewardedAd();
-    setAiPanelOpened(true);
+    setAdFailed(false);
+    const granted = await watchRewardedAd();
+    if (granted) setAiPanelOpened(true);
+    else setAdFailed(true);
   };
 
   const handleSubscribe = async () => {
@@ -64,10 +71,28 @@ export default function AiChatScreen() {
           <ThemedText type="small" themeColor="textSecondary">
             {StanleyTrainer.portraitPlaceholder} {pickTrainerLine(StanleyTrainer.dialogueSet.adPitch).text}
           </ThemedText>
-          <ThemedText type="caption" themeColor="textSecondary">
-            광고를 보면 AI PT를 이용할 수 있어요. 구독과 AI 기능은 똑같아요 — 접근 방식만 달라요.
-          </ThemedText>
-          <PrimaryButton label="광고 보고 이용하기" variant="gold" onPress={handleWatchAd} />
+          {adProviderAvailable && (
+            <ThemedText type="caption" themeColor="textSecondary">
+              광고를 보면 AI PT를 이용할 수 있어요. 구독과 AI 기능은 똑같아요 — 접근 방식만 달라요.
+            </ThemedText>
+          )}
+          {/*
+            광고 provider가 없는 빌드에서는 버튼을 아예 내보내지 않는다 — 눌러도 보상을
+            줄 수 없는 버튼은 "광고를 본 것처럼" 공짜 이용권을 주는 경로가 되거나,
+            아무 일도 일어나지 않는 고장난 버튼이 된다. 둘 다 만들지 않는다.
+          */}
+          {adProviderAvailable ? (
+            <PrimaryButton label="광고 보고 이용하기" variant="gold" onPress={handleWatchAd} />
+          ) : (
+            <ThemedText type="caption" themeColor="textSecondary">
+              광고와 결제를 준비하고 있어요. 준비되면 여기에서 AI PT를 이용할 수 있어요.
+            </ThemedText>
+          )}
+          {adFailed && (
+            <ThemedText type="caption" themeColor="textSecondary">
+              지금은 광고를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
+            </ThemedText>
+          )}
           {/*
             결제 SDK가 붙기 전까지 출시 빌드에 구독 버튼을 두지 않는다 — 누르면 결제된 것처럼
             보이는 버튼은 거짓말이고, 그 경로가 곧 premium 우회가 된다.
