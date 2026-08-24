@@ -55,7 +55,8 @@
     "verify:workout-character-motion": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-workout-character-motion.ts",
     "verify:core-loop": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-core-loop.ts",
     "verify:pt": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-pt-context.ts",
-    "verify:entitlement": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-entitlement.ts"
+    "verify:entitlement": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-entitlement.ts",
+    "verify:storage": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-storage-recovery.ts"
   },
   "private": true
 }

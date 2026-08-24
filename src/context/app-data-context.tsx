@@ -92,6 +92,7 @@ import { addXp, computePassLevelProgress } from '@/utils/pass';
 import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/character-appearance';
 import { buildPtContext, buildPtExerciseBrief, matchExerciseInText, PtContext } from '@/utils/pt-context';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
+import { resolveOnboardingState } from '@/utils/stored-state';
 import { buildWorkoutSessionResult } from '@/utils/workout-session-result';
 import { createDefaultGrowthState, updateBodyComposition } from '@/utils/growth-state';
 import { buildDanbaekBodyState } from '@/utils/body-state';
@@ -127,6 +128,12 @@ import {
 
 interface AppDataState {
   loading: boolean;
+  /**
+   * 저장된 데이터를 읽지 못한 채 부팅이 끝났는가. loading(아직 읽는 중)과 다르다 —
+   * 여기까지 오면 "모른다"는 뜻이고, 모르는 상태로 온보딩을 다시 시키면 멀쩡한
+   * 프로필을 덮어쓴다. 그래서 진행시키지 않고 다시 시도할 기회를 준다.
+   */
+  bootstrapFailed: boolean;
   onboardingComplete: boolean;
   profile: UserProfile | null;
   bodyHistory: BodyHistoryEntry[];
@@ -187,6 +194,8 @@ export interface EndSessionSummary {
 }
 
 interface AppDataContextValue extends AppDataState {
+  /** 부팅 실패 화면의 [다시 시도]. 저장소를 처음부터 다시 읽는다. */
+  reloadAppData: () => void;
   /** 등급에서 파생된 기능 권한. 화면은 tier를 비교하지 않고 이 boolean을 읽는다. */
   capabilities: EntitlementCapabilities;
   hasSubscriptionAccess: boolean;
@@ -312,6 +321,7 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 
 const initialState: AppDataState = {
   loading: true,
+  bootstrapFailed: false,
   onboardingComplete: false,
   profile: null,
   bodyHistory: [],
@@ -372,10 +382,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [mutateActiveSession]
   );
 
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
+  /**
+   * 저장소에서 앱 상태를 통째로 읽어 온다. 부팅 때 한 번 돌고, 읽지 못했을 때
+   * 사용자가 [다시 시도]를 누르면 같은 경로로 다시 돈다 — 복구 전용 코드를 따로 만들지 않는다.
+   */
+  const loadAppData = useCallback(async (isCancelled: () => boolean) => {
+    {
+      try {
       const [
         onboardingComplete,
         profile,
@@ -406,15 +419,21 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         getGrowthState(),
       ]);
 
-      if (cancelled) return;
+      if (isCancelled()) return;
 
-      // 기존 사용자 보호: 온보딩이 새로 생기기 전에 이미 프로필을 만든 사용자가 첫 화면에
-      // 다시 갇히지 않도록, 핵심 데이터(체중)가 있으면 완료로 간주하고 플래그를 채워준다.
-      // 기존 데이터는 건드리지 않는다 — 플래그만 보강한다.
-      let resolvedOnboardingComplete = onboardingComplete;
-      if (!onboardingComplete && profile && profile.weightKg > 0) {
-        resolvedOnboardingComplete = true;
-        await setOnboardingCompleteRepo(true);
+      // 기존 사용자 보호와 그 반대 방향(플래그는 있는데 프로필이 없는 경우)을 모두
+      // resolveOnboardingState가 판정한다 — 순수 함수라 검증할 수 있다
+      // (scripts/verify-storage-recovery.ts). 다른 키(운동 기록/성장)는 건드리지 않는다.
+      const { onboardingComplete: resolvedOnboardingComplete, shouldPersistFlag } =
+        resolveOnboardingState(onboardingComplete, profile);
+      if (shouldPersistFlag) {
+        // 플래그 보강은 편의 기능이다. 저장에 실패해도 이번 실행은 그대로 진행하고,
+        // 다음 실행에서 같은 조건으로 다시 시도한다 — 부팅을 막을 이유가 없다.
+        try {
+          await setOnboardingCompleteRepo(true);
+        } catch {
+          // 무시한다. resolvedOnboardingComplete는 이미 메모리에 반영돼 있다.
+        }
       }
 
       // 세션이 'active'로 저장된 채 오래 방치됐다면(백그라운드/강제종료) 마지막으로 확인된
@@ -432,13 +451,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         let recovered = recoverStaleSession(activeSession, nowMs, staleThresholdMs);
         recovered = resumeIfRecentBackground(recovered, nowMs, staleThresholdMs);
         if (recovered !== activeSession) {
-          await saveActiveSession(recovered);
+          // 복구 결과를 저장하지 못해도 화면에는 복구된 세션을 보여준다 — 저장 실패가
+          // 진행 중이던 운동을 통째로 날리는 것보다 낫다. 다음 세트 기록이 다시 저장한다.
+          try {
+            await saveActiveSession(recovered);
+          } catch {
+            // 무시한다.
+          }
           recoveredSession = recovered;
         }
       }
 
       setState({
         loading: false,
+        bootstrapFailed: false,
         onboardingComplete: resolvedOnboardingComplete,
         profile,
         bodyHistory,
@@ -458,12 +484,36 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         pass,
         growth,
       });
-    })();
+      } catch {
+        // 여기까지 오면 안 되지만, 온다면 **빈 화면에 갇히는 것만은 막는다.**
+        // loading이 true로 남으면 RootNavigator가 계속 null을 그려서 사용자는 영원히
+        // 검은 화면을 본다 — 재설치 외에는 빠져나올 방법이 없다.
+        //
+        // 대신 온보딩으로 떨어뜨리지도 않는다. 읽지 못한 것과 없는 것은 다르고,
+        // 온보딩을 다시 완료시키면 멀쩡히 남아 있던 프로필을 덮어쓴다.
+        if (!isCancelled()) setState((prev) => ({ ...prev, loading: false, bootstrapFailed: true }));
+      }
+    }
+  }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    // 이 파일의 다른 effect들과 같은 방식으로 한 tick 뒤에 시작한다 — effect 본문에서
+    // 곧바로 setState를 부르지 않기 위한 것이고, 그동안은 스플래시가 떠 있다.
+    const timer = setTimeout(() => {
+      loadAppData(() => cancelled);
+    }, 0);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, []);
+  }, [loadAppData]);
+
+  /** 부팅 실패 화면의 [다시 시도]. 다시 읽는 동안에는 로딩 상태로 되돌린다. */
+  const reloadAppData = useCallback(() => {
+    setState((prev) => ({ ...prev, loading: true, bootstrapFailed: false }));
+    loadAppData(() => false);
+  }, [loadAppData]);
 
   // 앱이 백그라운드로 전환되는 순간 활성 세션을 즉시 일시정지해, 방치된 시간이 운동 시간에
   // 섞이지 않게 한다("1217분 버그"의 근본 원인). 짧게 백그라운드에 있었다가 곧바로 돌아오면
@@ -1108,7 +1158,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const resetAllData = useCallback(async () => {
     await clearAllKeys(Object.values(StorageKeys));
-    setState({ ...initialState, loading: false });
+    setState({ ...initialState, loading: false, bootstrapFailed: false });
   }, []);
 
   const today = todayDateString();
@@ -1135,6 +1185,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const value: AppDataContextValue = {
     ...state,
+    reloadAppData,
     capabilities,
     hasSubscriptionAccess: isSubscribed,
     hasAiPtAccess,

@@ -1,13 +1,12 @@
 import { AppConfig } from '@/config/app-config';
 import { StorageKeys } from '@/services/storage/keys';
-import { readJSON, writeJSON } from '@/services/storage/local-storage';
+import { readArray, writeJSON } from '@/services/storage/local-storage';
 import { BodyHistoryEntry } from '@/types/body';
 import { todayDateString } from '@/utils/date';
 import { createId } from '@/utils/id';
 
 export async function getBodyHistory(): Promise<BodyHistoryEntry[]> {
-  const entries = await readJSON<BodyHistoryEntry[]>(StorageKeys.bodyHistory);
-  return entries ?? [];
+  return readArray<BodyHistoryEntry>(StorageKeys.bodyHistory);
 }
 
 export async function addBodyHistoryEntry(

@@ -1,11 +1,10 @@
 import { StorageKeys } from '@/services/storage/keys';
-import { readJSON, writeJSON } from '@/services/storage/local-storage';
+import { readArray, writeJSON } from '@/services/storage/local-storage';
 import { Routine } from '@/types/routine';
 import { createId } from '@/utils/id';
 
 export async function getRoutines(): Promise<Routine[]> {
-  const routines = await readJSON<Routine[]>(StorageKeys.routines);
-  return routines ?? [];
+  return readArray<Routine>(StorageKeys.routines);
 }
 
 export async function saveRoutine(
