@@ -31,3 +31,37 @@ WEIGHT CORE 마일스톤([[roadmap]])에서 V1 운동 CORE 구조를 최종 확�
 - 체형 등 사용자에게 민감할 수 있는 표시 문자열은 내부 ID와 분리해서 관리한다 (`src/config/body-presets.ts`). 외형을 묘사하는 표현을 도메인 ID/코드에 박지 않는다.
 - 작업 전 `git status`로 진행 중인 변경사항을 확인하고 임의로 삭제하지 않는다. 작업 후 `git diff`/`git status`로 검토하고, 테스트가 통과하면 논리적 단위로 커밋한다. 원격 저장소 push는 사용자가 명시적으로 요청하기 전까지 하지 않는다.
 - 작업 후 가능한 범위에서 TypeScript 검사(`npx tsc --noEmit`), lint(`npm run lint`), 관련 테스트, Expo 실행 가능성 검사를 수행한다. `package.json`에 없는 명령을 추측해서 실행하지 않는다. `npm audit fix --force`를 취약점 이유로 임의 실행하지 않는다.
+
+## AI COMMAND CENTER (v0.1)
+
+기존 규칙은 그대로 유효하다. 이 섹션은 그 규칙들을 **어떤 순서로 적용할지**만 정한다.
+
+### 작업 시작 시 읽는 순서
+
+1. `AGENTS.md`
+2. `CLAUDE.md` (이 문서)
+3. `PROJECT_STATE.md` — SNAPSHOT / LOCKED / CURRENT / NEXT / BLOCKED / CONFLICTS / WORKTREE WARNING
+4. CURRENT와 관련된 authority 문서 (`docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `assets/characters/danbaek/canon/**`)
+5. 필요할 경우 `DECISION_LOG.md`
+6. 필요할 경우 `FAILURE_LOG.md`
+7. 관련 `.agents/skills/**` (`safe-git-workflow` / `helchang-verify` / `danbaek-canon-guard` / `asset-integration`)
+
+권위 순서와 충돌 처리 규칙은 `PROJECT_STATE.md`의 AUTHORITY ORDER에 있다. 서로 다른 권위 문서가 실제로 충돌하면 임의로 수정하지 않는다 — `CONFLICT`로 기록하고 중단하거나 사용자 판정을 요구한다.
+
+### 작업 종료 전
+
+1. 실제 diff 확인 (`git status --short`, `git diff`)
+2. 관련 검증 실행 (`helchang-verify` 기준으로 범위에 맞는 것만)
+3. 성공 여부 판정 — PASS / FAIL을 명시한다
+4. `PROJECT_STATE.md` 업데이트 필요 여부 판단 (CURRENT / NEXT / BLOCKED / CONFLICTS)
+5. 중요한 새 결정이면 `DECISION_LOG.md`에 추가
+6. 재발 방지 가치가 있는 실패면 `FAILURE_LOG.md`에 추가
+7. **검증하지 못한 것은 DONE으로 기록하지 않는다.** dirty tree의 존재를 완료 근거로 삼지 않는다
+
+### AI 역할 분담
+
+- ChatGPT — 총괄 / 계획 / 우선순위 / 작업 분해 / 최종 판정
+- Claude Code — 기본 주력 구현 / 저장소 조사 / 코드 변경 / 테스트
+- Codex — 고위험 변경의 독립 검증, Claude가 해결하지 못한 문제의 second opinion (필요할 때만)
+
+같은 작업을 Claude와 Codex에 이유 없이 중복 수행시키지 않는다.

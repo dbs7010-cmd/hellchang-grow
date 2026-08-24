@@ -1,0 +1,108 @@
+# DECISION LOG
+
+> AI COMMAND CENTER v0.1. 프로젝트의 중요한 결정을 추적한다.
+> `docs/PRODUCT_SPEC.md` / `docs/ARCHITECTURE.md` / CANON 내용을 복제하지 않는다 — **인덱스와 포인터만 둔다.**
+> 확실한 evidence가 없는 과거 결정을 새로 APPROVED 처리하지 않는다.
+> 관련: [PROJECT_STATE.md](PROJECT_STATE.md) · [FAILURE_LOG.md](FAILURE_LOG.md)
+
+Status 값: `PROPOSED` · `APPROVED` · `LOCKED` · `SUPERSEDED` · `CONFLICT`
+
+---
+
+## DEC-001 — V1 운동 CORE 구조 잠금 (WEIGHT CORE)
+
+- **Status**: LOCKED
+- **Date**: WEIGHT CORE 마일스톤 시점 (정확한 날짜 미확인 — ROADMAP/커밋 이력이 원본)
+- **Decision**: `WorkoutSession`(activeSince 기반 타이머 / pause-resume / 세션 복구), Exercise DB, Routine, 세트 기록 UX를 V1 운동 CORE로 확정한다. 이후 작업은 이 위에 추가한다.
+- **Reason**: 실시간 운동 연동 게임의 기본 루프가 반복 재설계로 흔들리는 것을 막기 위해.
+- **Authority**: 1 (LOCKED)
+- **Affected areas**: `src/types/workout-session.ts`, `src/utils/workout-session.ts`, `src/config/exercises.ts`, Routine, `src/app/session.tsx`, `src/app/workout-start.tsx`
+- **Do not reinterpret**: WEIGHT FIRST / START WORKOUT FIRST / ROUTINE OPTIONAL / REAL ACTION = GAME INPUT / RECORDS ARE OUTPUT 다섯 원칙. 사용자의 명시적 재설계 요청 없이 다시 설계하지 않는다.
+- **Supersedes**: —
+- **Evidence**: `CLAUDE.md` NON-NEGOTIABLE PRODUCT RULES, `docs/PRODUCT_SPEC.md` 0-A장, `docs/ROADMAP.md` "WEIGHT CORE — V1 운동 CORE 최종 확정 (잠금)"
+
+---
+
+## DEC-002 — 단백이 시각 CANON 잠금
+
+- **Status**: LOCKED
+- **Date**: `fa3ffca` / `0c8a36c` / `c3c05bf` 시점
+- **Decision**: `assets/characters/danbaek/canon/`을 최우선 시각 CANON으로 고정한다. Stage 0 MASTER와 Lv.1~10 성장 불변 규칙(키/얼굴/중심축/사지 길이 고정, 성장은 부피와 곡률로)을 지킨다.
+- **Reason**: 새 캐릭터 디자인으로의 재해석과 전신 일괄 scale 대체를 막기 위해.
+- **Authority**: 1 (CANON)
+- **Affected areas**: `assets/characters/danbaek/canon/**`, `src/config/character-assets.ts`, 공통 `PlayerCharacter` 렌더러, BodyParameters 어댑터
+- **Do not reinterpret**: CANON과 코드가 충돌하면 임의 변경하지 않고 중단 후 보고한다. 임시/생성/참고용 이미지를 승인 없이 최종 CANON으로 승격하지 않는다.
+- **Supersedes**: 기존 SVG/stages 보조 자료 (MASTER보다 우선할 수 없음)
+- **Evidence**: `assets/characters/danbaek/canon/README.md` ("Danbaek CANON — LOCKED"), `manifest.json`, `.agents/skills/danbaek-canon-guard/SKILL.md`, commits `fa3ffca` `0c8a36c` `c3c05bf`
+
+---
+
+## DEC-003 — V1에서 외부 서비스는 인터페이스 + mock까지만
+
+- **Status**: LOCKED
+- **Date**: M0 시점부터 유지, 마일스톤마다 재확인
+- **Decision**: 실제 AI 이미지 생성, LLM API, 광고 SDK, 인앱결제, 추천 서버를 V1에서 연결하지 않는다. `src/services/*`에 인터페이스와 mock 구현까지만 둔다.
+- **Reason**: 외부 SDK 연결 없이 제품 구조와 게임 루프를 먼저 확정하기 위해.
+- **Authority**: 1 (CLAUDE.md 고정 규칙)
+- **Affected areas**: `src/services/ads`, `src/services/subscription`, `src/services/referral`, `src/services/trainer`, `src/services/growth`
+- **Do not reinterpret**: mock이 있다는 이유로 출시 빌드에서 실제 보상/권리를 만들어도 된다는 뜻이 아니다 (DEC-005 참조).
+- **Supersedes**: —
+- **Evidence**: `CLAUDE.md`, `docs/ROADMAP.md` 각 마일스톤 말미 문단
+
+---
+
+## DEC-004 — 유효 세트 판정 단일화 (`isEffectiveSet`)
+
+- **Status**: APPROVED
+- **Date**: commits `36bc923`, `cf7b546`
+- **Decision**: `isEffectiveSet(set) = completed && (reps ?? 0) > 0` 하나를 모든 집계가 재사용한다. 중량 0은 무효 조건이 아니다(맨몸 0kg × N회, 시간 종목의 reps=초 계약은 유효). 과거에 저장된 무효 세트는 마이그레이션/삭제하지 않고 **읽는 시점에만** 거른다.
+- **Reason**: 체크만 하고 횟수를 넣지 않은 세트가 기록·streak·XP·PR을 만들었다. 판정식을 화면마다 복제하면 같은 사고가 다시 난다.
+- **Authority**: 2 (사용자 승인 커밋)
+- **Affected areas**: 세션 저장 경계, HISTORY 통계, PR 집계, `findPreviousPerformance`, PT 컨텍스트, 루틴 완료 보너스 XP
+- **Do not reinterpret**: 저장된 사용자 기록을 정리한다는 이유로 마이그레이션/삭제하지 않는다.
+- **Supersedes**: —
+- **Evidence**: commits `36bc923` `cf7b546`, `scripts/verify-weight-core.ts` / `verify-pt-context.ts` / `verify-core-loop.ts`
+- **관련 실패**: [FAILURE_LOG.md](FAILURE_LOG.md) `FAIL-001`
+
+---
+
+## DEC-005 — 권리(entitlement) 판정을 단일 순수 함수로 모은다
+
+- **Status**: APPROVED
+- **Date**: commit `b2a3f65` (2026-08-23)
+- **Decision**: `resolveEntitlement()`가 provider 기록 + 현재 시각 + 신뢰 정책을 받아 등급을 낸다. `SubscriptionState`는 "provider가 알려준 기록"일 뿐 권리 판단에서 분리된다. 유효한 만료 시각이 없는 `active`는 인정하지 않고, production에서는 실제 스토어 provider만 신뢰한다. mock 구독은 `provider:'dev'`이며 구독 버튼은 `__DEV__` 안에만 존재한다.
+- **Reason**: 화면마다 유료 여부를 따로 판단하면 만료가 지켜지지 않고 로컬 문서만으로 영구 premium이 된다.
+- **Authority**: 2 (사용자 승인 커밋)
+- **Affected areas**: `src/utils/entitlement.ts`, `src/types/entitlement.ts`, `src/config/entitlements.ts`, `src/data/subscription-repository.ts`, `src/context/app-data-context.tsx`, `src/app/ai-chat.tsx`, `src/app/(tabs)/settings.tsx`
+- **Do not reinterpret**: 가격/상품 id를 코드에 두지 않는다(store product metadata가 원본). capability는 실제 존재하는 기능만 정의한다.
+- **Supersedes**: 화면별 개별 구독 판정
+- **Evidence**: commit `b2a3f65`, `scripts/verify-entitlement.ts` (55개)
+- **관련 실패**: [FAILURE_LOG.md](FAILURE_LOG.md) `FAIL-002`
+
+---
+
+## DEC-006 — AI COMMAND CENTER v0.1 도입
+
+- **Status**: APPROVED
+- **Date**: 2026-08-25
+- **Decision**: `PROJECT_STATE.md` / `DECISION_LOG.md` / `FAILURE_LOG.md` 세 파일 + `CLAUDE.md`의 짧은 연결 섹션만으로 AI 운영 계층을 구성한다. 새 agent framework / CLI / database / automation service를 만들지 않는다.
+- **Reason**: 새 세션이 짧은 지시만으로 상태 파악 → LOCKED 확인 → 현재 작업 → 다음 작업 → 최소 변경 → 검증 → 판정 → 상태 기록 순서를 이어갈 수 있어야 한다. 문서를 늘리는 것이 목적이 아니다.
+- **Authority**: 2 (사용자 지시)
+- **Affected areas**: `PROJECT_STATE.md`, `DECISION_LOG.md`, `FAILURE_LOG.md`, `CLAUDE.md`
+- **Do not reinterpret**: 기존 권위 문서(`docs/**`, CANON, `.agents/skills/**`) 내용을 이 세 파일로 복사하지 않는다. 참조만 한다.
+- **Supersedes**: —
+- **Evidence**: 이 저장소의 세 파일과 `CLAUDE.md`의 AI COMMAND CENTER 섹션
+
+---
+
+## DEC-007 — 게임 진행 기반 아바타 성장 경로 (CONFLICT)
+
+- **Status**: CONFLICT
+- **Date**: 2026-08-25 (기록 시점)
+- **Decision**: **없음. 결정되지 않았다.** 이 항목은 판정을 기다리는 충돌 기록이다.
+- **Reason**: `CLAUDE.md`의 "V1 캐릭터는 단일 아바타다 / 게임 진행도가 외형 파라미터로 흘러 들어가는 경로를 만들지 않는다"와, ROADMAP·ARCHITECTURE·CANON·현재 구현의 `Workout → GrowthEngine → Muscle SP/Stage → BodyState → BodyParameters → Renderer` 파이프라인이 서로 어긋난다. 양쪽 다 각자의 문서 안에서는 일관된다.
+- **Authority**: 충돌 당사자가 1(CANON)과 1~2(CLAUDE.md 고정 규칙)이라 자동 해소되지 않는다.
+- **Affected areas**: `CLAUDE.md` REAL BODY DATA != GAME AVATAR PROGRESSION 2·4항, `docs/PRODUCT_SPEC.md` 0·2장, `docs/ARCHITECTURE.md` 5.5-B/5.5-C, `assets/characters/danbaek/canon/README.md` Lv.1~10 규칙, `src/services/growth/**`, `src/utils/growth-*.ts`, `src/utils/body-state.ts` 계열
+- **Do not reinterpret**: 어느 한쪽을 "최신이니까" 또는 "구현이 이미 있으니까"로 자동 채택하지 않는다. 사용자 승인 없이 문서도 코드도 수정하지 않는다.
+- **Supersedes**: —
+- **Evidence**: 위 문서들의 해당 문단 (인용 위치는 [PROJECT_STATE.md](PROJECT_STATE.md) `CONFLICTS` 참조)
