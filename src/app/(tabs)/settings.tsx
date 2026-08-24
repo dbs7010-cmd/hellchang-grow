@@ -15,8 +15,12 @@ import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { useTheme } from '@/hooks/use-theme';
 import { toDateString } from '@/utils/date';
+import { resolveMonetizationVisibility } from '@/utils/monetization-visibility';
 
 type SectionId = 'profile' | 'goal' | 'subscription' | 'referral' | 'event' | 'reset';
+const monetizationVisibility = resolveMonetizationVisibility(
+  typeof __DEV__ !== 'undefined' && __DEV__
+);
 
 /**
  * 16 SETTINGS.
@@ -156,56 +160,60 @@ export default function SettingsScreen() {
           )}
         </SettingsRow>
 
-        <SettingsRow
-          id="referral"
-          label="추천인"
-          value={`보너스 ${referral.bonusDaysGranted}일`}
-          openSection={openSection}
-          onToggle={toggleSection}>
-          {alreadyRedeemed ? (
-            <ThemedText type="small" themeColor="textSecondary">
-              등록된 코드: {referral.referredByCode} (중복 등록은 보너스가 지급되지 않아요)
-            </ThemedText>
-          ) : (
-            <>
-              <TextField
-                label="추천인 코드"
-                value={referralCode}
-                onChangeText={setReferralCode}
-                placeholder="코드 입력"
-              />
-              {referralMessage && (
-                <ThemedText type="caption" themeColor="textSecondary">
-                  {referralMessage}
-                </ThemedText>
-              )}
-              <PrimaryButton label="등록" variant="secondary" onPress={handleRedeemReferral} />
-            </>
-          )}
-        </SettingsRow>
+        {monetizationVisibility.referral && (
+          <SettingsRow
+            id="referral"
+            label="추천인"
+            value={`보너스 ${referral.bonusDaysGranted}일`}
+            openSection={openSection}
+            onToggle={toggleSection}>
+            {alreadyRedeemed ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                등록된 코드: {referral.referredByCode} (중복 등록은 보너스가 지급되지 않아요)
+              </ThemedText>
+            ) : (
+              <>
+                <TextField
+                  label="추천인 코드"
+                  value={referralCode}
+                  onChangeText={setReferralCode}
+                  placeholder="코드 입력"
+                />
+                {referralMessage && (
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    {referralMessage}
+                  </ThemedText>
+                )}
+                <PrimaryButton label="등록" variant="secondary" onPress={handleRedeemReferral} />
+              </>
+            )}
+          </SettingsRow>
+        )}
 
-        <SettingsRow
-          id="event"
-          label="오픈 이벤트 패스"
-          value={
-            openEventPass.active
-              ? `이용 중 · ~${openEventPass.expiresAt ? toDateString(new Date(openEventPass.expiresAt)) : ''}`
-              : '미활성'
-          }
-          openSection={openSection}
-          onToggle={toggleSection}>
-          {openEventPass.active ? (
-            <ThemedText type="small" themeColor="textSecondary">
-              이미 이용 중이에요.
-            </ThemedText>
-          ) : (
-            <PrimaryButton
-              label={`무료 패스 받기 (${AppConfig.openEventPassDays}일)`}
-              variant="secondary"
-              onPress={activateOpenEventPass}
-            />
-          )}
-        </SettingsRow>
+        {monetizationVisibility.openEventPass && (
+          <SettingsRow
+            id="event"
+            label="오픈 이벤트 패스"
+            value={
+              openEventPass.active
+                ? `이용 중 · ~${openEventPass.expiresAt ? toDateString(new Date(openEventPass.expiresAt)) : ''}`
+                : '미활성'
+            }
+            openSection={openSection}
+            onToggle={toggleSection}>
+            {openEventPass.active ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                이미 이용 중이에요.
+              </ThemedText>
+            ) : (
+              <PrimaryButton
+                label={`무료 패스 받기 (${AppConfig.openEventPassDays}일)`}
+                variant="secondary"
+                onPress={activateOpenEventPass}
+              />
+            )}
+          </SettingsRow>
+        )}
       </Section>
 
       <Section title="데이터" gap={Spacing.one}>

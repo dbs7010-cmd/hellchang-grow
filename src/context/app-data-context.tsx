@@ -38,7 +38,13 @@ import {
   savePendingSessionCompletion,
 } from '@/data/session-completion-repository';
 import { getSubscriptionState } from '@/data/subscription-repository';
-import { grantRewardedPtUses, getTrainerUsageState, consumeRewardedPtUse } from '@/data/trainer-usage-repository';
+import {
+  commitRewardedPtUse,
+  getTrainerUsageState,
+  grantRewardedPtUses,
+  releaseRewardedPtUse,
+  reserveRewardedPtUse,
+} from '@/data/trainer-usage-repository';
 import {
   addWorkoutRecord as addWorkoutRecordRepo,
   deleteWorkoutRecord as deleteWorkoutRecordRepo,
@@ -73,7 +79,12 @@ import { SubscriptionState } from '@/types/subscription';
 import type { EntitlementCapabilities, EntitlementState } from '@/types/entitlement';
 import { FreeEntitlement } from '@/types/entitlement';
 import { entitlementCapabilities, resolveEntitlement } from '@/utils/entitlement';
-import { claimRewardedAiTicket, resolveAiAccess } from '@/utils/ai-access';
+import {
+  claimRewardedAiTicket,
+  createAiRequestGate,
+  runAiAccessTransaction,
+} from '@/utils/ai-access';
+import { resolveMonetizationVisibility } from '@/utils/monetization-visibility';
 import { TrainerUsageState } from '@/types/ads';
 import { UserProfile } from '@/types/user';
 import { WorkoutCategory, WorkoutRecord } from '@/types/workout';
@@ -315,6 +326,9 @@ interface AppDataContextValue extends AppDataState {
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
+const monetizationVisibility = resolveMonetizationVisibility(
+  typeof __DEV__ !== 'undefined' && __DEV__
+);
 
 const initialState: AppDataState = {
   loading: true,
@@ -345,6 +359,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const activeSessionRef = useRef<WorkoutSession | null>(null);
   /** 세션 종료 처리 중인지. 완료 버튼이 연타돼도 기록이 두 번 저장되지 않게 한다. */
   const endingSessionRef = useRef(false);
+  /** 화면을 다시 눌러도 하나의 AI 요청/이용권 transaction만 공유한다. */
+  const ptMessageGateRef = useRef(createAiRequestGate());
 
   useEffect(() => {
     activeSessionRef.current = state.activeSession;
@@ -995,19 +1011,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const hasAiPtAccess = isSubscribed || state.trainerUsage.rewardedPtUsesRemaining > 0;
 
   /**
-   * 유료 구독과 광고 보상 AI PT는 접근 방식만 다르고 AI 기능 자체는 동일하다
-   * (제품 기획 6/7장) — 이 함수 하나로 접근 가능 여부 확인 + 이용권 차감을 공유한다.
-   */
-  const consumeAiAccess = useCallback(async (): Promise<boolean> => {
-    const access = resolveAiAccess(isSubscribed, state.trainerUsage.rewardedPtUsesRemaining);
-    if (!access.allowed) return false;
-    if (!access.consumeTicket) return true;
-    const trainerUsage = await consumeRewardedPtUse();
-    setState((prev) => ({ ...prev, trainerUsage }));
-    return true;
-  }, [isSubscribed, state.trainerUsage.rewardedPtUsesRemaining]);
-
-  /**
    * PT에게 넘기는 컨텍스트. 실제 저장된 기록만 들어가고, 없는 값은 null이다.
    * 화면(무료 브리핑)과 AI 요청이 같은 값을 보기 때문에 둘이 서로 다른 숫자를 말할 수 없다.
    */
@@ -1029,23 +1032,36 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     async ({ text, quickActionId, history }) => {
       const trimmed = text.trim();
       if (!trimmed) return null;
-      const allowed = await consumeAiAccess();
-      if (!allowed) return null;
+      const execute = async (): Promise<AiTrainerMessage | null> => {
+        const result = await runAiAccessTransaction({
+          premium: isSubscribed,
+          aiConnected: aiTrainerService.isAiConnected,
+          reserve: reserveRewardedPtUse,
+          commit: commitRewardedPtUse,
+          release: releaseRewardedPtUse,
+          send: async () => {
+            // 질문에서 앱 운동 DB의 운동이 잡히면 그 운동 데이터(설명/주의/내 기록)도 함께 넘긴다.
+            const matched = matchExerciseInText(trimmed, Exercises, searchExercises);
+            const exercise = matched ? buildPtExerciseBrief(matched, state.workoutRecords) : null;
+            return aiTrainerService.send({
+              text: trimmed,
+              quickActionId,
+              context: ptContext,
+              exercise,
+              history: history.slice(-AppConfig.aiHistoryMessageLimit),
+            });
+          },
+        });
+        if (!result.allowed) return null;
+        if (result.trainerUsage) {
+          setState((prev) => ({ ...prev, trainerUsage: result.trainerUsage! }));
+        }
+        return result.value;
+      };
 
-      // 질문에서 앱 운동 DB의 운동이 잡히면 그 운동 데이터(설명/주의/내 기록)도 함께 넘긴다 —
-      // PT가 운동 상세 화면과 다른 설명을 하지 않게 하기 위한 것이다.
-      const matched = matchExerciseInText(trimmed, Exercises, searchExercises);
-      const exercise = matched ? buildPtExerciseBrief(matched, state.workoutRecords) : null;
-
-      return aiTrainerService.send({
-        text: trimmed,
-        quickActionId,
-        context: ptContext,
-        exercise,
-        history: history.slice(-AppConfig.aiHistoryMessageLimit),
-      });
+      return ptMessageGateRef.current.run(execute);
     },
-    [consumeAiAccess, ptContext, state.workoutRecords]
+    [isSubscribed, ptContext, state.workoutRecords]
   );
 
   const applySubscriptionRecord = useCallback((subscription: SubscriptionState) => {
@@ -1068,7 +1084,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     applySubscriptionRecord(await subscriptionService.cancel());
   }, [applySubscriptionRecord]);
 
-  const redeemReferralCode = useCallback(async (code: string) => {
+  const redeemReferralCode = useCallback<AppDataContextValue['redeemReferralCode']>(async (code) => {
+    if (!monetizationVisibility.referral) return { success: false, reason: 'invalid_code' };
     const result = await referralService.redeemCode(code);
     if (result.success) {
       const referral = await getReferralState();
@@ -1091,6 +1108,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const activateOpenEventPass = useCallback(async () => {
+    if (!monetizationVisibility.openEventPass) return;
     const now = new Date();
     const expires = new Date(now);
     expires.setDate(expires.getDate() + AppConfig.openEventPassDays);

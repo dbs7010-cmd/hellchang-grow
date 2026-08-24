@@ -7,6 +7,11 @@ import { AppConfig } from '@/config/app-config';
 import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { useTheme } from '@/hooks/use-theme';
+import { resolveMonetizationVisibility } from '@/utils/monetization-visibility';
+
+const monetizationVisibility = resolveMonetizationVisibility(
+  typeof __DEV__ !== 'undefined' && __DEV__
+);
 
 /**
  * 15 NOTIFICATIONS. 홈을 지저분하게 만드는 이벤트/보상 정보를 이 화면으로 뺐다.
@@ -19,7 +24,7 @@ export default function NotificationsScreen() {
 
   const canClaimReward =
     streak.currentStreakDays >= AppConfig.streakRewardDays && !streak.rewardClaimed;
-  const showEventItem = !openEventPass.active;
+  const showEventItem = monetizationVisibility.openEventPass && !openEventPass.active;
   const hasAny = showEventItem || canClaimReward;
 
   return (

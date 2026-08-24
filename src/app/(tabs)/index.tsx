@@ -22,6 +22,7 @@ import { getThisWeekRecords } from '@/data/workout-repository';
 import { useTheme } from '@/hooks/use-theme';
 import { findPreviousPerformance } from '@/utils/exercise-history';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
+import { resolveMonetizationVisibility } from '@/utils/monetization-visibility';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import { recommendMuscleGroup } from '@/utils/workout-recommendation';
 import { formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
@@ -101,7 +102,11 @@ export default function HomeScreen() {
 
   const canClaimReward =
     streak.currentStreakDays >= AppConfig.streakRewardDays && !streak.rewardClaimed;
-  const noticeAvailable = !openEventPass.active || canClaimReward;
+  const monetizationVisibility = resolveMonetizationVisibility(
+    typeof __DEV__ !== 'undefined' && __DEV__
+  );
+  const noticeAvailable =
+    (monetizationVisibility.openEventPass && !openEventPass.active) || canClaimReward;
 
   const recommendedItems = useMemo(() => {
     const exercises = scheduledRoutine
