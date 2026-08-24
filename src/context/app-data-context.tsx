@@ -307,6 +307,7 @@ interface AppDataContextValue extends AppDataState {
    * 던진다 (화면이 대화를 유지한 채 재시도를 안내한다).
    */
   sendPtMessage: (input: {
+    requestId: string;
     text: string;
     quickActionId?: AiQuickActionId;
     history: AiTrainerHistoryEntry[];
@@ -1029,7 +1030,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   );
 
   const sendPtMessage = useCallback<AppDataContextValue['sendPtMessage']>(
-    async ({ text, quickActionId, history }) => {
+    async ({ requestId, text, quickActionId, history }) => {
       const trimmed = text.trim();
       if (!trimmed) return null;
       const execute = async (): Promise<AiTrainerMessage | null> => {
@@ -1044,6 +1045,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             const matched = matchExerciseInText(trimmed, Exercises, searchExercises);
             const exercise = matched ? buildPtExerciseBrief(matched, state.workoutRecords) : null;
             return aiTrainerService.send({
+              requestId,
               text: trimmed,
               quickActionId,
               context: ptContext,

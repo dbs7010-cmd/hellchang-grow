@@ -23,6 +23,8 @@ export const AppConfig = {
   aiHistoryMessageLimit: 8,
   /** AI 요청 타임아웃(ms). 넘으면 대화를 유지한 채 재시도 안내를 띄운다. */
   aiRequestTimeoutMs: 20000,
+  /** 프록시가 비정상적으로 큰 답을 보내 UI/메모리를 압박하지 못하게 하는 문자 상한. */
+  aiResponseCharacterLimit: 8000,
   /** 오픈 이벤트 무료 패스 기간(일) */
   openEventPassDays: 14,
   /** PASS: 운동 세션 1회 완료 시 지급되는 XP */

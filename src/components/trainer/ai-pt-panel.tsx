@@ -38,6 +38,7 @@ export interface AiPtPanelProps {
    */
   initialQuickAction?: AiQuickActionId;
   onSend: (input: {
+    requestId: string;
     text: string;
     quickActionId?: AiQuickActionId;
     history: AiTrainerHistoryEntry[];
@@ -51,18 +52,26 @@ export function AiPtPanel({ accessLabel, aiConnected, initialQuickAction, onSend
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** 실패한 요청 그대로 다시 보낼 수 있게 마지막 요청을 들고 있는다 (재시도 버튼 노출 조건). */
-  const [lastRequest, setLastRequest] = useState<{ text: string; quickActionId?: AiQuickActionId } | null>(
-    null
-  );
+  const [lastRequest, setLastRequest] = useState<{
+    requestId: string;
+    text: string;
+    quickActionId?: AiQuickActionId;
+  } | null>(null);
   /** 전송 중 중복 요청 차단 — 버튼 disabled보다 앞선 방어선이다. */
   const sendingRef = useRef(false);
 
-  const send = async (text: string, quickActionId?: AiQuickActionId, appendUserBubble = true) => {
+  const send = async (
+    text: string,
+    quickActionId?: AiQuickActionId,
+    appendUserBubble = true,
+    existingRequestId?: string
+  ) => {
     const trimmed = text.trim();
     if (!trimmed || sendingRef.current) return;
     sendingRef.current = true;
     setError(null);
-    setLastRequest({ text: trimmed, quickActionId });
+    const requestId = existingRequestId ?? createId('ai-request');
+    setLastRequest({ requestId, text: trimmed, quickActionId });
 
     const history: AiTrainerHistoryEntry[] = messages.map((message) => ({
       role: message.role,
@@ -76,7 +85,7 @@ export function AiPtPanel({ accessLabel, aiConnected, initialQuickAction, onSend
 
     setLoading(true);
     try {
-      const reply = await onSend({ text: trimmed, quickActionId, history });
+      const reply = await onSend({ requestId, text: trimmed, quickActionId, history });
       if (!reply) {
         setError('이용권이 부족해요. 광고를 보거나 구독하면 다시 이용할 수 있어요.');
         return;
@@ -108,7 +117,7 @@ export function AiPtPanel({ accessLabel, aiConnected, initialQuickAction, onSend
   const handleRetry = () => {
     if (!lastRequest) return;
     // 사용자 말풍선은 이미 있으므로 다시 붙이지 않는다.
-    send(lastRequest.text, lastRequest.quickActionId, false);
+    send(lastRequest.text, lastRequest.quickActionId, false, lastRequest.requestId);
   };
 
   const autoSentRef = useRef(false);

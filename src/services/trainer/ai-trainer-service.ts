@@ -23,6 +23,8 @@ export interface AiTrainerHistoryEntry {
 }
 
 export interface AiTrainerRequest {
+  /** 재시도에도 유지되는 공개 요청 식별자. 서버의 Idempotency-Key와 동일하다. */
+  requestId: string;
   /** 사용자가 실제로 보낸 문장 (빠른 질문도 문장으로 바뀌어 들어온다) */
   text: string;
   /** 빠른 질문으로 시작된 요청이면 그 ID */
@@ -50,7 +52,12 @@ export interface AITrainerService {
 
 /** 요청이 실패했을 때 화면이 재시도를 안내할 수 있게 던지는 에러. */
 export class AiTrainerRequestError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly kind: 'timeout' | 'network' | 'http' | 'rate_limit' | 'malformed' = 'network',
+    readonly status?: number,
+    readonly retryAfterMs?: number
+  ) {
     super(message);
     this.name = 'AiTrainerRequestError';
   }

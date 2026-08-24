@@ -1,4 +1,13 @@
 import { resolveRewardedAdService } from '@/services/ads/index';
+import {
+  GoogleAndroidRewardedTestUnitId,
+  resolvePublicAppEnvironment,
+  resolveRewardedAdRuntimeConfig,
+} from '@/config/rewarded-ads';
+import {
+  GoogleRewardedAdService,
+} from '@/services/ads/google-rewarded-ad-service';
+import type { NativeRewardedAdPort } from '@/services/ads/google-rewarded-ad-service';
 import type { RewardedAdService } from '@/services/ads/rewarded-ad-service';
 import type { RewardedAdResult } from '@/types/ads';
 import {
@@ -11,6 +20,8 @@ import { createAiTicketCoordinator } from '@/utils/ai-ticket-transaction';
 import { resolveEntitlement } from '@/utils/entitlement';
 import { resolveMonetizationVisibility } from '@/utils/monetization-visibility';
 import type { TrainerUsageState } from '@/types/ads';
+import { normalizeTrainerEndpointUrl, parseRetryAfterMs } from '@/services/trainer/trainer-request-config';
+import { readFileSync } from 'node:fs';
 
 let failures = 0;
 function expect(name: string, condition: boolean) {
@@ -35,6 +46,55 @@ const devProvider = resolveRewardedAdService(true);
 const releaseProvider = resolveRewardedAdService(false);
 expect('DEV provider는 mock이라 사용 가능하다', devProvider.isProviderAvailable);
 expect('release provider는 SDK 미연결 상태라 unavailable이다', !releaseProvider.isProviderAvailable);
+
+// ── Native rewarded provider boundary ─────────────────────────────────────
+expect('알 수 없는 app env는 안전한 development로 해석한다', resolvePublicAppEnvironment('typo') === 'development');
+for (const environment of ['development', 'preview'] as const) {
+  const config = resolveRewardedAdRuntimeConfig({ environment });
+  expect(`${environment} 광고는 Google test configuration을 쓴다`, config.testMode);
+  expect(`${environment} 광고는 공식 test unit만 쓴다`, config.adUnitId === GoogleAndroidRewardedTestUnitId);
+}
+const missingProductionAd = resolveRewardedAdRuntimeConfig({ environment: 'production' });
+expect('production ad unit이 없으면 provider는 fail closed다', !missingProductionAd.enabled);
+expect('production 누락 config는 test unit으로 fallback하지 않는다', missingProductionAd.adUnitId === null);
+const configuredProductionAd = resolveRewardedAdRuntimeConfig({
+  environment: 'production',
+  productionAdUnitId: 'owner-supplied-unit',
+});
+expect('production은 외부 주입된 unit이 있을 때만 활성화된다', configuredProductionAd.enabled);
+expect('production 외부 unit은 test mode가 아니다', !configuredProductionAd.testMode);
+
+function nativePort(outcome: 'earned' | 'closed' | 'error', ready = true): NativeRewardedAdPort & {
+  shows: () => number;
+} {
+  let showCount = 0;
+  return {
+    async prepare() {
+      return ready;
+    },
+    async show() {
+      showCount += 1;
+      return outcome;
+    },
+    shows: () => showCount,
+  };
+}
+
+for (const outcome of ['closed', 'error'] as const) {
+  const result = await new GoogleRewardedAdService(nativePort(outcome), true).showRewardedAd();
+  expect(`${outcome} callback은 reward를 만들지 않는다`, !result.granted && result.rewardUnits === 0);
+}
+const earnedPort = nativePort('earned');
+const earnedService = new GoogleRewardedAdService(earnedPort, true);
+const [earnedFirst, earnedDuplicate] = await Promise.all([
+  earnedService.showRewardedAd(),
+  earnedService.showRewardedAd(),
+]);
+expect('earned callback만 ticket 승인 결과를 만든다', earnedFirst.granted && earnedFirst.rewardUnits === 1);
+expect('중복 show callback은 하나의 결과를 공유한다', earnedDuplicate.granted && earnedPort.shows() === 1);
+const notReadyPort = nativePort('earned', false);
+const notReady = await new GoogleRewardedAdService(notReadyPort, true).showRewardedAd();
+expect('consent/load가 준비되지 않으면 광고와 reward가 없다', !notReady.granted && notReadyPort.shows() === 0);
 
 let grantedTickets = 0;
 const unavailableGranted = await claimRewardedAiTicket(releaseProvider, async (units) => {
@@ -138,6 +198,45 @@ function memoryCoordinator(initialTickets: number, failWrites = false) {
   expect('free AI 성공은 ticket 저장을 정확히 한 번 한다', memory.writes() === 1);
   expect('free AI 성공 후 reservation이 남지 않는다', memory.coordinator.reservedCount() === 0);
 }
+
+// ── Production AI client boundary ─────────────────────────────────────────
+expect(
+  'release AI endpoint는 HTTPS만 허용한다',
+  normalizeTrainerEndpointUrl('https://api.example.test/pt', false) === 'https://api.example.test/pt'
+);
+expect('release AI endpoint는 HTTP를 거부한다', normalizeTrainerEndpointUrl('http://api.example.test/pt', false) === null);
+expect(
+  'DEV localhost는 HTTP 연결을 허용한다',
+  normalizeTrainerEndpointUrl('http://localhost:3000/pt', true) === 'http://localhost:3000/pt'
+);
+expect('잘못된 AI endpoint는 offline으로 fail closed한다', normalizeTrainerEndpointUrl('not a url', false) === null);
+expect('Retry-After 초를 ms로 해석한다', parseRetryAfterMs('3', 0) === 3000);
+expect(
+  'Retry-After 날짜를 ms로 해석한다',
+  parseRetryAfterMs('Thu, 01 Jan 2026 00:00:05 GMT', Date.parse('2026-01-01T00:00:00Z')) === 5000
+);
+
+const remoteSource = readFileSync('src/services/trainer/remote-trainer-service.ts', 'utf8');
+expect('AI 요청은 Idempotency-Key를 전송한다', remoteSource.includes("'Idempotency-Key': request.requestId"));
+expect('AI 요청은 short-lived bearer token 경계를 사용한다', remoteSource.includes('Authorization: `Bearer ${authToken}`'));
+expect('AI client payload에는 system prompt가 포함되지 않는다', !remoteSource.includes('systemPrompt:'));
+const easConfig = JSON.parse(readFileSync('eas.json', 'utf8')) as {
+  build?: {
+    development?: unknown;
+    preview?: unknown;
+    production?: { android?: { buildType?: string }; env?: Record<string, string> };
+  };
+};
+expect('release config에 development/preview/production profile이 모두 있다', Boolean(easConfig.build?.development && easConfig.build?.preview && easConfig.build?.production));
+expect('production Android artifact는 AAB다', easConfig.build?.production?.android?.buildType === 'app-bundle');
+expect('production build는 runtime env를 명시한다', easConfig.build?.production?.env?.EXPO_PUBLIC_APP_ENV === 'production');
+const appConfigSource = readFileSync('app.json', 'utf8');
+expect('release config에 API key/secret이 하드코딩되지 않았다', !/(api[_-]?key|client[_-]?secret)\s*["']?\s*:/i.test(appConfigSource));
+const dynamicConfigSource = readFileSync('app.config.js', 'utf8');
+expect('production EAS build는 AdMob App ID 누락 시 실패한다', dynamicConfigSource.includes('requires ADMOB_ANDROID_APP_ID'));
+expect('production App ID는 환경변수에서만 읽는다', dynamicConfigSource.includes('process.env.ADMOB_ANDROID_APP_ID'));
+expect('광고 측정은 UMP 동의 전 자동 시작하지 않는다', dynamicConfigSource.includes('delayAppMeasurementInit: true'));
+expect('Android UMP consent SDK 보존 규칙이 있다', dynamicConfigSource.includes('consent_sdk.**'));
 
 for (const failure of ['network', 'HTTP', 'provider'] as const) {
   const memory = memoryCoordinator(1);
