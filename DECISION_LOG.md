@@ -134,3 +134,18 @@ Status 값: `PROPOSED` · `APPROVED` · `LOCKED` · `SUPERSEDED` · `CONFLICT`
 - **Do not reinterpret**: 자율 실행은 검증 면제가 아니다 — SAFE도 검증하고 상태를 기록한다. CURRENT가 없을 때 EXPERIMENTAL 항목이나 실험 아이디어를 확정 작업처럼 자동 선택하지 않는다. `CONF-001`은 APPROVAL REQUIRED이며 이 결정으로 열리지 않는다.
 - **Supersedes**: v0.1의 암묵적 "매 단계 승인" 관행 (v0.1 구조 자체는 그대로 유효하다)
 - **Evidence**: `CLAUDE.md`의 AUTONOMY LEVELS / CONTINUATION RULE / STOP CONDITIONS 섹션
+
+---
+
+## DEC-010 — 믿을 수 없는 완료 receipt는 버리지 않고 멈춘다
+
+- **Status**: APPROVED
+- **Date**: 2026-08-25
+- **Decision**: 저장된 `SessionCompletionReceipt`를 읽을 수 없으면 **삭제하지도, 처음부터 다시 진행하지도 않는다.** 완료 처리를 멈추고 세션을 남긴 채 사용자에게 [다시 시도]를 보여 준다. 단, 읽을 수 있는 `sessionId`가 이번 세션과 다르면 다른 세션의 잔해로 보고 이번 완료를 막지 않는다.
+- **Reason**: receipt는 완료 파이프라인이 "어디까지 성공했는지" 기억하는 유일한 근거다. 버리면 이미 반영된 성장/XP/streak를 다시 줄 수 있고(중복), 억지로 살리면 안 끝난 단계를 끝났다고 보아 보상이 유실된다. **중복 지급보다 지연이 낫다** — `4a75851`이 저장 실패를 다룬 방향과 같다. sessionId 예외가 없으면 옛 손상값 하나가 이후 모든 운동 완료를 영구히 막는다.
+- **Authority**: 2 (사용자 결정)
+- **Affected areas**: `src/utils/stored-state.ts`(`classifyStoredReceipt` / `classifyStoredReceiptRaw`), `src/data/session-completion-repository.ts`, `src/services/storage/local-storage.ts`(`readRawString`), `src/context/app-data-context.tsx` 호출부, `scripts/verify-storage-recovery.ts`
+- **Do not reinterpret**: 완료 파이프라인(`runSessionCompletion`)의 단계 순서와 `SessionCompletionOperations` 계약은 이 결정으로 바뀌지 않는다. 손상된 receipt를 "정리"한다는 이유로 삭제하는 코드를 추가하지 않는다. snapshot 내부까지 검사해 부분 복구를 시도하지 않는다.
+- **Supersedes**: —
+- **Evidence**: commit `8444a0f`, `npm run verify:storage`(168개 중 receipt 판정 29개), `npm run verify:core-loop`(85개 회귀)
+- **승인 경위**: [PROJECT_STATE.md](PROJECT_STATE.md) BLOCKED에 문제/영향/추천안/필요한 승인을 올린 직후 사용자가 "계속"으로 진행을 지시했다 — 추천안 그대로 채택한 것으로 해석했다. 다른 방침을 원하면 이 항목을 SUPERSEDED로 바꾸고 다시 결정한다.

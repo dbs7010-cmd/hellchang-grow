@@ -7,10 +7,10 @@
 ## SNAPSHOT
 
 - branch: `feat/v1-monetization-foundation`
-- HEAD: `4968d2c` — fix(storage): validate the shape of the remaining state keys
+- HEAD: `8444a0f` — fix(core-loop): refuse to resume an unreadable completion receipt
   (이 문서를 담은 상태 갱신 커밋이 그 위에 올라간다)
 - last_updated: 2026-08-25
-- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 14종 전부 PASS(904개 단언)
+- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 14종 전부 PASS(933개 단언)
 - worktree: 추적 대상 clean. 남은 untracked는 EXPERIMENTAL 항목뿐이다 (아래 WORKTREE 참조)
 
 ## AUTHORITY ORDER
@@ -53,6 +53,7 @@
 - `ac6aec4` AI COMMAND CENTER v0.2 — FAILURE EVIDENCE RULE + AUTONOMY LEVELS(`DEC-008` `DEC-009`)
 - `bc2e90c` kill된 세션의 저장값을 방어적으로 읽는다(`asStoredSession`) + 실기기 kill 수동 절차. `verify:storage` 68 → 95개
 - `4968d2c` streak / pass / trainer-usage / referral / event 다섯 키의 모양 검사. 공용 조각(`asStoredCount` 등)으로 조합. `verify:storage` 95 → 139개
+- `8444a0f` 믿을 수 없는 완료 receipt는 버리지 않고 멈춘다([DECISION_LOG.md](DECISION_LOG.md) `DEC-010`). `verify:storage` 139 → 168개
 - `b2a3f65` V1 entitlement foundation — 단일 권리 판정 소스 `resolveEntitlement()`, 만료 강제, `verify:entitlement` 55개
 - `ebd5784` 휴식 중 이탈 확인 표시 + stale 종료 확인 정리 (Android 실기기 재현 버그)
 - `d6c3910` 세트 완료 피드백을 휴식 전환 전에 보이도록 유지
@@ -63,16 +64,15 @@
 
 **없음 — verified checkpoint 직후다.** 진행 중인 주 작업 단위가 없다.
 
-직전 NEXT(남은 저장 키 모양 검사)는 `4968d2c`로 끝났다 — "계속" 두 번째 사이클이며,
-조사에서 위험이 확인된 다섯 키만 고치고 `session-completion`은 판단이 필요해 남겼다.
-다음 작업은 NEXT를 따른다.
+직전 BLOCKED 항목(`session-completion` receipt 방침)은 사용자 승인 후 `8444a0f`로 구현됐다
+(`DEC-010`). 저장값 모양 검사 라인은 이것으로 닫혔다 — 남은 것은 자동화가 불가능한
+실기기 확인뿐이다.
 
 ## NEXT
 
-**`session-completion` receipt가 깨졌을 때의 방침을 정한다 — 등급 APPROVAL REQUIRED (BLOCKED 참조).**
-AI가 임의로 정하지 않는다. 승인이 오면 그 방침대로 구현 + `verify:core-loop`/`verify:storage` 검증까지 자율 실행한다.
+**저장 계층 다음 단계는 사용자 확인을 기다린다.** 자동 검증으로 더 가져갈 수 있는 것이 남아 있지 않다 — 저장값 모양 검사는 모든 키에서 닫혔고(`verify:storage` 168개), 남은 것은 실기기 확인과 제품 방향 결정이다.
 
-그동안 자율로 진행 가능한 대안(승인 불필요, GUARDED): 없음 — 저장값 모양 검사 라인은 이 항목을 빼면 닫혔다.
+다음에 "계속"이 오면 `docs/ROADMAP.md` M3에서 **확정 항목** 하나를 골라 조사부터 시작한다 — 가장 가까운 것은 "AI PT가 최근 WorkoutRecord/Routine/Exercise DB/이전 기록을 컨텍스트로 활용" 계열이며, 이미 `utils/pt-context.ts`(`verify:pt` 58개)가 있으므로 그 공백을 조사하는 것이 시작점이다. 등급 **GUARDED**. 제품 방향이 갈리는 항목(대화 로그 보존 여부 등)은 APPROVAL REQUIRED로 남긴다.
 
 **실기기 kill 검증(사용자 작업)**: `scripts/verify-storage-recovery.ts` 하단의 수동 절차 6단계를 실기기에서 1회 수행하면 ROADMAP M3의 해당 항목이 닫힌다. AI가 대신할 수 없다.
 
@@ -80,7 +80,7 @@ push는 사용자가 명시적으로 요청하기 전까지 하지 않는다.
 
 ## BLOCKED
 
-**`session-completion` receipt의 손상 처리 방침 — 사용자 승인 대기.**
+~~**`session-completion` receipt의 손상 처리 방침 — 사용자 승인 대기.**~~ → **해소(`DEC-010`, commit `8444a0f`)**. 승인된 방침: 믿을 수 없으면 버리지 않고 멈추고 [다시 시도]를 보여 준다. 다른 세션의 잔해는 막지 않는다. 아래는 그때의 판단 근거를 남긴 것이다.
 
 - 문제: `getPendingSessionCompletion()`은 저장된 receipt를 그대로 믿는다. 이 값은 운동 완료
   파이프라인(Growth → WorkoutRecord → 보상 → cleanup)이 "어디까지 성공했는지" 기억하는
