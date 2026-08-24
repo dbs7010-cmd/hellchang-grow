@@ -27,6 +27,21 @@ export async function readJSON<T>(key: string): Promise<T | null> {
 }
 
 /**
+ * 저장된 원문을 그대로 읽는다.
+ *
+ * `readJSON`은 "값이 없다"와 "값이 있는데 못 읽었다"를 똑같이 null로 만든다. 대부분은 그게
+ * 맞지만, 완료 receipt처럼 **없는 것과 못 읽은 것의 처리가 달라야 하는** 자리에서는 원문이
+ * 필요하다. 저장소 자체를 읽지 못하면 없는 값과 똑같이 다룬다.
+ */
+export async function readRawString(key: string): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 배열로 저장한 값을 읽는다. 배열이 아니면 빈 배열이다.
  *
  * `readJSON() ?? []`만으로는 부족하다 — 그것이 막는 것은 "값이 없는 경우"뿐이고,

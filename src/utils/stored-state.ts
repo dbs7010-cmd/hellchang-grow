@@ -1,5 +1,6 @@
 import type { BodyParameters } from '@/types/body';
 import type { UserProfile } from '@/types/user';
+import type { SessionCompletionReceipt } from '@/types/session-completion';
 import type { WorkoutSetEntry } from '@/types/workout';
 import type { SessionExerciseEntry, WorkoutSession } from '@/types/workout-session';
 
@@ -201,4 +202,69 @@ export function asStoredDateString(value: unknown): string | undefined {
 /** 저장된 문자열. 문자열이 아니면 없는 값이다. */
 export function asStoredText(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
+}
+
+/**
+ * 저장된 완료 receipt를 세 가지로 나눈다.
+ *
+ * 이 값은 운동 완료 파이프라인(Growth → 기록 → 보상 → cleanup)이 "어디까지 성공했는지"
+ * 기억하는 유일한 근거다. 그래서 다른 저장값처럼 "이상하면 기본값" 으로 다룰 수 없다 —
+ * 단계 표시 하나를 잘못 읽으면 이미 준 성장/XP를 다시 주거나(중복), 아직 안 준 보상을
+ * 줬다고 판단한다(유실).
+ *
+ * - `none`: 저장된 것이 없다. 처음부터 시작하면 된다.
+ * - `usable`: 모든 단계 표시를 읽을 수 있다. 그 지점부터 이어서 하면 된다.
+ * - `unreadable`: 값은 있는데 믿을 수 없다. **버리지도 말고 진행하지도 않는다.**
+ *   읽을 수 있는 `sessionId`가 있으면 함께 돌려준다 — 다른 세션의 잔해라면 이번 완료를
+ *   막을 이유가 없기 때문이다(그 판단은 호출부가 한다).
+ *
+ * snapshot 안쪽까지 검사하지는 않는다. 여기서 정하는 것은 "어느 단계부터 이어갈 수 있는가"
+ * 하나이고, snapshot이 실제로 쓸 수 없으면 그 단계에서 실패해 같은 재시도 경로로 돌아온다.
+ */
+export function classifyStoredReceiptRaw(
+  raw: string | null
+): ReturnType<typeof classifyStoredReceipt> {
+  if (raw === null) return { kind: 'none' };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // 다른 키에서는 파싱 실패를 "없는 값"으로 접었다. 여기서는 그럴 수 없다 —
+    // 잘린 원문 뒤에 이미 반영된 단계가 있었는지 알 수 없기 때문이다.
+    return { kind: 'unreadable' };
+  }
+  return classifyStoredReceipt(parsed);
+}
+
+export function classifyStoredReceipt(
+  value: unknown
+):
+  | { kind: 'none' }
+  | { kind: 'usable'; receipt: SessionCompletionReceipt }
+  | { kind: 'unreadable'; sessionId?: string } {
+  if (value === null || value === undefined) return { kind: 'none' };
+
+  const stored = asStoredRecord(value);
+  if (!stored) return { kind: 'unreadable' };
+
+  const sessionId = typeof stored.sessionId === 'string' && stored.sessionId.length > 0
+    ? stored.sessionId
+    : undefined;
+
+  const flagsReadable =
+    typeof stored.growthApplied === 'boolean' &&
+    typeof stored.workoutRecordSaved === 'boolean' &&
+    typeof stored.rewardsSaved === 'boolean';
+
+  if (
+    stored.version !== 1 ||
+    sessionId === undefined ||
+    asStoredDateString(stored.completedAt) === undefined ||
+    !flagsReadable ||
+    asStoredRecord(stored.snapshot) === null
+  ) {
+    return { kind: 'unreadable', sessionId };
+  }
+
+  return { kind: 'usable', receipt: stored as unknown as SessionCompletionReceipt };
 }

@@ -858,7 +858,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     };
 
     const completion = await runSessionCompletion(initialReceipt, {
-      loadReceipt: getPendingSessionCompletion,
+      loadReceipt: () => getPendingSessionCompletion(initialReceipt.sessionId),
       saveReceipt: savePendingSessionCompletion,
       clearReceipt: clearPendingSessionCompletion,
       applyGrowth: async (snapshot) => {

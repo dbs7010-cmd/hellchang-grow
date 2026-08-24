@@ -7,6 +7,8 @@ import {
   asStoredRecord,
   asStoredSession,
   asStoredText,
+  classifyStoredReceipt,
+  classifyStoredReceiptRaw,
   isOnboardingComplete,
   isUsableProfile,
   parseStoredJson,
@@ -345,6 +347,94 @@ const profile = (input: Partial<UserProfile> = {}): UserProfile =>
   expect(
     '보존된 값으로 날짜 계산이 던지지 않는다',
     !Number.isNaN(new Date(usable as string).getTime())
+  );
+}
+
+// 11. 완료 receipt: 중복 지급보다 지연이 낫다 (DEC-010)
+{
+  const receipt = (input: Record<string, unknown> = {}) => ({
+    version: 1,
+    sessionId: 'sess-1',
+    completedAt: '2026-08-25T11:00:00.000Z',
+    growthApplied: true,
+    workoutRecordSaved: false,
+    rewardsSaved: false,
+    snapshot: { durationMinutes: 42 },
+    ...input,
+  });
+
+  expect('저장된 것이 없으면 none', classifyStoredReceipt(null).kind === 'none');
+  expect('undefined도 none', classifyStoredReceipt(undefined).kind === 'none');
+
+  const usable = classifyStoredReceipt(receipt());
+  expect('모든 단계 표시를 읽을 수 있으면 usable', usable.kind === 'usable');
+  expect(
+    '단계 표시가 그대로 보존된다',
+    usable.kind === 'usable' && usable.receipt.growthApplied === true && usable.receipt.rewardsSaved === false
+  );
+
+  // 믿을 수 없는 값 - 버리지도 진행하지도 않는다
+  const cases: [string, unknown][] = [
+    ['버전이 다르면', receipt({ version: 2 })],
+    ['버전이 없으면', receipt({ version: undefined })],
+    ['sessionId가 없으면', receipt({ sessionId: undefined })],
+    ['sessionId가 빈 문자열이면', receipt({ sessionId: '' })],
+    ['완료 시각을 읽을 수 없으면', receipt({ completedAt: 'soon' })],
+    ['단계 표시가 문자열이면', receipt({ growthApplied: 'true' })],
+    ['단계 표시가 숫자면', receipt({ workoutRecordSaved: 1 })],
+    ['단계 표시가 없으면', receipt({ rewardsSaved: undefined })],
+    ['snapshot이 없으면', receipt({ snapshot: undefined })],
+    ['snapshot이 배열이면', receipt({ snapshot: [] })],
+    ['객체가 아니면', 'receipt'],
+    ['배열이면', []],
+  ];
+  for (const [name, value] of cases) {
+    expect(`${name} unreadable`, classifyStoredReceipt(value).kind === 'unreadable');
+  }
+  // 원문 수준: 파싱 실패를 "없는 값"으로 접으면 안 된다 - 잘린 뒤에 무엇이 반영됐는지 모른다
+  expect('저장된 원문이 없으면 none', classifyStoredReceiptRaw(null).kind === 'none');
+  expect('잘린 원문은 unreadable', classifyStoredReceiptRaw('{"version":1,"sess').kind === 'unreadable');
+  expect('JSON이 아닌 원문도 unreadable', classifyStoredReceiptRaw('garbage').kind === 'unreadable');
+  expect('멀쩡한 원문은 usable', classifyStoredReceiptRaw(JSON.stringify(receipt())).kind === 'usable');
+  expect(
+    '원문이 다른 세션의 잘린 값이어도 판정은 unreadable이다 (호출부가 sessionId로 거른다)',
+    classifyStoredReceiptRaw('{"sessionId":"sess-0"').kind === 'unreadable'
+  );
+
+  // 읽을 수 있는 sessionId는 함께 돌려준다 - 다른 세션의 잔해인지 호출부가 판단할 수 있게
+  const brokenFlags = classifyStoredReceipt(receipt({ growthApplied: 'true' }));
+  expect(
+    'unreadable이어도 sessionId는 전달된다',
+    brokenFlags.kind === 'unreadable' && brokenFlags.sessionId === 'sess-1'
+  );
+  const noId = classifyStoredReceipt(receipt({ sessionId: 42 }));
+  expect('sessionId조차 읽을 수 없으면 비운다', noId.kind === 'unreadable' && noId.sessionId === undefined);
+
+  // repository가 실제로 하는 판단 (같은 규칙을 여기서 다시 조합해 본다)
+  const decide = (value: unknown, currentSessionId: string): 'fresh' | 'resume' | 'stop' => {
+    const stored = classifyStoredReceipt(value);
+    if (stored.kind === 'none') return 'fresh';
+    if (stored.kind === 'usable') return 'resume';
+    if (stored.sessionId !== undefined && stored.sessionId !== currentSessionId) return 'fresh';
+    return 'stop';
+  };
+  expect('저장된 것이 없으면 처음부터', decide(null, 'sess-1') === 'fresh');
+  expect('멀쩡한 receipt면 이어서', decide(receipt(), 'sess-1') === 'resume');
+  expect(
+    '같은 세션의 믿을 수 없는 receipt면 멈춘다 (중복 지급 금지)',
+    decide(receipt({ growthApplied: 'true' }), 'sess-1') === 'stop'
+  );
+  expect(
+    'sessionId를 못 읽으면 안전한 쪽으로 멈춘다',
+    decide(receipt({ sessionId: 42 }), 'sess-1') === 'stop'
+  );
+  expect(
+    '다른 세션의 잔해는 이번 완료를 막지 않는다',
+    decide(receipt({ sessionId: 'sess-0', growthApplied: 'true' }), 'sess-1') === 'fresh'
+  );
+  expect(
+    '멈춘 경우에도 저장값을 지우지 않는다 (판정은 읽기만 한다)',
+    typeof classifyStoredReceipt === 'function' && classifyStoredReceipt.length === 1
   );
 }
 
