@@ -98,6 +98,7 @@ import { createDefaultGrowthState, updateBodyComposition } from '@/utils/growth-
 import { buildDanbaekBodyState } from '@/utils/body-state';
 import { applyPumpToBodyParameters, toDanbaekBodyParameters } from '@/utils/body-parameters';
 import { mutateSessionIfActive, runSessionCompletion } from '@/utils/core-loop';
+import { resolveStoredOnboardingComplete } from '@/utils/stored-state';
 import {
   addExerciseToSession as addExerciseToSessionPure,
   addSetToExercise as addSetToExercisePure,
@@ -128,6 +129,8 @@ import {
 
 interface AppDataState {
   loading: boolean;
+  /** 저장소 I/O 실패로 초기 데이터를 신뢰할 수 없는 상태. 빈 신규 계정으로 진행하지 않는다. */
+  bootstrapFailed: boolean;
   onboardingComplete: boolean;
   profile: UserProfile | null;
   bodyHistory: BodyHistoryEntry[];
@@ -188,6 +191,8 @@ export interface EndSessionSummary {
 }
 
 interface AppDataContextValue extends AppDataState {
+  /** 저장소 읽기 실패 화면에서 기존 데이터를 다시 불러온다. */
+  reloadAppData: () => void;
   /** 등급에서 파생된 기능 권한. 화면은 tier를 비교하지 않고 이 boolean을 읽는다. */
   capabilities: EntitlementCapabilities;
   hasSubscriptionAccess: boolean;
@@ -313,6 +318,7 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 
 const initialState: AppDataState = {
   loading: true,
+  bootstrapFailed: false,
   onboardingComplete: false,
   profile: null,
   bodyHistory: [],
@@ -373,10 +379,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [mutateActiveSession]
   );
 
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
+  const loadAppData = useCallback(async (isCancelled: () => boolean) => {
+    try {
       const [
         onboardingComplete,
         profile,
@@ -407,12 +411,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         getGrowthState(),
       ]);
 
-      if (cancelled) return;
+      if (isCancelled()) return;
 
       // 기존 사용자 보호: 온보딩이 새로 생기기 전에 이미 프로필을 만든 사용자가 첫 화면에
       // 다시 갇히지 않도록, 핵심 데이터(체중)가 있으면 완료로 간주하고 플래그를 채워준다.
       // 기존 데이터는 건드리지 않는다 — 플래그만 보강한다.
-      let resolvedOnboardingComplete = onboardingComplete;
+      // 완료 플래그만 남고 프로필 문서가 손상된 경우 HOME은 그릴 데이터가 없다. 다른 저장
+      // 키는 그대로 둔 채 프로필 온보딩으로 돌아가 다시 입력할 수 있게 한다.
+      let resolvedOnboardingComplete = resolveStoredOnboardingComplete(onboardingComplete, profile);
       if (!onboardingComplete && profile && profile.weightKg > 0) {
         resolvedOnboardingComplete = true;
         await setOnboardingCompleteRepo(true);
@@ -440,6 +446,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       setState({
         loading: false,
+        bootstrapFailed: false,
         onboardingComplete: resolvedOnboardingComplete,
         profile,
         bodyHistory,
@@ -459,12 +466,31 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         pass,
         growth,
       });
-    })();
+    } catch {
+      // 읽기 실패를 빈 계정으로 오인하면 이후 입력이 기존 데이터를 덮을 수 있다. 저장값은
+      // 그대로 두고 navigation 진입을 막은 채 사용자가 다시 읽을 수 있게 한다.
+      if (!isCancelled()) {
+        setState((prev) => ({ ...prev, loading: false, bootstrapFailed: true }));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void loadAppData(() => cancelled);
+    }, 0);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, []);
+  }, [loadAppData]);
+
+  const reloadAppData = useCallback(() => {
+    setState((prev) => ({ ...prev, loading: true, bootstrapFailed: false }));
+    void loadAppData(() => false);
+  }, [loadAppData]);
 
   // 앱이 백그라운드로 전환되는 순간 활성 세션을 즉시 일시정지해, 방치된 시간이 운동 시간에
   // 섞이지 않게 한다("1217분 버그"의 근본 원인). 짧게 백그라운드에 있었다가 곧바로 돌아오면
@@ -1094,7 +1120,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const resetAllData = useCallback(async () => {
     await clearAllKeys(Object.values(StorageKeys));
-    setState({ ...initialState, loading: false });
+    setState({ ...initialState, loading: false, bootstrapFailed: false });
   }, []);
 
   const today = todayDateString();
@@ -1121,6 +1147,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const value: AppDataContextValue = {
     ...state,
+    reloadAppData,
     capabilities,
     hasSubscriptionAccess: isSubscribed,
     hasAiPtAccess,

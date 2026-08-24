@@ -16,6 +16,7 @@ import { Section } from '@/components/ui/section';
 import { TextField } from '@/components/ui/text-field';
 import { AppConfig } from '@/config/app-config';
 import { BodyGoalLabels } from '@/config/body-goals';
+import { hasPlayerCharacterModel } from '@/config/character-assets';
 import { StanleyTrainer } from '@/config/trainers';
 import {
   WorkoutCategories,
@@ -67,6 +68,7 @@ function formatDelta(value: number, unit: string): string {
  */
 export default function HistoryScreen() {
   const theme = useTheme();
+  const canView360 = hasPlayerCharacterModel();
   const {
     profile,
     bodyHistory,
@@ -295,7 +297,13 @@ export default function HistoryScreen() {
               />
             </View>
             <View style={styles.bodyActions}>
-              <PrimaryButton label="360도 보기" variant="secondary" onPress={() => setViewerOpen(true)} />
+              {canView360 && (
+                <PrimaryButton
+                  label="360도 보기"
+                  variant="secondary"
+                  onPress={() => setViewerOpen(true)}
+                />
+              )}
               {photoDates.length >= 2 ? (
                 <PrimaryButton
                   label={compareOpen ? '사진 비교 닫기' : `사진 비교 (${photoDates.length}장)`}

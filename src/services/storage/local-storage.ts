@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { readStoredJson } from '@/utils/stored-state';
+
 export async function readJSON<T>(key: string): Promise<T | null> {
-  const raw = await AsyncStorage.getItem(key);
-  if (raw === null) return null;
-  return JSON.parse(raw) as T;
+  return readStoredJson<T>(() => AsyncStorage.getItem(key));
 }
 
 export async function writeJSON<T>(key: string, value: T): Promise<void> {

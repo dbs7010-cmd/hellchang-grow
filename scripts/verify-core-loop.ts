@@ -6,6 +6,11 @@ import {
 } from '@/utils/session-exit';
 import { detectPRs } from '@/utils/exercise-history';
 import * as sessionExitModule from '@/utils/session-exit';
+import {
+  parseStoredJson,
+  readStoredJson,
+  resolveStoredOnboardingComplete,
+} from '@/utils/stored-state';
 import type {
   SessionCompletionReceipt,
   SessionCompletionResultSnapshot,
@@ -41,6 +46,29 @@ function check(name: string, actual: unknown, expected: unknown) {
 
 const START_ISO = '2026-08-22T00:00:00.000Z';
 const START_MS = new Date(START_ISO).getTime();
+
+// RELEASE SAFETY: 문법이 깨진 저장 문서 하나가 앱 전체 부팅을 거부하지 않는다.
+{
+  const valid = { sessionId: 'stored-session', completed: true };
+  check('H1: 정상 JSON은 값이 그대로 복원된다', parseStoredJson(JSON.stringify(valid)), valid);
+  check('H1: 저장값이 없으면 기존 null 계약을 유지한다', parseStoredJson(null), null);
+  check('H1: 잘린 JSON은 해당 문서만 없는 것으로 격리한다', parseStoredJson('{"broken"'), null);
+  check('H1: 유효한 JSON null도 null로 해석한다', parseStoredJson('null'), null);
+
+  let ioFailurePropagated = false;
+  try {
+    await readStoredJson(() => Promise.reject(new Error('storage unavailable')));
+  } catch {
+    ioFailurePropagated = true;
+  }
+  check('H1: 저장소 I/O 실패는 빈 데이터로 오인하지 않고 상위 복구 경계로 전파한다', ioFailurePropagated, true);
+  check('H2: 완료 플래그만 있고 프로필이 없으면 HOME으로 진입하지 않는다',
+    resolveStoredOnboardingComplete(true, null), false);
+  check('H2: 완료 플래그와 프로필이 모두 있으면 기존 HOME 진입을 유지한다',
+    resolveStoredOnboardingComplete(true, { weightKg: 70 }), true);
+  check('H2: 옛 사용자의 유효한 체중 프로필은 기존 자동 완료 계약을 유지한다',
+    resolveStoredOnboardingComplete(false, { weightKg: 70 }), true);
+}
 
 // A: 계획 수가 아니라 완료 세트가 있는 고유 운동만 Result 개수로 센다.
 {
