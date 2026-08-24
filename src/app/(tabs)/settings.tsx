@@ -32,7 +32,7 @@ export default function SettingsScreen() {
   const theme = useTheme();
   const {
     profile,
-    subscription,
+    hasSubscriptionAccess,
     referral,
     openEventPass,
     updateProfile,
@@ -64,7 +64,8 @@ export default function SettingsScreen() {
 
   const alreadyRedeemed = Boolean(referral.referredByCode);
   const bodyGoal = resolveBodyGoal(profile?.bodyGoal);
-  const isSubscribed = subscription.status === 'active';
+  // 유료 여부를 이 화면에서 다시 계산하지 않는다 — context의 단일 entitlement 결과를 읽는다.
+  const isSubscribed = hasSubscriptionAccess;
 
   return (
     <ScreenScroll gap={Spacing.three}>
@@ -128,19 +129,29 @@ export default function SettingsScreen() {
           value={isSubscribed ? '구독 중' : '구독 안 함'}
           openSection={openSection}
           onToggle={toggleSection}>
-          {isSubscribed ? (
-            <PrimaryButton label="구독 해지" variant="secondary" onPress={cancelSubscriptionMock} />
-          ) : (
+          <ThemedText type="caption" themeColor="textSecondary">
+            구독하면 광고 없이 AI PT를 이용할 수 있어요.
+          </ThemedText>
+          {/*
+            결제 SDK가 아직 없다. 그래서 출시 빌드에는 **구독 버튼을 두지 않는다** — 누르면
+            결제한 것처럼 보이는 버튼은 거짓말이고, 그 경로가 그대로 premium 우회가 된다.
+            아래 mock 조작은 개발 빌드에서만 존재하고, 그것이 남기는 기록조차
+            provider: 'dev'로 표시되어 출시 빌드에서는 권리를 만들지 못한다.
+          */}
+          {__DEV__ ? (
             <>
+              {isSubscribed ? (
+                <PrimaryButton label="구독 해지" variant="secondary" onPress={cancelSubscriptionMock} />
+              ) : (
+                <PrimaryButton label="구독하기" variant="secondary" onPress={() => subscribeMock('pro')} />
+              )}
               <ThemedText type="caption" themeColor="textSecondary">
-                구독하면 광고 없이 AI PT를 이용할 수 있어요.
+                DEV: 결제 연동 전이라 mock 구독으로 동작해요. 이 구독은 출시 빌드에서 인정되지 않아요.
               </ThemedText>
-              <PrimaryButton label="구독하기" variant="secondary" onPress={() => subscribeMock('pro')} />
             </>
-          )}
-          {__DEV__ && (
+          ) : (
             <ThemedText type="caption" themeColor="textSecondary">
-              DEV: 결제 연동 전이라 mock 구독으로 동작해요.
+              결제 준비 중이에요. 지금은 광고를 보면 AI PT를 이용할 수 있어요.
             </ThemedText>
           )}
         </SettingsRow>

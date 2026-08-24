@@ -52,7 +52,7 @@ import {
 } from '@/data/workout-session-repository';
 import { clearAllKeys } from '@/services/storage/local-storage';
 import { StorageKeys } from '@/services/storage/keys';
-import { rewardedAdService } from '@/services/ads/mock-rewarded-ad-service';
+import { rewardedAdService } from '@/services/ads';
 import { referralService } from '@/services/referral/mock-referral-service';
 import { subscriptionService } from '@/services/subscription/mock-subscription-service';
 import { growthEngine } from '@/services/growth';
@@ -70,6 +70,10 @@ import { ReferralState, ReferralRedemptionResult } from '@/types/referral';
 import { Routine } from '@/types/routine';
 import { StreakState } from '@/types/streak';
 import { SubscriptionState } from '@/types/subscription';
+import type { EntitlementCapabilities, EntitlementState } from '@/types/entitlement';
+import { FreeEntitlement } from '@/types/entitlement';
+import { entitlementCapabilities, resolveEntitlement } from '@/utils/entitlement';
+import { claimRewardedAiTicket, resolveAiAccess } from '@/utils/ai-access';
 import { TrainerUsageState } from '@/types/ads';
 import { UserProfile } from '@/types/user';
 import { WorkoutCategory, WorkoutRecord } from '@/types/workout';
@@ -130,6 +134,11 @@ interface AppDataState {
   workoutRecords: WorkoutRecord[];
   streak: StreakState;
   subscription: SubscriptionState;
+  /**
+   * provider 기록을 현재 시각·신뢰 정책에 통과시킨 결과. **앱 전체에서 유료 여부의 유일한 근거**다
+   * (src/utils/entitlement.ts). 화면이 subscription.status를 직접 보고 판단하지 않는다.
+   */
+  entitlement: EntitlementState;
   trainerUsage: TrainerUsageState;
   referral: ReferralState;
   openEventPass: OpenEventPassState;
@@ -179,6 +188,8 @@ export interface EndSessionSummary {
 }
 
 interface AppDataContextValue extends AppDataState {
+  /** 등급에서 파생된 기능 권한. 화면은 tier를 비교하지 않고 이 boolean을 읽는다. */
+  capabilities: EntitlementCapabilities;
   hasSubscriptionAccess: boolean;
   hasAiPtAccess: boolean;
   /** 오늘 사진 기반 신체 기록을 추가할 수 있는지 (DEV 빌드에서는 항상 true) */
@@ -213,7 +224,8 @@ interface AppDataContextValue extends AppDataState {
   deleteWorkoutRecord: (recordId: string) => Promise<void>;
   addBodyHistoryEntry: (input: Parameters<typeof addBodyHistoryEntryRepo>[0]) => Promise<void>;
   claimStreakReward: () => Promise<void>;
-  watchRewardedAd: () => Promise<void>;
+  /** 보상이 실제로 저장됐을 때만 true다. */
+  watchRewardedAd: () => Promise<boolean>;
   startWorkoutSession: (
     category: WorkoutCategory,
     options?: {
@@ -272,6 +284,8 @@ interface AppDataContextValue extends AppDataState {
   ptContext: PtContext;
   /** 실제 AI 백엔드가 연결돼 있는지. false면 화면이 "AI 연결 전"임을 알린다. */
   aiConnected: boolean;
+  /** 이 빌드에 실제 광고 provider가 연결돼 있는가. */
+  adProviderAvailable: boolean;
   /**
    * PT에게 한 마디 보낸다. 접근 권한이 없으면 null, 요청이 실패하면 AiTrainerRequestError를
    * 던진다 (화면이 대화를 유지한 채 재시도를 안내한다).
@@ -305,6 +319,7 @@ const initialState: AppDataState = {
   workoutRecords: [],
   streak: { currentStreakDays: 0, longestStreakDays: 0, rewardClaimed: false },
   subscription: { status: 'none' },
+  entitlement: FreeEntitlement,
   trainerUsage: { rewardedPtUsesRemaining: 0 },
   referral: { bonusDaysGranted: 0 },
   openEventPass: { active: false },
@@ -431,6 +446,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         workoutRecords,
         streak,
         subscription,
+        entitlement: resolveEntitlement({
+          subscription,
+          nowMs: Date.now(),
+          allowDevProvider: __DEV__,
+        }),
         trainerUsage,
         referral,
         openEventPass,
@@ -464,6 +484,18 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           return { ...prev, activeSession: updated };
         });
       } else {
+        // 백그라운드에 있는 동안 구독이 만료됐을 수 있다. 돌아온 순간 다시 판단한다 —
+        // 렌더 중에 시계를 읽지 않기 위해, 시각이 필요한 판단은 전부 이런 이벤트에서만 한다.
+        setState((prev) => {
+          const entitlement = resolveEntitlement({
+            subscription: prev.subscription,
+            nowMs,
+            allowDevProvider: __DEV__,
+          });
+          return entitlement.tier === prev.entitlement.tier && entitlement.reason === prev.entitlement.reason
+            ? prev
+            : { ...prev, entitlement };
+        });
         setState((prev) => {
           if (!prev.activeSession) return prev;
           const updated = resumeIfRecentBackground(
@@ -924,15 +956,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, routines }));
   }, []);
 
-  const watchRewardedAd = useCallback(async () => {
-    const result = await rewardedAdService.showRewardedAd();
-    if (result.granted) {
-      const trainerUsage = await grantRewardedPtUses(result.rewardUnits);
+  const watchRewardedAd = useCallback(async (): Promise<boolean> => {
+    return claimRewardedAiTicket(rewardedAdService, async (rewardUnits) => {
+      const trainerUsage = await grantRewardedPtUses(rewardUnits);
       setState((prev) => ({ ...prev, trainerUsage }));
-    }
+    });
   }, []);
 
-  const isSubscribed = state.subscription.status === 'active';
+  // 유료 여부는 여기서 다시 계산하지 않는다 — resolveEntitlement가 낸 결과 하나만 읽는다.
+  const capabilities = entitlementCapabilities(state.entitlement);
+  const isSubscribed = capabilities.aiPtWithoutAd;
   const hasAiPtAccess = isSubscribed || state.trainerUsage.rewardedPtUsesRemaining > 0;
 
   /**
@@ -940,8 +973,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
    * (제품 기획 6/7장) — 이 함수 하나로 접근 가능 여부 확인 + 이용권 차감을 공유한다.
    */
   const consumeAiAccess = useCallback(async (): Promise<boolean> => {
-    if (isSubscribed) return true;
-    if (state.trainerUsage.rewardedPtUsesRemaining <= 0) return false;
+    const access = resolveAiAccess(isSubscribed, state.trainerUsage.rewardedPtUsesRemaining);
+    if (!access.allowed) return false;
+    if (!access.consumeTicket) return true;
     const trainerUsage = await consumeRewardedPtUse();
     setState((prev) => ({ ...prev, trainerUsage }));
     return true;
@@ -988,15 +1022,25 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [consumeAiAccess, ptContext, state.workoutRecords]
   );
 
-  const subscribeMock = useCallback(async (tierId: string) => {
-    const subscription = await subscriptionService.subscribe(tierId);
-    setState((prev) => ({ ...prev, subscription }));
+  const applySubscriptionRecord = useCallback((subscription: SubscriptionState) => {
+    const entitlement = resolveEntitlement({
+      subscription,
+      nowMs: Date.now(),
+      allowDevProvider: __DEV__,
+    });
+    setState((prev) => ({ ...prev, subscription, entitlement }));
   }, []);
 
+  const subscribeMock = useCallback(
+    async (tierId: string) => {
+      applySubscriptionRecord(await subscriptionService.subscribe(tierId));
+    },
+    [applySubscriptionRecord]
+  );
+
   const cancelSubscriptionMock = useCallback(async () => {
-    const subscription = await subscriptionService.cancel();
-    setState((prev) => ({ ...prev, subscription }));
-  }, []);
+    applySubscriptionRecord(await subscriptionService.cancel());
+  }, [applySubscriptionRecord]);
 
   const redeemReferralCode = useCallback(async (code: string) => {
     const result = await referralService.redeemCode(code);
@@ -1077,6 +1121,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const value: AppDataContextValue = {
     ...state,
+    capabilities,
     hasSubscriptionAccess: isSubscribed,
     hasAiPtAccess,
     canAddPhotoToday,
@@ -1114,6 +1159,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     removeRoutine,
     ptContext,
     aiConnected: aiTrainerService.isAiConnected,
+    adProviderAvailable: rewardedAdService.isProviderAvailable,
     sendPtMessage,
     subscribeMock,
     cancelSubscriptionMock,
