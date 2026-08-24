@@ -7,10 +7,10 @@
 ## SNAPSHOT
 
 - branch: `feat/v1-monetization-foundation`
-- HEAD: `bc2e90c` — fix(session): read a killed session's stored state defensively
+- HEAD: `4968d2c` — fix(storage): validate the shape of the remaining state keys
   (이 문서를 담은 상태 갱신 커밋이 그 위에 올라간다)
 - last_updated: 2026-08-25
-- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 14종 전부 PASS(860개 단언)
+- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 14종 전부 PASS(904개 단언)
 - worktree: 추적 대상 clean. 남은 untracked는 EXPERIMENTAL 항목뿐이다 (아래 WORKTREE 참조)
 
 ## AUTHORITY ORDER
@@ -52,6 +52,7 @@
 - `4b23f17` 광고 경계 회귀 검증 `verify:monetization` 39개 — `FAIL-007`의 1회성 probe 근거를 재실행 가능한 명령으로 승격
 - `ac6aec4` AI COMMAND CENTER v0.2 — FAILURE EVIDENCE RULE + AUTONOMY LEVELS(`DEC-008` `DEC-009`)
 - `bc2e90c` kill된 세션의 저장값을 방어적으로 읽는다(`asStoredSession`) + 실기기 kill 수동 절차. `verify:storage` 68 → 95개
+- `4968d2c` streak / pass / trainer-usage / referral / event 다섯 키의 모양 검사. 공용 조각(`asStoredCount` 등)으로 조합. `verify:storage` 95 → 139개
 - `b2a3f65` V1 entitlement foundation — 단일 권리 판정 소스 `resolveEntitlement()`, 만료 강제, `verify:entitlement` 55개
 - `ebd5784` 휴식 중 이탈 확인 표시 + stale 종료 확인 정리 (Android 실기기 재현 버그)
 - `d6c3910` 세트 완료 피드백을 휴식 전환 전에 보이도록 유지
@@ -62,14 +63,16 @@
 
 **없음 — verified checkpoint 직후다.** 진행 중인 주 작업 단위가 없다.
 
-직전 NEXT(세션 kill 복구 근거)는 `bc2e90c`로 끝났다 — 일반 지시 "계속" 한 번으로 조사부터
-커밋까지 자율 실행한 첫 v0.2 사이클이다. 다음 작업은 NEXT를 따른다.
+직전 NEXT(남은 저장 키 모양 검사)는 `4968d2c`로 끝났다 — "계속" 두 번째 사이클이며,
+조사에서 위험이 확인된 다섯 키만 고치고 `session-completion`은 판단이 필요해 남겼다.
+다음 작업은 NEXT를 따른다.
 
 ## NEXT
 
-**남은 저장 키의 모양 검사 공백을 조사하고 필요한 곳만 채운다.** 등급 **GUARDED**(persistence).
-`readJSON<T>`를 그대로 쓰는 키가 7개 남아 있다 — `streak` / `pass` / `trainer-usage` / `referral` / `event` / `session-completion` / `growth`. `growth`는 `migrateGrowthState()`가 이미 덮으므로(`verify:growth`) 제외 후보다. 나머지는 손상된 값이 그대로 화면과 보상 계산으로 흘러간다.
-먼저 각 키가 실제로 어떻게 소비되는지 조사해 **터지거나 숫자를 왜곡할 수 있는 것만** 고른다 — 전부 기계적으로 감싸지 않는다(`DEC-008`의 과설계 금지). 채운 만큼 `verify:storage`에 검증을 추가하고, `utils/stored-state.ts` 패턴을 그대로 쓴다.
+**`session-completion` receipt가 깨졌을 때의 방침을 정한다 — 등급 APPROVAL REQUIRED (BLOCKED 참조).**
+AI가 임의로 정하지 않는다. 승인이 오면 그 방침대로 구현 + `verify:core-loop`/`verify:storage` 검증까지 자율 실행한다.
+
+그동안 자율로 진행 가능한 대안(승인 불필요, GUARDED): 없음 — 저장값 모양 검사 라인은 이 항목을 빼면 닫혔다.
 
 **실기기 kill 검증(사용자 작업)**: `scripts/verify-storage-recovery.ts` 하단의 수동 절차 6단계를 실기기에서 1회 수행하면 ROADMAP M3의 해당 항목이 닫힌다. AI가 대신할 수 없다.
 
@@ -77,7 +80,19 @@ push는 사용자가 명시적으로 요청하기 전까지 하지 않는다.
 
 ## BLOCKED
 
-None.
+**`session-completion` receipt의 손상 처리 방침 — 사용자 승인 대기.**
+
+- 문제: `getPendingSessionCompletion()`은 저장된 receipt를 그대로 믿는다. 이 값은 운동 완료
+  파이프라인(Growth → WorkoutRecord → 보상 → cleanup)이 "어디까지 성공했는지" 기억하는
+  유일한 근거다(`4a75851`).
+- 영향: 값이 깨졌을 때 **버리면** 파이프라인이 처음부터 다시 돌아 이미 반영된 성장/XP/streak를
+  다시 줄 수 있고, **살리면** 실제로는 안 끝난 단계를 끝났다고 보고 보상이 유실될 수 있다.
+  어느 쪽도 모양 문제가 아니라 데이터 판단이다.
+- 추천안: 읽을 수 있는 필드(`sessionId` / `version` / 단계 플래그)가 전부 유효할 때만 receipt로
+  인정하고, 그렇지 않으면 **버리지 말고 "판단 불가"로 두어 자동 재시도를 멈춘 뒤 사용자에게
+  [다시 시도]를 보여 주는 쪽**. 중복 지급보다 지연이 낫다는 기존 판단(`4a75851`의 저장 실패
+  처리)과 방향이 같다.
+- 필요한 승인: 위 방향으로 진행할지, 다른 방침을 쓸지.
 
 ## EXPERIMENTAL
 
