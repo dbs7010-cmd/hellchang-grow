@@ -154,3 +154,51 @@ export function asStoredSession(value: unknown): WorkoutSession | null {
 
   return { ...(session as WorkoutSession), accumulatedSeconds, exercises };
 }
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 작은 조각들
+ *
+ * 상태 저장소마다 전용 검사기를 만들면 같은 규칙이 여섯 벌이 된다. 실제로 필요한 것은
+ * "이 자리에 숫자가/날짜가/참이 들어 있는가" 몇 가지뿐이라, repository들이 이 조각을
+ * 조합해서 쓴다.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/** 필드를 읽기 전에 확인한다. 객체가 아니면 저장된 것이 없는 것과 같다. */
+export function asStoredRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+/**
+ * 개수/포인트처럼 **0 이상이어야 하는 숫자**. 그 밖의 값은 기본값으로 읽는다.
+ *
+ * 문자열 "5"를 그대로 흘리면 `"5" + 1 = "51"`이 되고 `"5" > 0`은 true다 — 연속 기록이
+ * 이상해지거나, 없는 이용권으로 유료 기능이 열린다. NaN은 화면의 숫자를 전부 NaN으로 만든다.
+ */
+export function asStoredCount(value: unknown, fallback = 0): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return fallback;
+  return value;
+}
+
+/** 저장된 참/거짓. 정확히 true일 때만 참이다 (문자열/숫자는 참이 아니다). */
+export function asStoredFlag(value: unknown): boolean {
+  return value === true;
+}
+
+/**
+ * 날짜로 쓸 수 있는 문자열. 읽을 수 없으면 **없는 값**이다.
+ *
+ * `new Date(깨진 값)`은 Invalid Date이고, 거기에 대고 `.toISOString()`을 부르면 던진다.
+ * 화면에는 "Invalid Date"가 그대로 찍힌다.
+ */
+export function asStoredDateString(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return undefined;
+  return value;
+}
+
+/** 저장된 문자열. 문자열이 아니면 없는 값이다. */
+export function asStoredText(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}

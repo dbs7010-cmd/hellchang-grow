@@ -1,7 +1,12 @@
 import type { UserProfile } from '@/types/user';
 import {
   asStoredArray,
+  asStoredCount,
+  asStoredDateString,
+  asStoredFlag,
+  asStoredRecord,
   asStoredSession,
+  asStoredText,
   isOnboardingComplete,
   isUsableProfile,
   parseStoredJson,
@@ -248,6 +253,99 @@ const profile = (input: Partial<UserProfile> = {}): UserProfile =>
   const stored = session({ exercises: undefined });
   asStoredSession(stored);
   expect('읽어도 저장 원본은 그대로다', !('exercises' in stored) || stored.exercises === undefined);
+}
+
+// 9. 상태 저장소의 작은 조각들 - 숫자/날짜/참거짓
+{
+  expect('객체가 아니면 저장된 것이 없다', asStoredRecord('{}') === null);
+  expect('배열도 상태 객체가 아니다', asStoredRecord([]) === null);
+  expect('null도 아니다', asStoredRecord(null) === null);
+  expect('객체는 그대로', asStoredRecord({ xp: 1 })?.xp === 1);
+
+  // 개수/포인트: 0 이상의 실제 숫자만
+  expect('정상 숫자는 그대로', asStoredCount(7) === 7);
+  expect('0도 유효하다', asStoredCount(0) === 0);
+  expect('문자열 숫자는 기본값 (연속 기록이 "5"+1="51"이 되지 않는다)', asStoredCount('5') === 0);
+  expect('NaN은 기본값 (화면 숫자가 NaN이 되지 않는다)', asStoredCount(NaN) === 0);
+  expect('Infinity는 기본값', asStoredCount(Infinity) === 0);
+  expect('음수는 기본값', asStoredCount(-3) === 0);
+  expect('null은 기본값', asStoredCount(null) === 0);
+  expect('없으면 기본값', asStoredCount(undefined) === 0);
+  expect('객체는 기본값', asStoredCount({}) === 0);
+  expect('기본값을 지정할 수 있다', asStoredCount('x', 10) === 10);
+
+  // 참/거짓
+  expect('true만 참', asStoredFlag(true));
+  expect("문자열 'true'는 참이 아니다", !asStoredFlag('true'));
+  expect('1은 참이 아니다', !asStoredFlag(1));
+  expect('객체는 참이 아니다', !asStoredFlag({}));
+
+  // 날짜 문자열
+  expect('ISO 문자열은 그대로', asStoredDateString('2026-08-25T00:00:00.000Z') === '2026-08-25T00:00:00.000Z');
+  expect('날짜만 있는 문자열도 읽을 수 있다', asStoredDateString('2026-08-25') === '2026-08-25');
+  expect('읽을 수 없는 날짜는 없는 값 (Invalid Date를 만들지 않는다)', asStoredDateString('내일') === undefined);
+  expect('숫자는 날짜 문자열이 아니다', asStoredDateString(1_800_000_000_000) === undefined);
+  expect('빈 문자열은 없는 값', asStoredDateString('') === undefined);
+  expect('null은 없는 값', asStoredDateString(null) === undefined);
+
+  // 문자열
+  expect('문자열은 그대로', asStoredText('ABC123') === 'ABC123');
+  expect('숫자는 문자열이 아니다', asStoredText(123) === undefined);
+  expect('객체는 문자열이 아니다', asStoredText({}) === undefined);
+}
+
+// 10. 상태 저장소가 실제로 읽는 모양 (repository들이 위 조각을 그대로 조합한다)
+{
+  const readStreak = (value: unknown) => {
+    const stored = asStoredRecord(value);
+    if (!stored) return { currentStreakDays: 0, longestStreakDays: 0, rewardClaimed: false };
+    return {
+      currentStreakDays: asStoredCount(stored.currentStreakDays),
+      longestStreakDays: asStoredCount(stored.longestStreakDays),
+      lastRecordDate: asStoredDateString(stored.lastRecordDate),
+      rewardClaimed: asStoredFlag(stored.rewardClaimed),
+    };
+  };
+  const healthy = readStreak({
+    currentStreakDays: 5,
+    longestStreakDays: 9,
+    lastRecordDate: '2026-08-24',
+    rewardClaimed: true,
+  });
+  expect('멀쩡한 streak은 그대로 읽힌다', healthy.currentStreakDays === 5 && healthy.longestStreakDays === 9);
+  expect('마지막 기록 날짜가 보존된다', healthy.lastRecordDate === '2026-08-24');
+  expect('보상 수령 표시가 보존된다', healthy.rewardClaimed === true);
+
+  const corrupted = readStreak({ currentStreakDays: '5', longestStreakDays: NaN, lastRecordDate: 42 });
+  expect('문자열 연속 일수는 0으로 읽는다', corrupted.currentStreakDays === 0);
+  expect('NaN 최장 기록도 0으로 읽는다', corrupted.longestStreakDays === 0);
+  expect('숫자로 저장된 날짜는 없는 값', corrupted.lastRecordDate === undefined);
+  expect('그 뒤 +1을 해도 숫자로 남는다', corrupted.currentStreakDays + 1 === 1);
+
+  // 이용권: 깨진 값으로 유료 기능이 열리지 않는다
+  const readUses = (value: unknown) =>
+    asStoredCount(asStoredRecord(value)?.rewardedPtUsesRemaining);
+  expect('정상 이용권은 그대로', readUses({ rewardedPtUsesRemaining: 2 }) === 2);
+  expect('문자열 이용권으로 AI PT가 열리지 않는다', !(readUses({ rewardedPtUsesRemaining: '5' }) > 0));
+  expect('true로도 열리지 않는다', !(readUses({ rewardedPtUsesRemaining: true }) > 0));
+  expect('깨진 원문으로도 열리지 않는다', !(readUses(parseStoredJson('{"rewardedPtUses')) > 0));
+
+  // PASS xp: 레벨 계산이 NaN이 되지 않는다
+  const readXp = (value: unknown) => asStoredCount(asStoredRecord(value)?.xp);
+  expect('정상 xp는 그대로', readXp({ xp: 250 }) === 250);
+  expect('NaN xp는 0으로 읽는다', Number.isFinite(readXp({ xp: NaN })));
+  expect('문자열 xp도 숫자로 읽힌다', Number.isFinite(readXp({ xp: '250' })));
+
+  // 이벤트 패스 만료: new Date(...).toISOString()이 던지지 않는다
+  const readExpiry = (value: unknown) => asStoredDateString(asStoredRecord(value)?.expiresAt);
+  const broken = readExpiry({ active: true, expiresAt: 'soon' });
+  expect('읽을 수 없는 만료 시각은 없는 값', broken === undefined);
+  const usable = readExpiry({ active: true, expiresAt: '2026-09-01T00:00:00.000Z' });
+  expect('읽을 수 있는 만료 시각은 보존된다', usable === '2026-09-01T00:00:00.000Z');
+  expect(
+    '보존된 값으로 날짜 계산이 던지지 않는다',
+    !Number.isNaN(new Date(usable as string).getTime())
+  );
 }
 
 /*
