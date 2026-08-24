@@ -1,6 +1,7 @@
 import type { UserProfile } from '@/types/user';
 import {
   asStoredArray,
+  asStoredSession,
   isOnboardingComplete,
   isUsableProfile,
   parseStoredJson,
@@ -178,6 +179,95 @@ const profile = (input: Partial<UserProfile> = {}): UserProfile =>
     isUsableProfile(okProfile) && asStoredArray(parseStoredJson('[{"id"')).length === 0
   );
 }
+
+// 8. 진행 중이던 세션: 앱이 kill된 뒤 다시 켰을 때
+{
+  const session = (input: Record<string, unknown> = {}) => ({
+    id: 's1',
+    startedAt: '2026-08-25T10:00:00.000Z',
+    createdAt: '2026-08-25T10:00:00.000Z',
+    status: 'active',
+    primaryCategory: 'weight',
+    accumulatedSeconds: 120,
+    exercises: [{ id: 'e1', exerciseId: 'bench', exerciseName: '벤치프레스', sets: [] }],
+    ...input,
+  });
+
+  const ok = asStoredSession(session());
+  expect('정상 세션은 그대로 복구된다', ok?.id === 's1' && ok?.status === 'active');
+  expect('운동 목록이 보존된다', ok?.exercises.length === 1);
+  expect('누적 시간이 보존된다', ok?.accumulatedSeconds === 120);
+
+  // 세션이라고 볼 수 없는 값은 버린다 - 이 상태로는 어떤 화면도 그릴 수 없다
+  expect('null은 세션 아님', asStoredSession(null) === null);
+  expect('배열은 세션 아님', asStoredSession([]) === null);
+  expect('문자열은 세션 아님', asStoredSession('session') === null);
+  expect('id가 없으면 세션 아님', asStoredSession(session({ id: undefined })) === null);
+  expect('id가 빈 문자열이면 세션 아님', asStoredSession(session({ id: '' })) === null);
+  expect('startedAt이 없으면 세션 아님', asStoredSession(session({ startedAt: undefined })) === null);
+  expect('createdAt이 없으면 세션 아님', asStoredSession(session({ createdAt: undefined })) === null);
+  expect('status가 없으면 세션 아님', asStoredSession(session({ status: undefined })) === null);
+  expect('모르는 status면 세션 아님', asStoredSession(session({ status: 'running' })) === null);
+  expect('깨진 원문은 세션 아님', asStoredSession(parseStoredJson('{"id":"s1","stat')) === null);
+
+  // 읽을 수 있는 세션은 살린다 - 진행 중이던 운동을 통째로 버리는 것이 더 나쁘다
+  const noExercises = asStoredSession(session({ exercises: undefined }));
+  expect('exercises가 없는 옛 세션도 복구된다', noExercises !== null);
+  expect('그때 exercises는 빈 배열이다', noExercises?.exercises.length === 0);
+
+  const brokenExercises = asStoredSession(session({ exercises: { 0: 'x' } }));
+  expect('exercises가 배열이 아니어도 세션은 살아남는다', brokenExercises !== null);
+  expect('배열이 아닌 exercises는 빈 배열로 읽는다', brokenExercises?.exercises.length === 0);
+
+  const brokenSets = asStoredSession(
+    session({ exercises: [{ id: 'e1', exerciseId: 'bench', exerciseName: '벤치', sets: null }] })
+  );
+  expect('세트 목록이 깨져도 운동은 남는다', brokenSets?.exercises.length === 1);
+  expect('깨진 세트 목록은 빈 배열로 읽는다', brokenSets?.exercises[0].sets.length === 0);
+
+  const nanSeconds = asStoredSession(session({ accumulatedSeconds: NaN }));
+  expect('누적 시간이 NaN이면 0으로 읽는다', nanSeconds?.accumulatedSeconds === 0);
+  const stringSeconds = asStoredSession(session({ accumulatedSeconds: '120' }));
+  expect('누적 시간이 문자열이면 0으로 읽는다', stringSeconds?.accumulatedSeconds === 0);
+
+  // kill 복구에 필요한 표시들은 손대지 않는다 (recoverStaleSession / resumeIfRecentBackground의 입력)
+  const killed = asStoredSession(
+    session({ lastHeartbeatMs: 1_800_000, activeSince: '2026-08-25T10:02:00.000Z' })
+  );
+  expect('lastHeartbeatMs는 그대로 전달된다', killed?.lastHeartbeatMs === 1_800_000);
+  expect('activeSince는 그대로 전달된다', killed?.activeSince === '2026-08-25T10:02:00.000Z');
+  const backgrounded = asStoredSession(
+    session({ status: 'paused', pausedByAppBackground: true, pausedAtMs: 1_800_000 })
+  );
+  expect('자동 일시정지 표시가 보존된다', backgrounded?.pausedByAppBackground === true);
+  expect('일시정지 시각이 보존된다', backgrounded?.pausedAtMs === 1_800_000);
+  expect('완료된 세션도 그대로 읽는다 (완료 파이프라인이 판단한다)',
+    asStoredSession(session({ status: 'completed' }))?.status === 'completed');
+
+  // 읽기는 저장된 값을 바꾸지 않는다
+  const stored = session({ exercises: undefined });
+  asStoredSession(stored);
+  expect('읽어도 저장 원본은 그대로다', !('exercises' in stored) || stored.exercises === undefined);
+}
+
+/*
+ * 여기서 자동으로 덮지 못하는 것 — 재현 가능한 수동 절차 (DEC-008의 우선순위 3).
+ *
+ * 실기기 kill 복구: 위 검증은 "저장된 값이 어떤 모양이든 앱이 안전하게 읽는가"까지다.
+ * 실제 iOS/Android가 백그라운드에서 앱을 죽이는 시점과 그때 마지막 저장 상태는 순수 함수로
+ * 재현할 수 없다. 실기기에서 확인할 때는 다음 순서를 그대로 따른다.
+ *
+ *   1. 운동을 시작하고 세트를 한 개 이상 완료한다 (저장이 일어난다).
+ *   2. 타이머가 도는 것을 확인하고 시각을 적어 둔다.
+ *   3. 앱을 백그라운드로 보내고 앱 전환기에서 강제 종료한다.
+ *   4. 30분 이상 기다린 뒤 앱을 다시 켠다.
+ *   5. 확인: 세션이 남아 있고, 상태가 [일시정지]이며, 경과 시간에 방치된 30분이 더해져
+ *      있지 않다(= 마지막 heartbeat까지만 계산된다). 기록해 둔 세트도 그대로 있다.
+ *   6. 다시 [재개]하고 종료하면 그 시간만 기록에 남는다.
+ *
+ * 짧은 전환(2번 뒤 30초 안에 복귀)은 [재개]를 누르지 않아도 자동으로 이어져야 한다.
+ * 순수 규칙 쪽 근거는 verify:session의 recoverStaleSession / resumeIfRecentBackground에 있다.
+ */
 
 if (failures > 0) {
   console.log(`${failures} FAILED`);

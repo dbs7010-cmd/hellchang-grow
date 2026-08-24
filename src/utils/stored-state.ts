@@ -1,5 +1,7 @@
 import type { BodyParameters } from '@/types/body';
 import type { UserProfile } from '@/types/user';
+import type { WorkoutSetEntry } from '@/types/workout';
+import type { SessionExerciseEntry, WorkoutSession } from '@/types/workout-session';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -112,4 +114,43 @@ export function resolveBootstrapScreen(input: {
   if (input.loading) return 'splash';
   if (input.bootstrapFailed) return 'recovery';
   return 'navigator';
+}
+
+/**
+ * 저장된 진행 중 세션. 모양이 맞지 않으면 **세션이 없는 것으로 다룬다.**
+ *
+ * 이 키는 앱에서 가장 자주 쓰인다 — 세트를 완료할 때마다, 그리고 heartbeat마다 저장된다.
+ * 그래서 쓰기 도중 강제 종료가 겹칠 확률도 가장 높다. 그런데 세션 화면은
+ * `session.exercises.map(...)`처럼 필드가 있다고 믿고 읽으므로, 잘린 값 하나가 운동 화면을
+ * 렌더 도중 터뜨린다.
+ *
+ * 판정은 두 단계다.
+ * - **세션이라고 볼 수 없으면 버린다**: 객체가 아니거나, id/시각/상태가 없거나, 상태 값이
+ *   세 가지가 아닌 경우. 이 상태로는 어떤 화면도 그릴 수 없다.
+ * - **읽을 수 있는 세션은 살린다**: 진행 중이던 운동을 통째로 버리는 것이 더 나쁜 결과다.
+ *   `exercises`가 없거나 배열이 아니면(옛 버전 세션, 잘린 값) 빈 배열로, 숫자가 아닌 누적
+ *   시간은 0으로 읽는다. NaN을 그대로 흘리면 타이머와 기록 분(分)까지 NaN이 된다.
+ *
+ * **읽을 때만 정리하고 저장소를 고쳐 쓰지 않는다** — 저장된 값은 그대로 두고, 다음 저장이
+ * 자연스럽게 덮어쓴다.
+ */
+export function asStoredSession(value: unknown): WorkoutSession | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const session = value as Partial<WorkoutSession>;
+  if (typeof session.id !== 'string' || session.id.length === 0) return null;
+  if (typeof session.startedAt !== 'string' || typeof session.createdAt !== 'string') return null;
+  if (session.status !== 'active' && session.status !== 'paused' && session.status !== 'completed') {
+    return null;
+  }
+
+  const exercises = asStoredArray<SessionExerciseEntry>(session.exercises).map((exercise) => ({
+    ...exercise,
+    sets: asStoredArray<WorkoutSetEntry>(exercise?.sets),
+  }));
+  const accumulatedSeconds =
+    typeof session.accumulatedSeconds === 'number' && Number.isFinite(session.accumulatedSeconds)
+      ? session.accumulatedSeconds
+      : 0;
+
+  return { ...(session as WorkoutSession), accumulatedSeconds, exercises };
 }
