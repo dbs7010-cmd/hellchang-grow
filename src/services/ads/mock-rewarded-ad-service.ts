@@ -1,6 +1,6 @@
 import { AppConfig } from '@/config/app-config';
-import { RewardedAdService } from '@/services/ads/rewarded-ad-service';
-import { RewardedAdResult } from '@/types/ads';
+import type { RewardedAdService } from '@/services/ads/rewarded-ad-service';
+import type { RewardedAdResult } from '@/types/ads';
 
 /**
  * 개발용 보상형 광고 어댑터 — **개발 빌드에서만 존재한다.**

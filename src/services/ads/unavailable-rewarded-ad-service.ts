@@ -1,5 +1,5 @@
-import { RewardedAdService } from '@/services/ads/rewarded-ad-service';
-import { RewardedAdResult } from '@/types/ads';
+import type { RewardedAdService } from '@/services/ads/rewarded-ad-service';
+import type { RewardedAdResult } from '@/types/ads';
 
 /**
  * 광고 SDK가 연결되지 않은 빌드에서 쓰는 어댑터 — **보상을 주지 않는다.**

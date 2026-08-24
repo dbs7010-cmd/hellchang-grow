@@ -91,6 +91,7 @@ import { createId } from '@/utils/id';
 import { addXp, computePassLevelProgress } from '@/utils/pass';
 import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/character-appearance';
 import { buildPtContext, buildPtExerciseBrief, matchExerciseInText, PtContext } from '@/utils/pt-context';
+import { resolveRewardedAdGrant } from '@/utils/ad-reward';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { resolveOnboardingState } from '@/utils/stored-state';
 import { buildWorkoutSessionResult } from '@/utils/workout-session-result';
@@ -1018,9 +1019,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       // 광고 SDK 실패가 앱을 멈추게 하지 않는다. 이용권도 주지 않는다.
       return false;
     }
-    if (!result.granted || result.rewardUnits <= 0) return false;
+    // 보상 여부 판정은 순수 규칙 하나에서만 나온다 (scripts/verify-monetization.ts).
+    const grant = resolveRewardedAdGrant(result);
+    if (!grant.granted) return false;
     try {
-      const trainerUsage = await grantRewardedPtUses(result.rewardUnits);
+      const trainerUsage = await grantRewardedPtUses(grant.rewardUnits);
       setState((prev) => ({ ...prev, trainerUsage }));
       return true;
     } catch {
