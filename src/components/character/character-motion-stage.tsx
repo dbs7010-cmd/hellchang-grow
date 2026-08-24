@@ -14,6 +14,7 @@ import Animated, {
 import { PlayerCharacter } from '@/components/character/player-character';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
+import { SessionGameAssetSlots } from '@/config/danbaek-game-assets';
 import { useTheme } from '@/hooks/use-theme';
 import type { DanbaekBodyParameters } from '@/types/body-state';
 import type { MotionFamily } from '@/types/exercise';
@@ -100,10 +101,12 @@ export function CharacterMotionStage({
 
   return (
     <View style={[styles.stage, { height }, style]} pointerEvents="none">
-      <Animated.View style={animatedStyle}>
+      <Animated.View style={[styles.characterMotion, animatedStyle]}>
         <PlayerCharacter
           appearance={appearance}
           slot="session"
+          gameAssetSlot={SessionGameAssetSlots[state]}
+          allowGameAssetWithBodyParameters
           height={height}
           bodyParameters={bodyParameters}
           idle={reducedMotion || state === 'idle' || state === 'ready' || state === 'resting'}
@@ -126,6 +129,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'hidden',
+  },
+  characterMotion: {
+    width: '100%',
+    alignItems: 'center',
   },
   /** 캐릭터 자리 위에 겹쳐 뜨는 한 줄 — 흐름에 없으므로 아래 UI를 밀지 않는다. */
   reaction: {

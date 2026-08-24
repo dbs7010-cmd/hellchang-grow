@@ -1,8 +1,10 @@
 import { Image } from 'expo-image';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { CharacterIntrinsicHeight, CharacterSilhouette } from '@/components/character/character-silhouette';
 import { CharacterAssetSlot, resolveCharacterAsset } from '@/config/character-assets';
+import { DanbaekGameAssetSlot, resolveDanbaekGameAsset } from '@/config/danbaek-game-assets';
 import type { DanbaekBodyParameters } from '@/types/body-state';
 import { CharacterAppearance } from '@/utils/character-appearance';
 
@@ -10,6 +12,10 @@ export interface PlayerCharacterProps {
   appearance: CharacterAppearance;
   /** 어느 화면에서 쓰는지. 슬롯별 에셋이 없으면 메인(home) 캐릭터로 떨어진다. */
   slot: CharacterAssetSlot;
+  /** HOME/SESSION/RESULT presentation slot. Invalid or unavailable assets use the CANON renderer. */
+  gameAssetSlot?: DanbaekGameAssetSlot;
+  /** SESSION presentation only. HOME/RESULT leave this false to preserve BodyParameters. */
+  allowGameAssetWithBodyParameters?: boolean;
   /**
    * 캐릭터를 담을 높이(px). 실제 에셋은 이 높이 안에서 contain으로 맞춰지고,
    * placeholder는 같은 비율로 축소된다. 0이면(측정 전) 아직 그리지 않는다.
@@ -57,15 +63,28 @@ const MaxBodyScale = 1.2;
 export function PlayerCharacter({
   appearance,
   slot,
+  gameAssetSlot,
+  allowGameAssetWithBodyParameters = false,
   height,
   fill = false,
   bodyParameters,
   idle = false,
 }: PlayerCharacterProps) {
-  const asset = resolveCharacterAsset(slot);
+  const resolvedGameAsset = gameAssetSlot
+    ? resolveDanbaekGameAsset(gameAssetSlot, {
+        hasBodyParameters: Boolean(bodyParameters),
+        allowBodyParametersAsset: allowGameAssetWithBodyParameters,
+      })
+    : undefined;
+  const [failedGameAssetId, setFailedGameAssetId] = useState<string>();
+  const gameAsset = resolvedGameAsset?.descriptor.id === failedGameAssetId ? undefined : resolvedGameAsset;
+
+  // A requested Danbaek game slot never falls through to legacy player_main.png. If the reviewed
+  // source is unavailable, the branches below draw the existing parametric CANON renderer.
+  const asset = gameAsset?.source ?? (gameAssetSlot ? undefined : resolveCharacterAsset(slot));
 
   // 성장 상태가 있으면 layered CANON Renderer로 그린다.
-  if (bodyParameters) {
+  if (bodyParameters && !gameAsset) {
     if (height <= 0) return null;
     return (
       <View style={[fill ? styles.bodyFill : styles.placeholder, { height }]}>
@@ -88,10 +107,10 @@ export function PlayerCharacter({
     // fill 모드는 Yoga가 박스 크기를 정하고 contain이 그 안에서 비율을 맞춘다 —
     // JS 측정값이 전혀 개입하지 않으므로 Android/웹이 같은 크기로 나온다.
     if (fill) {
-      return <Image source={asset} style={styles.imageFill} contentFit="contain" />;
+      return <Image source={asset} style={styles.imageFill} contentFit="contain" onError={() => setFailedGameAssetId(gameAsset?.descriptor.id)} />;
     }
     if (height <= 0) return null;
-    return <Image source={asset} style={[styles.image, { height }]} contentFit="contain" />;
+    return <Image source={asset} style={[styles.image, { height }]} contentFit="contain" onError={() => setFailedGameAssetId(gameAsset?.descriptor.id)} />;
   }
 
   if (height <= 0) return null;

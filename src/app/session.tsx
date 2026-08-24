@@ -1132,6 +1132,7 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
             <PlayerCharacter
               appearance={characterAppearance}
               slot="result"
+              gameAssetSlot={revealPhase}
               height={RESULT_CHARACTER_HEIGHT}
               bodyParameters={displayedBody}
             />

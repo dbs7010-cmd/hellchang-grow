@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "assetSet": "danbaek-game-assets-v1",
+  "canonVersion": 3,
+  "status": "APPROVED_V3_PRODUCTION",
+  "coordinateSpace": { "width": 512, "height": 512 },
+  "runtimePolicy": {
+    "approvedIndividualTransparentPngOnly": true,
+    "spriteSheetsAllowed": false,
+    "labeledImagesAllowed": false,
+    "generatedDraftsAllowed": false,
+    "missingOrInvalidFallback": "canon_parametric_v3",
+    "bodyParametersFallback": "canon_parametric_v3",
+    "motionFamilyCompatibility": "outer_transform_only"
+  },
+  "assets": [
+    { "id": "danbaek.game.idle.v1", "slot": "idle", "filename": "danbaek-game-idle-v1.png", "dimensions": { "width": 512, "height": 512 }, "anchor": { "x": 0.5, "y": 1 }, "pivot": { "x": 0.5, "y": 0.75 }, "boundingBox": { "x": 155, "y": 62, "width": 201, "height": 430 }, "approval": "approved", "fallback": "canon_parametric_v3" },
+    { "id": "danbaek.game.happy.v1", "slot": "happy", "filename": "danbaek-game-happy-v1.png", "dimensions": { "width": 512, "height": 512 }, "anchor": { "x": 0.5, "y": 1 }, "pivot": { "x": 0.5, "y": 0.75 }, "boundingBox": { "x": 141, "y": 62, "width": 230, "height": 430 }, "approval": "approved", "fallback": "canon_parametric_v3" },
+    { "id": "danbaek.game.ready.v1", "slot": "ready", "filename": "danbaek-game-ready-v1.png", "dimensions": { "width": 512, "height": 512 }, "anchor": { "x": 0.5, "y": 1 }, "pivot": { "x": 0.5, "y": 0.75 }, "boundingBox": { "x": 148, "y": 62, "width": 215, "height": 430 }, "approval": "approved", "fallback": "canon_parametric_v3" },
+    { "id": "danbaek.game.working.v1", "slot": "working", "filename": "danbaek-game-working-v1.png", "dimensions": { "width": 512, "height": 512 }, "anchor": { "x": 0.5, "y": 1 }, "pivot": { "x": 0.5, "y": 0.75 }, "boundingBox": { "x": 130, "y": 62, "width": 251, "height": 430 }, "approval": "approved", "fallback": "canon_parametric_v3" },
+    { "id": "danbaek.game.set_complete.v1", "slot": "set_complete", "filename": "danbaek-game-set-complete-v1.png", "dimensions": { "width": 512, "height": 512 }, "anchor": { "x": 0.5, "y": 1 }, "pivot": { "x": 0.5, "y": 0.75 }, "boundingBox": { "x": 141, "y": 62, "width": 230, "height": 430 }, "approval": "approved", "fallback": "canon_parametric_v3" },
+    { "id": "danbaek.game.resting.v1", "slot": "resting", "filename": "danbaek-game-resting-v1.png", "dimensions": { "width": 512, "height": 512 }, "anchor": { "x": 0.5, "y": 1 }, "pivot": { "x": 0.5, "y": 0.75 }, "boundingBox": { "x": 131, "y": 62, "width": 250, "height": 430 }, "approval": "approved", "fallback": "canon_parametric_v3" },
+    { "id": "danbaek.game.paused.v1", "slot": "paused", "filename": "danbaek-game-paused-v1.png", "dimensions": { "width": 512, "height": 512 }, "anchor": { "x": 0.5, "y": 1 }, "pivot": { "x": 0.5, "y": 0.75 }, "boundingBox": { "x": 81, "y": 326, "width": 350, "height": 166 }, "approval": "approved", "fallback": "canon_parametric_v3" },
+    { "id": "danbaek.game.complete.v1", "slot": "complete", "filename": "danbaek-game-complete-v1.png", "dimensions": { "width": 512, "height": 512 }, "anchor": { "x": 0.5, "y": 1 }, "pivot": { "x": 0.5, "y": 0.75 }, "boundingBox": { "x": 146, "y": 62, "width": 219, "height": 430 }, "approval": "approved", "fallback": "canon_parametric_v3" },
+    { "id": "danbaek.game.before.v1", "slot": "before", "filename": "danbaek-game-before-v1.png", "dimensions": { "width": 512, "height": 512 }, "anchor": { "x": 0.5, "y": 1 }, "pivot": { "x": 0.5, "y": 0.75 }, "boundingBox": { "x": 155, "y": 62, "width": 201, "height": 430 }, "approval": "approved", "fallback": "canon_parametric_v3" },
+    { "id": "danbaek.game.pump.v1", "slot": "pump", "filename": "danbaek-game-pump-v1.png", "dimensions": { "width": 512, "height": 512 }, "anchor": { "x": 0.5, "y": 1 }, "pivot": { "x": 0.5, "y": 0.75 }, "boundingBox": { "x": 130, "y": 62, "width": 251, "height": 430 }, "approval": "approved", "fallback": "canon_parametric_v3" },
+    { "id": "danbaek.game.after.v1", "slot": "after", "filename": "danbaek-game-after-v1.png", "dimensions": { "width": 512, "height": 512 }, "anchor": { "x": 0.5, "y": 1 }, "pivot": { "x": 0.5, "y": 0.75 }, "boundingBox": { "x": 155, "y": 62, "width": 201, "height": 430 }, "approval": "approved", "fallback": "canon_parametric_v3" },
+    { "id": "danbaek.game.celebration.v1", "slot": "celebration", "filename": "danbaek-game-celebration-v1.png", "dimensions": { "width": 512, "height": 512 }, "anchor": { "x": 0.5, "y": 1 }, "pivot": { "x": 0.5, "y": 0.75 }, "boundingBox": { "x": 141, "y": 62, "width": 230, "height": 430 }, "approval": "approved", "fallback": "canon_parametric_v3" }
+  ]
+}

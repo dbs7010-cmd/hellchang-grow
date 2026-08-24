@@ -242,6 +242,7 @@ export default function HomeScreen() {
               <PlayerCharacter
                 appearance={characterAppearance}
                 slot="home"
+                gameAssetSlot="idle"
                 height={characterHeight}
                 bodyParameters={bodyParameters}
                 fill
