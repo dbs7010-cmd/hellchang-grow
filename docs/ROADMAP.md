@@ -157,3 +157,21 @@ BODY STATE에서도 실제 캐릭터 그림/에셋, 애니메이션, 식단 화�
 - 세션 중 앱이 완전히 종료(kill)됐다가 재실행됐을 때의 복구 경험 실기기 검증 (현재는 로컬 저장 기반 복구 로직만 구현, 실제 iOS/Android 백그라운드 kill 정책까지는 검증 못함)
 - 실제 서비스 연동 착수 여부는 별도 논의 후 결정 (LLM API, 광고 SDK, 결제 SDK, 실제 추천 서버 등)
 - 위 항목들은 모두 WEIGHT CORE로 잠긴 운동 CORE 구조 위에 추가하는 것을 전제로 한다 — 구조 자체를 다시 설계하지 않는다
+
+### M3 구현 현황 메모 (2026-08-25 조사)
+
+**위 항목을 바꾸거나 지우지 않는다.** 아래는 "지금 저장소에 실제로 무엇이 있는가"만 적은 상태 스냅샷이다 — 계획 변경이 아니라, 다음 작업을 고를 때 이미 된 것을 다시 고르지 않기 위한 메모다. 원본은 코드와 verify 스크립트다.
+
+| M3 항목 | 현재 상태 | 근거 |
+| --- | --- | --- |
+| 캐릭터 아트 반영 | **반영됨** — CANON 렌더러가 BodyParameters로 그린다 | `ec40521`, `npm run verify:character-body` |
+| 트레이너 아트 반영 | **미완** — `portraitPlaceholder`가 여전히 이모지 | `src/config/trainers.ts` |
+| 세트 완료/PR 연출 | **부분** — 반응/결과 연출은 있고 실제 애니메이션 클립은 없다 | `5a2ae72`, `0dfbe4e`, `verify:workout-character-motion`, `verify:growth-reveal` |
+| AI PT 컨텍스트 연결 | **구현됨** — 최근 기록/PR/루틴/Exercise/진행 중 세션이 압축 컨텍스트로 전달된다 | `src/utils/pt-context.ts`, `src/services/trainer/*`, `npm run verify:pt` |
+| "[이 루틴으로 운동 시작]" | **미착수** — AI가 구조화된 루틴을 돌려주는 계약이 없다. 제품 설계 + LLM 연결 결정이 선행돼야 한다([[decision-log]] `DEC-003`) | `src/app/ai-chat.tsx`, `src/services/trainer/offline-trainer-service.ts` |
+| 대화 로그 세션 간 유지 | **결정 미정 그대로** — 로컬 state뿐 | `src/components/trainer/ai-pt-panel.tsx` |
+| 히스토리 신체 지표 | **반영됨** — 체지방률/골격근량 입력과 표시가 있다(전후 비교 확장은 별개) | `src/app/(tabs)/history.tsx` |
+| 알림/리마인더 | **부분** — 앱 안 알림 화면은 있고, 실제 푸시/리마인더는 없다(`expo-notifications` 미설치) | `src/app/notifications.tsx`, `package.json` |
+| PR 판정 확장 | **미착수** — 여전히 "이전보다 높은 중량" 단순 기준 | `src/utils/exercise-history.ts` |
+| kill 복구 실기기 검증 | **절차만 확보** — 재현 가능한 수동 절차가 있고 아직 수행되지 않았다 | `scripts/verify-storage-recovery.ts` 하단 |
+| 실제 서비스 연동 | **경계까지만** — remote PT 어댑터/entitlement/광고 어댑터 경계는 있고 실제 연결은 없다. `DEC-003` 유지 | `b2a3f65`, `10e4169`, `4b23f17` |

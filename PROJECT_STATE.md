@@ -7,7 +7,7 @@
 ## SNAPSHOT
 
 - branch: `feat/v1-monetization-foundation`
-- HEAD: `8444a0f` — fix(core-loop): refuse to resume an unreadable completion receipt
+- HEAD: `c6cff28` — docs(command-center): log DEC-010 and close the storage-shape line
   (이 문서를 담은 상태 갱신 커밋이 그 위에 올라간다)
 - last_updated: 2026-08-25
 - last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 14종 전부 PASS(933개 단언)
@@ -54,6 +54,7 @@
 - `bc2e90c` kill된 세션의 저장값을 방어적으로 읽는다(`asStoredSession`) + 실기기 kill 수동 절차. `verify:storage` 68 → 95개
 - `4968d2c` streak / pass / trainer-usage / referral / event 다섯 키의 모양 검사. 공용 조각(`asStoredCount` 등)으로 조합. `verify:storage` 95 → 139개
 - `8444a0f` 믿을 수 없는 완료 receipt는 버리지 않고 멈춘다([DECISION_LOG.md](DECISION_LOG.md) `DEC-010`). `verify:storage` 139 → 168개
+- ROADMAP M3 구현 현황 조사 — 문서와 코드의 어긋남을 근거와 함께 `docs/ROADMAP.md` 하단 메모로 기록(항목 자체는 수정하지 않음)
 - `b2a3f65` V1 entitlement foundation — 단일 권리 판정 소스 `resolveEntitlement()`, 만료 강제, `verify:entitlement` 55개
 - `ebd5784` 휴식 중 이탈 확인 표시 + stale 종료 확인 정리 (Android 실기기 재현 버그)
 - `d6c3910` 세트 완료 피드백을 휴식 전환 전에 보이도록 유지
@@ -64,15 +65,21 @@
 
 **없음 — verified checkpoint 직후다.** 진행 중인 주 작업 단위가 없다.
 
-직전 BLOCKED 항목(`session-completion` receipt 방침)은 사용자 승인 후 `8444a0f`로 구현됐다
-(`DEC-010`). 저장값 모양 검사 라인은 이것으로 닫혔다 — 남은 것은 자동화가 불가능한
-실기기 확인뿐이다.
+저장값 모양 검사 라인은 `8444a0f`로 닫혔다. 이번 사이클은 ROADMAP M3에서 다음 확정 작업을
+고르려고 **조사만** 했다 — 결과는 아래 NEXT다. 코드 변경 없음.
 
 ## NEXT
 
-**저장 계층 다음 단계는 사용자 확인을 기다린다.** 자동 검증으로 더 가져갈 수 있는 것이 남아 있지 않다 — 저장값 모양 검사는 모든 키에서 닫혔고(`verify:storage` 168개), 남은 것은 실기기 확인과 제품 방향 결정이다.
+**AI가 자율로 집을 수 있는 확정 작업이 M3에 남아 있지 않다 — 다음 항목의 선택은 사용자 몫이다.**
 
-다음에 "계속"이 오면 `docs/ROADMAP.md` M3에서 **확정 항목** 하나를 골라 조사부터 시작한다 — 가장 가까운 것은 "AI PT가 최근 WorkoutRecord/Routine/Exercise DB/이전 기록을 컨텍스트로 활용" 계열이며, 이미 `utils/pt-context.ts`(`verify:pt` 58개)가 있으므로 그 공백을 조사하는 것이 시작점이다. 등급 **GUARDED**. 제품 방향이 갈리는 항목(대화 로그 보존 여부 등)은 APPROVAL REQUIRED로 남긴다.
+조사 결과(근거는 `docs/ROADMAP.md` 하단 "M3 구현 현황 메모"): AI PT 컨텍스트 연결과 히스토리 신체 지표는 **이미 구현돼 있고**, 나머지는 셋 중 하나다.
+- **에셋이 필요**: 트레이너 아트, 실제 애니메이션 클립 → 승인/자산 없이는 시작할 수 없다
+- **제품 결정이 필요**(APPROVAL REQUIRED): "[이 루틴으로 운동 시작]"(AI가 구조화된 루틴을 돌려주는 계약 + `DEC-003`의 LLM 미연결 방침과 충돌), 대화 로그 세션 간 유지, PR 판정 확장, 실제 서비스 연동 착수
+- **사용자만 가능**: 실기기 kill 절차 수행, 실제 푸시 알림 도입 여부(`expo-notifications` 의존성 추가 = APPROVAL REQUIRED)
+
+즉 다음 "계속"은 **어느 항목을 열 것인지 지정**이 있어야 진행된다. 지정이 오면 그 항목의 등급에 맞춰(GUARDED면 강화 검증까지) 자율 실행한다.
+
+push는 사용자가 명시적으로 요청하기 전까지 하지 않는다.
 
 **실기기 kill 검증(사용자 작업)**: `scripts/verify-storage-recovery.ts` 하단의 수동 절차 6단계를 실기기에서 1회 수행하면 ROADMAP M3의 해당 항목이 닫힌다. AI가 대신할 수 없다.
 
