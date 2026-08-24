@@ -106,3 +106,31 @@ Status 값: `PROPOSED` · `APPROVED` · `LOCKED` · `SUPERSEDED` · `CONFLICT`
 - **Do not reinterpret**: 어느 한쪽을 "최신이니까" 또는 "구현이 이미 있으니까"로 자동 채택하지 않는다. 사용자 승인 없이 문서도 코드도 수정하지 않는다.
 - **Supersedes**: —
 - **Evidence**: 위 문서들의 해당 문단 (인용 위치는 [PROJECT_STATE.md](PROJECT_STATE.md) `CONFLICTS` 참조)
+
+---
+
+## DEC-008 — FAILURE는 재실행 가능한 근거가 있을 때만 RESOLVED
+
+- **Status**: APPROVED
+- **Date**: 2026-08-25 (COMMAND CENTER v0.2)
+- **Decision**: `FAILURE_LOG.md` 항목을 RESOLVED로 올리려면 저장소에 남아 다시 실행할 수 있는 근거가 있어야 한다. 우선순위는 ① 자동 검증 명령 ② 결정적 build/type/static 검증 ③ 재현 가능한 수동 검증 절차. ①이 합리적으로 가능한데 1회성 probe만 있으면 완전한 RESOLVED가 아니다.
+- **Reason**: v0.1에서 `FAIL-007`의 근거가 1회성 probe였다 — 다시 확인하려면 매번 손으로 만들어야 했고 회귀를 잡아 주지 못했다. 상태 문서의 "검증됨"이 재실행 가능해야 의미가 있다.
+- **Authority**: 2 (사용자 지시)
+- **Affected areas**: `FAILURE_LOG.md`, `CLAUDE.md` AI COMMAND CENTER v0.2, `scripts/verify-*.ts`, `package.json`
+- **Do not reinterpret**: 모든 실패에 테스트 파일을 강제로 만들지 않는다. UI/실기기/외부 SDK처럼 자동화가 비합리적인 경우 ③으로 충분하다 — 과설계는 이 결정의 목적이 아니다.
+- **Supersedes**: —
+- **Evidence**: `CLAUDE.md`의 FAILURE EVIDENCE RULE, `scripts/verify-monetization.ts`(commit `4b23f17`), `FAILURE_LOG.md` `FAIL-007`
+
+---
+
+## DEC-009 — 위험도 기반 자율 실행 권한 (AUTONOMY LEVELS)
+
+- **Status**: APPROVED
+- **Date**: 2026-08-25 (COMMAND CENTER v0.2)
+- **Decision**: 작업을 SAFE / GUARDED / APPROVAL REQUIRED로 나눈다. SAFE는 재승인 없이 조사→최소 변경→검증→재검증→상태 기록까지 자율 실행한다. GUARDED는 실행하되 영향 범위 조사 + 관련 verification + typecheck/lint + 회귀 검증 + diff 검토를 모두 붙이고, 안전한 범위에서 검증 실패를 해결하지 못하면 STOP한다. APPROVAL REQUIRED는 실행하지 않고 문제/영향/추천안/필요한 승인만 보고하고 STOP한다. "계속 / 진행 / continue" 같은 일반 지시는 COMMAND CENTER를 읽어 CURRENT/NEXT를 복구한 뒤 이 등급에 따라 처리한다.
+- **Reason**: 저위험 작업마다 승인을 다시 받는 것이 실제 병목이었다. 동시에 LOCKED/CANON/제품 방향/데이터 손실처럼 되돌리기 어려운 것은 사람의 결정으로 남겨야 한다. 등급이 애매하면 한 단계 높게 본다.
+- **Authority**: 2 (사용자 지시)
+- **Affected areas**: `CLAUDE.md` AI COMMAND CENTER v0.2 (AUTONOMY LEVELS / CONTINUATION RULE / STOP CONDITIONS), `PROJECT_STATE.md`
+- **Do not reinterpret**: 자율 실행은 검증 면제가 아니다 — SAFE도 검증하고 상태를 기록한다. CURRENT가 없을 때 EXPERIMENTAL 항목이나 실험 아이디어를 확정 작업처럼 자동 선택하지 않는다. `CONF-001`은 APPROVAL REQUIRED이며 이 결정으로 열리지 않는다.
+- **Supersedes**: v0.1의 암묵적 "매 단계 승인" 관행 (v0.1 구조 자체는 그대로 유효하다)
+- **Evidence**: `CLAUDE.md`의 AUTONOMY LEVELS / CONTINUATION RULE / STOP CONDITIONS 섹션

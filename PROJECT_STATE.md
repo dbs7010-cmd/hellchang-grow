@@ -7,10 +7,10 @@
 ## SNAPSHOT
 
 - branch: `feat/v1-monetization-foundation`
-- HEAD: `034fa55` — fix(storage): survive corrupted stored values instead of a blank screen
-  (이 문서를 담은 COMMAND CENTER 체크포인트 커밋이 그 위에 올라간다)
+- HEAD: `4b23f17` — test(monetization): make the rewarded-ad boundary re-runnable
+  (이 문서를 담은 COMMAND CENTER v0.2 커밋이 그 위에 올라간다)
 - last_updated: 2026-08-25
-- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 13종 전부 PASS(794개 단언, 신규 `verify:storage` 포함)
+- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 14종 전부 PASS(833개 단언, 신규 `verify:monetization` 포함)
 - worktree: 추적 대상 clean. 남은 untracked는 EXPERIMENTAL 항목뿐이다 (아래 WORKTREE 참조)
 
 ## AUTHORITY ORDER
@@ -39,6 +39,7 @@
 | V1 홈 화면 visual canon | commit `c3c05bf` |
 | V1에서 외부 서비스 미연결 (LLM / 광고 SDK / 인앱결제 / 추천 서버) | `CLAUDE.md`, `docs/ROADMAP.md` 각 마일스톤 말미 |
 | Git 안전 규칙 / 검증 선택 규칙 / CANON 가드 / 에셋 통합 규칙 | `.agents/skills/safe-git-workflow`, `helchang-verify`, `danbaek-canon-guard`, `asset-integration` |
+| 자율 실행 등급 / FAILURE 근거 규칙 / 일반 지시("계속") 처리 / STOP 조건 | `CLAUDE.md` AI COMMAND CENTER v0.2, [DECISION_LOG.md](DECISION_LOG.md) `DEC-008` `DEC-009` |
 
 ## DONE
 
@@ -47,6 +48,8 @@
 - ROADMAP 마일스톤 M0 ~ BODY STATE 완료 (WEIGHT CORE / WORKOUT CORE / GROWTH ENGINE / BODY STATE)
 - `10e4169` 광고 보상 경계 — 출시 빌드에 보상을 주는 어댑터가 없다. `FAIL-007` RESOLVED
 - `034fa55` 저장값 손상 → 빈 화면 대신 복구. `utils/stored-state` 단일 원본 + `verify:storage` 68개. `FAIL-008` RESOLVED
+- `689f8b7` AI COMMAND CENTER v0.1 (PROJECT_STATE / DECISION_LOG / FAILURE_LOG + CLAUDE.md 연결부)
+- `4b23f17` 광고 경계 회귀 검증 `verify:monetization` 39개 — `FAIL-007`의 1회성 probe 근거를 재실행 가능한 명령으로 승격
 - `b2a3f65` V1 entitlement foundation — 단일 권리 판정 소스 `resolveEntitlement()`, 만료 강제, `verify:entitlement` 55개
 - `ebd5784` 휴식 중 이탈 확인 표시 + stale 종료 확인 정리 (Android 실기기 재현 버그)
 - `d6c3910` 세트 완료 피드백을 휴식 전환 전에 보이도록 유지
@@ -57,12 +60,12 @@
 
 **없음 — verified checkpoint 직후다.** 진행 중인 주 작업 단위가 없다.
 
-직전 작업(V1 수익화/저장 안전 경계)은 `10e4169` + `034fa55`로 커밋됐고 DONE으로 옮겼다.
-다음 작업은 NEXT를 따른다.
+COMMAND CENTER v0.2(회귀 근거 + 자율 실행 등급)까지 커밋됐다. 다음 작업은 NEXT를 따르며,
+일반 지시("계속")로도 그렇게 동작한다 — `CLAUDE.md`의 CONTINUATION RULE.
 
 ## NEXT
 
-`FAIL-007`의 1회성 probe를 `scripts/verify-monetization.ts`(`npm run verify:monetization`) 회귀 검증으로 승격한다 — 어댑터 선택(`__DEV__` 양쪽), 보상 게이트(`granted`/`rewardUnits`/예외/저장 실패), 광고가 entitlement를 만들지 않음을 저장소에 남는 검증으로 고정한다. 함께 COMMAND CENTER 규칙에 "실행 가능한 명령이 없으면 FAILURE를 RESOLVED로 올리지 않는다"를 넣는다(v0.2 1순위).
+**세션 kill 후 운동 세션 복구를 재현 가능한 근거로 만든다** (ROADMAP M3의 확정 항목: "세션 중 앱이 완전히 종료(kill)됐다가 재실행됐을 때의 복구 경험 실기기 검증"). 등급 **GUARDED** — 공용 context와 세션 저장 경계를 읽는다. 먼저 `recoverStaleSession` / `resumeIfRecentBackground` / `workout-session-repository`의 현재 계약을 조사하고, `verify:session` / `verify:core-loop`이 이미 덮는 범위를 확인한 뒤 공백만 채운다. 자동화가 비합리적인 실기기 부분은 `DEC-008`의 ③(재현 가능한 수동 절차)로 남긴다. LOCKED된 세션 엔진은 재설계하지 않는다.
 
 push는 사용자가 명시적으로 요청하기 전까지 하지 않는다.
 
@@ -106,5 +109,8 @@ None.
 - **ChatGPT** — 총괄, 계획, 우선순위, 작업 분해, 최종 판정.
 - **Claude Code** — 기본 주력 구현, 저장소 조사, 코드 변경, 테스트.
 - **Codex** — 고위험 변경의 독립 검증, Claude가 해결하지 못한 문제의 second opinion. 필요할 때만.
+
+자율 실행 등급(SAFE / GUARDED / APPROVAL REQUIRED)과 일반 지시 처리 규칙은 `CLAUDE.md`의
+AI COMMAND CENTER v0.2에 있다 — 여기에 복사하지 않는다.
 
 같은 작업을 Claude와 Codex에 이유 없이 중복 수행시키지 않는다.

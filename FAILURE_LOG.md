@@ -106,7 +106,7 @@ Status 값: `OPEN` · `RESOLVED` · `AVOID` · `UNKNOWN`
 
 ## FAIL-007 — mock 보상형 광고가 출시 빌드에서도 이용권을 줄 수 있었다
 
-- **Status**: RESOLVED (2026-08-25 검증, commit `10e4169`. 단, 저장소 내 회귀 검증 스크립트는 아직 없다 — [PROJECT_STATE.md](PROJECT_STATE.md) NEXT)
+- **Status**: RESOLVED (2026-08-25, commit `10e4169` + 회귀 검증 `4b23f17`)
 - **Date**: 2026-08-25 기록 / 2026-08-25 검증
 - **Context**: `DEC-003`에 따라 광고 SDK는 연결하지 않고 mock만 있다. 그 mock이 즉시 보상을 준다.
 - **Symptom**: 광고를 실제로 재생할 수 없는 빌드에서 버튼 한 번으로 유료 기능 이용권을 얻을 수 있다.
@@ -117,9 +117,9 @@ Status 값: `OPEN` · `RESOLVED` · `AVOID` · `UNKNOWN`
   - `npx tsc --noEmit` PASS / `npm run lint` PASS / `npm run verify:entitlement` PASS(55개) / `npm run verify:pt` PASS
   - 저장소 소스를 그대로 실행한 read-only probe (scratchpad, 저장소 무변경): `__DEV__=false` → `UnavailableRewardedAdService` / `isProviderAvailable:false` / `isAdReady:false` / `showRewardedAd → {granted:false, rewardUnits:0}`. `__DEV__=true` → `MockRewardedAdService` / `{granted:true, rewardUnits:1}`
   - 코드 기준 확인: `showRewardedAd` 호출부는 `app-data-context.tsx`의 `watchRewardedAd` 하나뿐이고, 실패·예외·저장 실패는 전부 `false`를 돌려주며 이용권을 늘리지 않는다. 광고 경로는 `trainerUsage`만 만지고 `entitlement`/`capabilities`를 만지지 않는다 — entitlement는 `resolveEntitlement({ allowDevProvider: __DEV__ })` 세 호출부에서만 나온다
-  - **커버리지 공백**: 위 probe는 1회성이며 저장소에 남는 회귀 검증이 아니다. `verify:monetization` 계열 스크립트는 존재하지 않는다
+  - ~~**커버리지 공백**: 위 probe는 1회성이며 저장소에 남는 회귀 검증이 아니다~~ → **해소(v0.2)**: `npm run verify:monetization`(`scripts/verify-monetization.ts`, 39개, commit `4b23f17`)이 같은 사실을 저장소 안에서 매번 다시 검증한다 — 빌드별 어댑터 선택, unavailable 어댑터의 무보상, 미승인/0/음수/NaN/Infinity/소수/결과 없음일 때 이용권 불변, 승인된 만큼만 증가, 보상 결과에 등급 필드 없음, production에서 dev provider 불신, 출시 빌드 전체 경로. 검증 가능성을 위해 `selectRewardedAdService(isDevBuild)`와 `resolveRewardedAdGrant(result)` 두 순수 함수만 추출했고 동작은 그대로다
 - **Do not repeat**: 없는 외부 서비스를 "성공한 것처럼" 반환하는 어댑터를 production 경로에 두지 말 것. mock은 `__DEV__` 경계 안에서만 선택한다.
-- **Retry condition**: 실제 AdMob 어댑터가 붙으면 이 자리의 구현만 교체한다. 그때 위 probe와 같은 검증을 다시 돌린다.
+- **Retry condition**: 실제 AdMob 어댑터가 붙으면 이 자리의 구현만 교체하고 `npm run verify:monetization`을 다시 돌린다.
 - **Evidence**: working tree `src/services/ads/index.ts`, `src/services/ads/unavailable-rewarded-ad-service.ts`, `src/services/ads/mock-rewarded-ad-service.ts`, `src/context/app-data-context.tsx` `watchRewardedAd`, `src/app/ai-chat.tsx` (uncommitted) + 2026-08-25 probe 출력
 
 ---

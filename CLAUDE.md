@@ -65,3 +65,39 @@ WEIGHT CORE 마일스톤([[roadmap]])에서 V1 운동 CORE 구조를 최종 확�
 - Codex — 고위험 변경의 독립 검증, Claude가 해결하지 못한 문제의 second opinion (필요할 때만)
 
 같은 작업을 Claude와 Codex에 이유 없이 중복 수행시키지 않는다.
+
+## AI COMMAND CENTER v0.2 — 근거와 자율 실행
+
+v0.1(위 섹션)의 읽는 순서와 종료 전 절차는 그대로다. 여기에 두 가지를 더한다.
+
+### FAILURE EVIDENCE RULE
+
+`FAILURE_LOG.md`의 항목을 `RESOLVED`로 올리려면 **저장소에 남아 다시 실행할 수 있는 근거**가 있어야 한다. 우선순위:
+
+1. 자동 검증 명령 (`npm run verify:*`) — 가장 강한 근거
+2. 결정적인 build / type / static 검증 (`npx tsc --noEmit`, `npm run lint`)
+3. 재현 가능한 수동 검증 절차 (무엇을, 어떤 순서로, 무엇을 보면 통과인지)
+
+1이 합리적으로 가능한데 1회성 probe만 있으면 완전한 RESOLVED가 아니다 — 상태에 그 공백을 적고 승격을 NEXT로 남긴다. 반대로 **모든 실패에 테스트 파일을 만들지 않는다.** UI, 실기기, 외부 SDK처럼 자동화가 비합리적인 경우 3번으로 충분하다.
+
+### AUTONOMY LEVELS
+
+작업의 위험도로 정한다. 등급이 애매하면 한 단계 높게 본다.
+
+**SAFE — 재승인 없이 실행한다.** 저장소 조사, 코드 검색, 기존 테스트/typecheck/lint 실행, 기존 규칙을 보존하는 작은 버그 수정, 테스트·검증 추가, 영향 범위가 명확하고 검증 가능한 dead code 정리, `PROJECT_STATE`/`FAILURE_LOG` 갱신, 이미 승인된 범위 안의 반복 수정과 재검증. 조사 → 최소 변경 → 검증 → 실패 시 원인 분석 → 안전 범위 내 수정 → 재검증 → 상태 기록까지 자율로 진행한다.
+
+**GUARDED — 실행하되 강한 검증을 붙인다.** 여러 production 파일 변경, shared utility 변경, persistence/storage 변경, entitlement/monetization 변경, 공용 context/state 변경, 기존 API contract 변경, 여러 기능에 영향을 줄 수 있는 refactor. 변경 전 영향 범위 조사 → 최소 변경 → 관련 verification → typecheck/lint → 회귀 검증 → diff 검토를 모두 거친다. **검증 실패를 안전한 범위에서 해결하지 못하면 STOP.**
+
+**APPROVAL REQUIRED — 실행하지 않는다.** LOCKED/CANON 변경, 제품 방향 변경, 미해결 CONFLICT 해결, 대규모 architecture 변경, dependency 추가/교체, destructive migration, 사용자 데이터 삭제 가능 변경, `reset`/`clean`/force push/history rewrite, production 배포, 외부 비용 발생, secret/credential 변경, 보안 정책 약화. 이 범주에서는 **문제 / 영향 / 추천안 / 필요한 승인**만 보고하고 STOP.
+
+### CONTINUATION RULE
+
+"계속 / 진행 / 알아서 진행 / 다음 / 이어서 해 / continue" 같은 일반 지시에는 세부 명령이 없어도 COMMAND CENTER를 읽고 CURRENT/NEXT를 복구한 뒤 진행한다. SAFE는 자율 실행, GUARDED는 이미 승인된 CURRENT/NEXT 범위라면 자율 실행 + 강화 검증, APPROVAL REQUIRED는 STOP 후 승인 요청.
+
+CURRENT가 없으면 `PROJECT_STATE.md`의 NEXT에서 가장 가까운 실행 가능한 작업 **하나**를 고른다. NEXT도 없으면 `docs/ROADMAP.md`의 가장 가까운 미완료 확정 작업을 조사한다. **실험 아이디어를 확정 작업처럼 자동 선택하지 않는다** (`PROJECT_STATE`의 EXPERIMENTAL 포함).
+
+### STOP CONDITIONS
+
+다음에만 사용자에게 돌아온다: ① APPROVAL REQUIRED 발생, ② 기존 결정과 충돌, ③ 검증 실패를 안전한 범위에서 해결 불가, ④ 요구사항이 실제로 모호해 구현 방향이 둘 이상이고 제품 결과가 달라짐, ⑤ 데이터 손실 위험, ⑥ 비용 발생, ⑦ credential/secret 필요, ⑧ 작업 목표 완료.
+
+"다음 작업을 진행해도 될까요?"라는 이유만으로 멈추지 않는다.
