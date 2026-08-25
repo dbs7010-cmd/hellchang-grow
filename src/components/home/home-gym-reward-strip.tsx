@@ -10,15 +10,19 @@ import {
   HomeGymState,
   STARTER_RACK_COST,
 } from '@/data/home-gym-repository';
+import { getWorkoutRecords } from '@/data/workout-repository';
 
-export function HomeGymRewardStrip({ completedWorkoutCount }: { completedWorkoutCount: number }) {
+export function HomeGymRewardStrip() {
   const [state, setState] = useState<HomeGymState | null>(null);
+  const [completedWorkoutCount, setCompletedWorkoutCount] = useState(0);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    getHomeGymState().then((loaded) => {
-      if (!cancelled) setState(loaded);
+    Promise.all([getHomeGymState(), getWorkoutRecords()]).then(([loaded, records]) => {
+      if (cancelled) return;
+      setState(loaded);
+      setCompletedWorkoutCount(records.length);
     });
     return () => {
       cancelled = true;
