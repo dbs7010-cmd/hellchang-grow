@@ -149,3 +149,17 @@ Status 값: `PROPOSED` · `APPROVED` · `LOCKED` · `SUPERSEDED` · `CONFLICT`
 - **Supersedes**: —
 - **Evidence**: commit `8444a0f`, `npm run verify:storage`(168개 중 receipt 판정 29개), `npm run verify:core-loop`(85개 회귀)
 - **승인 경위**: [PROJECT_STATE.md](PROJECT_STATE.md) BLOCKED에 문제/영향/추천안/필요한 승인을 올린 직후 사용자가 "계속"으로 진행을 지시했다 — 추천안 그대로 채택한 것으로 해석했다. 다른 방침을 원하면 이 항목을 SUPERSEDED로 바꾸고 다시 결정한다.
+
+---
+
+## DEC-011 — PR은 두 종류다: 최고 중량 갱신 + 같은 중량 최고 횟수 갱신
+
+- **Status**: APPROVED
+- **Date**: 2026-08-25
+- **Decision**: PR 판정을 `kind: 'weight' | 'reps'` 두 종류로 확장한다. `weight`는 기존 기준 그대로(과거 최고 중량 초과, 동률 아님), `reps`는 **전에 해본 적 있는 같은 중량에서** 그때보다 많은 횟수다. 처음 쓰는 중량에서는 rep PR이 나지 않고, 한 운동에서 둘이 겹치면 `weight`만 남는다. 중량 0/미입력은 하나의 맨몸 구간으로 묶는다. XP는 `AppConfig.passXpPerPr`(15) / `passXpPerRepPr`(10)에서 온다.
+- **Reason**: 중량 기준 하나만으로는 풀업/푸쉬업처럼 무게가 늘지 않는 종목에 영원히 PR이 없다. 같은 무게로 더 많이 드는 것은 실제 성장인데 앱이 아무 말도 하지 않았다. 동시에 "새 무게마다 PR"이 되면 PR이라는 말이 값을 잃으므로 경계를 좁게 잡았다.
+- **Authority**: 2 (사용자가 CURRENT로 승인)
+- **Affected areas**: `src/utils/exercise-history.ts`(detectPRs / listPRs / countPeriodPRs / describePr*), `src/utils/workout-session-result.ts`, `src/context/app-data-context.tsx`(XP), `src/utils/pt-context.ts`, `src/app/session.tsx`, `src/config/app-config.ts`, `src/types/{growth,session-completion}.ts`, `docs/PRODUCT_SPEC.md` 15장, `docs/ARCHITECTURE.md` 5.5-A/5.5-B
+- **Do not reinterpret**: **1RM 추정은 PR 판정에 쓰지 않는다** — 제품 기획 15장의 "단순하고 모호하지 않은 경우만"이 그대로 유효하다(`utils/growth-calculation.ts`의 1RM은 성장 SP 전용이며 PR과 무관하다). 판정 규칙을 화면이나 결과 빌더에 복제하지 않는다 — `detectPRs` / `listPRs` 두 함수가 원본이고 `countPeriodPRs`는 `listPRs`를 센다. XP 숫자는 config에서만 바꾼다.
+- **Supersedes**: PR을 "이전보다 높은 중량"만으로 판정하던 기존 규칙(확장이며 기존 판정은 그대로 유지된다)
+- **Evidence**: commit `6999edf`, `npm run verify:weight-core`(88개 중 rep PR 19개), `npm run verify:workout-core`, `npm run verify:pt`, `npm run verify:core-loop`

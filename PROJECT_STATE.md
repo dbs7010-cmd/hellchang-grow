@@ -7,10 +7,11 @@
 ## SNAPSHOT
 
 - branch: `feat/v1-monetization-foundation`
-- HEAD: `c6cff28` — docs(command-center): log DEC-010 and close the storage-shape line
+- HEAD: `6999edf` — feat(pr): count a rep PR, not just a heavier lift
   (이 문서를 담은 상태 갱신 커밋이 그 위에 올라간다)
 - last_updated: 2026-08-25
-- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 14종 전부 PASS(933개 단언)
+- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 14종 전부 PASS(952개 단언)
+- remote: `origin/feat/v1-monetization-foundation` — 사용자 승인 하에 fast-forward push (force 금지)
 - worktree: 추적 대상 clean. 남은 untracked는 EXPERIMENTAL 항목뿐이다 (아래 WORKTREE 참조)
 
 ## AUTHORITY ORDER
@@ -55,6 +56,7 @@
 - `4968d2c` streak / pass / trainer-usage / referral / event 다섯 키의 모양 검사. 공용 조각(`asStoredCount` 등)으로 조합. `verify:storage` 95 → 139개
 - `8444a0f` 믿을 수 없는 완료 receipt는 버리지 않고 멈춘다([DECISION_LOG.md](DECISION_LOG.md) `DEC-010`). `verify:storage` 139 → 168개
 - ROADMAP M3 구현 현황 조사 — 문서와 코드의 어긋남을 근거와 함께 `docs/ROADMAP.md` 하단 메모로 기록(항목 자체는 수정하지 않음)
+- `6999edf` PR 판정 확장 — 최고 중량 + 같은 중량 최고 횟수(맨몸 포함) 두 종류([DECISION_LOG.md](DECISION_LOG.md) `DEC-011`). `verify:weight-core` 69 → 88개
 - `b2a3f65` V1 entitlement foundation — 단일 권리 판정 소스 `resolveEntitlement()`, 만료 강제, `verify:entitlement` 55개
 - `ebd5784` 휴식 중 이탈 확인 표시 + stale 종료 확인 정리 (Android 실기기 재현 버그)
 - `d6c3910` 세트 완료 피드백을 휴식 전환 전에 보이도록 유지
@@ -65,16 +67,18 @@
 
 **없음 — verified checkpoint 직후다.** 진행 중인 주 작업 단위가 없다.
 
-저장값 모양 검사 라인은 `8444a0f`로 닫혔다. 이번 사이클은 ROADMAP M3에서 다음 확정 작업을
-고르려고 **조사만** 했다 — 결과는 아래 NEXT다. 코드 변경 없음.
+**없음 — PR 판정 확장(`6999edf`)이 끝났다.** 사용자가 CURRENT로 승인한 작업이 완료돼 DONE으로
+옮겼고, 문서(PRODUCT_SPEC 15장 / ARCHITECTURE / ROADMAP 메모)도 같은 커밋에서 맞췄다.
 
 ## NEXT
 
-**AI가 자율로 집을 수 있는 확정 작업이 M3에 남아 있지 않다 — 다음 항목의 선택은 사용자 몫이다.**
+**다음 항목의 선택은 사용자 몫이다 — M3에 AI가 자율로 집을 수 있는 확정 작업이 남아 있지 않다.**
+
+PR 판정 확장이 닫히면서 순수 함수 영역에서 자동 검증으로 가져갈 수 있는 작업은 소진됐다.
 
 조사 결과(근거는 `docs/ROADMAP.md` 하단 "M3 구현 현황 메모"): AI PT 컨텍스트 연결과 히스토리 신체 지표는 **이미 구현돼 있고**, 나머지는 셋 중 하나다.
 - **에셋이 필요**: 트레이너 아트, 실제 애니메이션 클립 → 승인/자산 없이는 시작할 수 없다
-- **제품 결정이 필요**(APPROVAL REQUIRED): "[이 루틴으로 운동 시작]"(AI가 구조화된 루틴을 돌려주는 계약 + `DEC-003`의 LLM 미연결 방침과 충돌), 대화 로그 세션 간 유지, PR 판정 확장, 실제 서비스 연동 착수
+- **제품 결정이 필요**(APPROVAL REQUIRED): "[이 루틴으로 운동 시작]"(AI가 구조화된 루틴을 돌려주는 계약 + `DEC-003`의 LLM 미연결 방침과 충돌), 대화 로그 세션 간 유지, 실제 서비스 연동 착수
 - **사용자만 가능**: 실기기 kill 절차 수행, 실제 푸시 알림 도입 여부(`expo-notifications` 의존성 추가 = APPROVAL REQUIRED)
 
 즉 다음 "계속"은 **어느 항목을 열 것인지 지정**이 있어야 진행된다. 지정이 오면 그 항목의 등급에 맞춰(GUARDED면 강화 검증까지) 자율 실행한다.
