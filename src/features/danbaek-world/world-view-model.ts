@@ -1,7 +1,7 @@
 import type { DanbaekLearningProfile, MovementFamily } from '@/types/danbaek-contract';
 import { runDanbaekAdventure } from '@/features/danbaek-world/adventure-runner';
 import { DanbaekWorldProofStages } from '@/features/danbaek-world/proof-stages';
-import { buildDanbaekWorldBlockPresentation } from '@/features/danbaek-world/block-presentation';
+import { presentDanbaekWorldBlock } from '@/features/danbaek-world/presentation';
 
 export type DanbaekWorldSceneState =
   | {
@@ -18,7 +18,7 @@ export type DanbaekWorldSceneState =
       clearedStageIds: string[];
       actionLabel: string;
       recommendedMovementFamily: MovementFamily;
-      specificExerciseId?: string;
+      specificExerciseId: string | null;
     };
 
 /** Pure WORLD-side projection for UI. APP supplies learning; WORLD never mutates it. */
@@ -36,7 +36,7 @@ export function buildDanbaekWorldScene(
     };
   }
 
-  const presentation = buildDanbaekWorldBlockPresentation(run.block!);
+  const presentation = presentDanbaekWorldBlock(run.block!);
   return {
     state: 'blocked',
     title: presentation.title,
