@@ -8,6 +8,7 @@ import {
   availableHomeGymCoins,
   buyStarterRack,
   getHomeGymState,
+  HOME_GYM_REWARD_PER_WORKOUT,
   HomeGymItemIds,
   type HomeGymState,
   STARTER_RACK_COST,
@@ -57,7 +58,7 @@ export function HomeGymRewardStrip() {
             🪙 홈짐 {coins}
           </ThemedText>
           <ThemedText type="caption" style={styles.subtitle}>
-            {rackPlaced ? '운동으로 만든 내 홈짐' : '운동 1회 = 홈짐 코인 10'}
+            {rackPlaced ? '운동으로 만든 내 홈짐' : `운동 1회 = 홈짐 코인 ${HOME_GYM_REWARD_PER_WORKOUT}`}
           </ThemedText>
         </View>
         {!ownsRack && (
