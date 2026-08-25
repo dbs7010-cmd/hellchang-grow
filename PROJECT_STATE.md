@@ -7,7 +7,7 @@
 ## SNAPSHOT
 
 - branch: `feat/v1-monetization-foundation`
-- HEAD: `281afdb` — fix(copy): pick Korean particles by the final consonant
+- HEAD: `098ebe7` — chore(release): link the EAS project
   (이 문서를 담은 상태 갱신 커밋이 그 위에 올라간다)
 - last_updated: 2026-08-25
 - last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 15종 전부 PASS(1,020개 단언)
@@ -71,6 +71,7 @@
 - `3f29487` 2차 브라우저 QA에서 찾은 버그 수정 — 같은 날 두 번째 신체 기록이 화면에 반영되지 않던 정렬 문제. rep PR 전체 경로와 새로고침 세션 복구도 함께 확인
 - `c18fd05` 3차 브라우저 QA — PT가 횟수 PR을 "중량 첫 기록"이라고 말하던 문제 수정(`DEC-011` 마무리). 루틴 만들기/수정은 정상
 - `281afdb` 4차 브라우저 QA — 한글 조사를 받침에 따라 붙인다("등를" → "등을"). 규칙을 `utils/korean.ts`로 공용화
+- `098ebe7` EAS 프로젝트 연결(`A3` 해소) — `@usunge/hellchang-grow`, owner `usunge`. 출시 차단 3 → 2
 - `b2a3f65` V1 entitlement foundation — 단일 권리 판정 소스 `resolveEntitlement()`, 만료 강제, `verify:entitlement` 55개
 - `ebd5784` 휴식 중 이탈 확인 표시 + stale 종료 확인 정리 (Android 실기기 재현 버그)
 - `d6c3910` 세트 완료 피드백을 휴식 전환 전에 보이도록 유지
@@ -90,7 +91,7 @@
 **V1 출시 critical path.** 근거와 상세는 [RELEASE_AUDIT.md](RELEASE_AUDIT.md). 순서대로 진행한다 — 앞의 것이 뒤의 것을 막는다.
 
 1. ~~앱 식별자·표시 이름 확정~~ **완료** — `com.helchanggrow.app`(iOS/Android 공통), `versionCode: 1`, `buildNumber: "1"`, `name: "헬창키우기"`. slug(`hellchang-grow`)은 EAS 연결 값이라 유지한다.
-2. **EAS 프로젝트 연결** (`A3`) — `eas.json`은 커밋됐다. 남은 것은 `eas init`으로 `extra.eas.projectId`/`owner`를 채우는 것이며 **Expo 계정이 필요해 사용자만 가능**하다. 그 뒤 `preview` 프로필로 첫 네이티브 빌드를 돌린다(`E5`).
+2. ~~EAS 프로젝트 연결~~ **완료** (`098ebe7`) — `@usunge/hellchang-grow`. 이어서 `preview` 프로필 Android 빌드를 실행했다(키스토어는 EAS가 클라우드에서 생성). 결과 APK로 [docs/DEVICE_QA.md](docs/DEVICE_QA.md)의 실기기 QA를 돈다.
 3. ~~미사용 네이티브 의존성 정리~~ **완료** (`1796e62`). 남은 의존성 사안은 패치 버전 6건(`B5`)이며 여전히 APPROVAL REQUIRED다.
 4. ~~개인정보처리방침 + 데이터 안전 답변 초안~~ **초안 완료** ([docs/PRIVACY.md](docs/PRIVACY.md)). 남은 것: 운영 주체/연락처/시행일 채우기 → 법률 검토 → 공개 URL 게시 → 스토어 콘솔 입력. **사용자만 가능**.
 5. ~~사진 URI 영속성 수정~~ **완료** (`f9da419`). 옛 기록의 사진은 되살릴 수 없고, 실기기 확인은 `E4`로 남았다.

@@ -26,7 +26,7 @@
 
 | 분류 | 최초 조사 | 현재 남은 것 |
 | --- | --- | --- |
-| A. 출시 차단 (BLOCKER) | 5 | **3** (A3 EAS 연결 · A4 계정/서명 · A5 개인정보처리방침) |
+| A. 출시 차단 (BLOCKER) | 5 | **2** (A4 스토어 계정 · A5 개인정보처리방침) |
 | B. 출시 전 필수 (REQUIRED) | 8 | **2** (B7 데이터 안전 콘솔 입력 · B8 크래시 리포팅) |
 | C. 출시 후 가능 (POST-LAUNCH) | 6 | **5** (C6 README 해소) |
 | D. 이미 완료 (DONE) | 9 | 9 |
@@ -119,7 +119,7 @@ E 항목(실기기 QA)을 대신하지 못하지만, 최근 변경(PR 두 종류
 | --- | --- | --- | --- |
 | A1 | ~~앱 식별자 없음~~ **해소** | 사용자 승인으로 `com.helchanggrow.app`을 iOS/Android 양쪽에 설정했다. `npx expo config`로 확인 | — |
 | A2 | ~~EAS 빌드 설정 없음~~ **해소** | `eas.json` 추가 — development / preview(APK, 내부 배포) / production(AAB) 세 프로필. `appVersionSource: "local"`이라 버전 숫자의 원본은 이 저장소다 | 실제 빌드 실행은 A3·A4 이후(MANUAL) |
-| A3 | **EAS 프로젝트 미연결** | 해석된 설정의 `extra`에 `eas.projectId`가 없고 `owner`도 없다 | `eas init`으로 프로젝트 연결 (Expo 계정 필요 — MANUAL) |
+| A3 | ~~EAS 프로젝트 미연결~~ **해소** | 사용자가 로그인한 뒤 `eas init --account usunge`로 연결했다(계정 선택은 사용자 결정). `@usunge/hellchang-grow`, projectId `97f8c096-…`, owner `usunge`가 `app.json`에 들어갔고 `npx expo config`로 확인했다 | — |
 | A4 | **스토어 계정·서명 키 없음** | 저장소에서 확인 가능한 서명/자격 증명이 없다(정상 — 저장소에 두면 안 된다) | Google Play 개발자 계정, Apple Developer Program, 키스토어/배포 인증서 — **사용자만 가능** |
 | A5 | **개인정보처리방침 — 초안 확보, 게시 대기** | [docs/PRIVACY.md](docs/PRIVACY.md) 1부에 코드에서 확인한 사실만으로 초안을 썼다. 운영 주체/연락처/시행일/게시 URL은 `{{...}}` 자리로 비워 뒀다 — 지어내지 않았다 | 남은 것: 운영 주체 정보 채우기 → 법률 검토 → 공개 URL 게시 → 스토어 등재 정보에 입력. **사용자만 가능** |
 
@@ -173,11 +173,11 @@ E 항목(실기기 QA)을 대신하지 못하지만, 최근 변경(PR 두 종류
 
 | # | 항목 | 방법 |
 | --- | --- | --- |
-| E1 | 세션 중 앱 kill 후 복구 | `scripts/verify-storage-recovery.ts` 하단 6단계 절차 |
+| E1 | 세션 중 앱 kill 후 복구 | [docs/DEVICE_QA.md](docs/DEVICE_QA.md) `E1` (원 절차는 `scripts/verify-storage-recovery.ts` 하단) |
 | E2 | 아이콘/스플래시가 Expo 템플릿 기본인지 | `assets/images/`에 `react-logo*`, `expo-badge*` 등 템플릿 잔재가 함께 있다 — 실제 아이콘을 눈으로 확인 |
 | E3 | 권한 다이얼로그 문구 | 사진 접근 요청 문구가 실기기에서 어떻게 보이는지 |
 | E4 | 사진 보관(B4) 확인 | 사진을 넣은 기록을 만든 뒤 며칠 뒤 [몸 변화]에서 다시 열어 그대로 있는지 본다. 복사가 실패하는 기기라면 기록만 남고 사진 자리가 비어야 한다 — 기록 저장 자체가 실패하면 안 된다 |
-| E5 | EAS preview 빌드 1회 성공 | A1~A3 해결 후 |
+| E5 | EAS preview 빌드 1회 성공 | A1~A3 해결됨 — Android preview 빌드를 실행했다(빌드 id `626adae7-…`). 설치·실행 확인은 [docs/DEVICE_QA.md](docs/DEVICE_QA.md) |
 | E6 | 다양한 화면 크기/저사양 기기 | 세션 화면의 세트 입력·휴식 타이머 중심 |
 
 ---
