@@ -3,26 +3,25 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { HomeColors, Radius, Spacing } from '@/constants/theme';
+import { useAppData } from '@/context/app-data-context';
 import {
   availableHomeGymCoins,
   buyStarterRack,
   getHomeGymState,
-  HomeGymState,
+  type HomeGymState,
   STARTER_RACK_COST,
 } from '@/data/home-gym-repository';
-import { getWorkoutRecords } from '@/data/workout-repository';
 
 export function HomeGymRewardStrip() {
+  const { workoutRecords } = useAppData();
   const [state, setState] = useState<HomeGymState | null>(null);
-  const [completedWorkoutCount, setCompletedWorkoutCount] = useState(0);
   const [saving, setSaving] = useState(false);
+  const completedWorkoutCount = workoutRecords.length;
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getHomeGymState(), getWorkoutRecords()]).then(([loaded, records]) => {
-      if (cancelled) return;
-      setState(loaded);
-      setCompletedWorkoutCount(records.length);
+    getHomeGymState().then((loaded) => {
+      if (!cancelled) setState(loaded);
     });
     return () => {
       cancelled = true;
