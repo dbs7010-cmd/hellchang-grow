@@ -7,7 +7,7 @@
 ## SNAPSHOT
 
 - branch: `feat/v1-monetization-foundation`
-- HEAD: `d9f9a99` — chore(deps): match the versions this SDK expects
+- HEAD: `8a833d2` — fix(settings): stop promising an ad that the release build cannot show
   (이 문서를 담은 상태 갱신 커밋이 그 위에 올라간다)
 - last_updated: 2026-08-25
 - last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 15종 전부 PASS(988개 단언)
@@ -65,6 +65,7 @@
 - `f9da419` 사진을 앱 보관 자리로 복사(`B4`) — 캐시가 지워져도 [몸 변화] 사진이 남는다. `expo-file-system` 선언은 사용자 승인
 - `1796e62` 쓰지 않는 직접 의존성 6개 제거(`B6`, 승인) — 그중 2개는 트리에서 완전히 빠졌고 4개는 expo/expo-router가 계속 요구한다
 - `d9f9a99` SDK 57 패치 버전 정렬(`B5`, 승인) — `expo-doctor` 21/21, 실패 항목 없음
+- `8a833d2` 출시 전 품질 점검 — 설정 화면이 출시 빌드에서 줄 수 없는 광고를 안내하던 문구 수정
 - `b2a3f65` V1 entitlement foundation — 단일 권리 판정 소스 `resolveEntitlement()`, 만료 강제, `verify:entitlement` 55개
 - `ebd5784` 휴식 중 이탈 확인 표시 + stale 종료 확인 정리 (Android 실기기 재현 버그)
 - `d6c3910` 세트 완료 피드백을 휴식 전환 전에 보이도록 유지
