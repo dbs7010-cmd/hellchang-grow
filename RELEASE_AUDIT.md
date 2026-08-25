@@ -1,7 +1,7 @@
 # V1 RELEASE AUDIT
 
 > 2026-08-25 · branch `feat/v1-monetization-foundation` · 기준 커밋 `a14419d`
-> **갱신 2026-08-25** (`abeaf31` 이후): A1/A2/B1/B3 해소 — 아래 표에 표시했다.
+> **갱신 2026-08-25** (`abeaf31` 이후): A1/A2/B1/B3 해소, A5/B7은 초안 확보 — 아래 표에 표시했다.
 > **새 기능을 구현하지 않았다.** 저장소의 현재 상태만 조사하고 분류했다.
 > 관련: [PROJECT_STATE.md](PROJECT_STATE.md) · [DECISION_LOG.md](DECISION_LOG.md) · [FAILURE_LOG.md](FAILURE_LOG.md)
 
@@ -43,7 +43,7 @@
 | A2 | ~~EAS 빌드 설정 없음~~ **해소** | `eas.json` 추가 — development / preview(APK, 내부 배포) / production(AAB) 세 프로필. `appVersionSource: "local"`이라 버전 숫자의 원본은 이 저장소다 | 실제 빌드 실행은 A3·A4 이후(MANUAL) |
 | A3 | **EAS 프로젝트 미연결** | 해석된 설정의 `extra`에 `eas.projectId`가 없고 `owner`도 없다 | `eas init`으로 프로젝트 연결 (Expo 계정 필요 — MANUAL) |
 | A4 | **스토어 계정·서명 키 없음** | 저장소에서 확인 가능한 서명/자격 증명이 없다(정상 — 저장소에 두면 안 된다) | Google Play 개발자 계정, Apple Developer Program, 키스토어/배포 인증서 — **사용자만 가능** |
-| A5 | **개인정보처리방침 없음** | `src` / `docs` / `README` 어디에도 개인정보·약관 문구나 링크가 없다 | 두 스토어 모두 제출 필수. 앱이 사진 라이브러리에 접근하므로 더더욱 필요 |
+| A5 | **개인정보처리방침 — 초안 확보, 게시 대기** | [docs/PRIVACY.md](docs/PRIVACY.md) 1부에 코드에서 확인한 사실만으로 초안을 썼다. 운영 주체/연락처/시행일/게시 URL은 `{{...}}` 자리로 비워 뒀다 — 지어내지 않았다 | 남은 것: 운영 주체 정보 채우기 → 법률 검토 → 공개 URL 게시 → 스토어 등재 정보에 입력. **사용자만 가능** |
 
 ---
 
@@ -57,7 +57,7 @@
 | B4 | **선택한 사진이 나중에 사라질 수 있다** | `history.tsx`가 `ImagePicker`가 준 URI를 그대로 `photoReference`로 저장한다. 앱 전용 저장소로 복사하지 않는다(`FileSystem` 사용처 0건) | 선택 직후 앱 디렉터리로 복사하고 그 경로를 저장. 지금 구조에서는 며칠 뒤 [몸 변화] 전후 비교 사진이 깨질 수 있다 |
 | B5 | **의존성 패치 버전 불일치 7개** | `expo-doctor`: `expo`, `expo-router`, `expo-image-picker`, `expo-splash-screen`, `expo-constants`, `expo-linking`, `@expo/ui` | `npx expo install --check`. **의존성 변경은 APPROVAL REQUIRED** |
 | B6 | **쓰지 않는 네이티브 의존성 6개** | `src`에서 참조 0건: `expo-device`, `expo-symbols`, `expo-glass-effect`, `@expo/ui`, `expo-web-browser`, `expo-font` | 실제 미사용인지 확인 후 정리. 네이티브 모듈은 빌드 크기와 권한 표면을 늘린다. **의존성 변경은 APPROVAL REQUIRED** |
-| B7 | **데이터 안전/개인정보 응답 미작성** | 앱이 수집하는 것: 사용자가 입력한 신체·운동 기록, 선택한 사진 — 전부 기기 로컬(AsyncStorage). 외부 전송은 AI PT 엔드포인트 하나뿐이고 현재 **설정돼 있지 않다**(`resolveTrainerEndpointUrl()` → null) | Play 데이터 안전 / Apple 개인정보 라벨 작성 — MANUAL. AI PT를 켜는 순간 "운동 기록이 서버로 전송됨"으로 답변이 바뀐다 |
+| B7 | **데이터 안전/개인정보 답변 — 시트 확보, 입력 대기** | [docs/PRIVACY.md](docs/PRIVACY.md) 2부에 Play 데이터 안전 / Apple 라벨 답변을 항목별 근거와 함께 정리했다. 확인된 사실: 저장은 전부 기기 로컬(14개 키), 사진은 경로만 저장하고 업로드 경로가 없다, 외부 통신은 AI PT `fetch` 하나뿐이며 현재 **엔드포인트 미설정**(`resolveTrainerEndpointUrl()` → null). AI PT를 켜면 키·체중·체지방률·골격근량과 운동 기록이 전송되므로 답변이 "건강·피트니스 수집"으로 바뀐다 | 스토어 콘솔 입력 — **사용자만 가능** |
 | B8 | **크래시 리포팅 없음** | 저장소에 crash/analytics SDK가 없다 | 초기 사용자 문제를 볼 방법이 없다. 도입은 **의존성 추가 = APPROVAL REQUIRED** |
 
 ---

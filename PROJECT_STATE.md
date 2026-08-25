@@ -7,7 +7,7 @@
 ## SNAPSHOT
 
 - branch: `feat/v1-monetization-foundation`
-- HEAD: `abeaf31` — docs(release): audit what actually stands between V1 and the stores
+- HEAD: `1ce7022` — chore(release): set the app identity and drop the permission we never use
   (이 문서를 담은 상태 갱신 커밋이 그 위에 올라간다)
 - last_updated: 2026-08-25
 - last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 14종 전부 PASS(952개 단언)
@@ -59,6 +59,7 @@
 - `6999edf` PR 판정 확장 — 최고 중량 + 같은 중량 최고 횟수(맨몸 포함) 두 종류([DECISION_LOG.md](DECISION_LOG.md) `DEC-011`). `verify:weight-core` 69 → 88개
 - V1 RELEASE AUDIT — 출시 차단 5 / 출시 전 필수 8 / 출시 후 가능 6 / 완료 9 / MANUAL QA 6으로 분류 ([RELEASE_AUDIT.md](RELEASE_AUDIT.md))
 - 출시 준비 1~3단계 일부 — 앱 식별자 `com.helchanggrow.app`(사용자 승인), `eas.json` 3개 프로필, 불필요 권한 제거(`RECORD_AUDIO` 0건). 출시 차단 5 → 3
+- 개인정보처리방침 초안 + 스토어 데이터 안전 답변 시트 ([docs/PRIVACY.md](docs/PRIVACY.md)) — 코드에서 확인한 사실만, 운영 주체 정보는 빈칸
 - `b2a3f65` V1 entitlement foundation — 단일 권리 판정 소스 `resolveEntitlement()`, 만료 강제, `verify:entitlement` 55개
 - `ebd5784` 휴식 중 이탈 확인 표시 + stale 종료 확인 정리 (Android 실기기 재현 버그)
 - `d6c3910` 세트 완료 피드백을 휴식 전환 전에 보이도록 유지
@@ -69,8 +70,9 @@
 
 **없음 — verified checkpoint 직후다.** 진행 중인 주 작업 단위가 없다.
 
-**없음 — 출시 critical path에서 AI가 지금 할 수 있는 설정 작업(1단계, 2단계의 파일, 3단계의 권한)이 끝났다.**
-남은 차단 요소는 계정·문서·사용자 결정이다. 아래 NEXT 참조.
+**없음 — AI가 승인 없이 진행할 수 있는 출시 준비 작업이 소진됐다.**
+설정(식별자/eas.json/권한)과 문서(개인정보처리방침 초안, 데이터 안전 답변 시트)까지 끝냈다.
+남은 것은 전부 계정·게시·제품 결정·의존성 승인이다.
 
 ## NEXT
 
@@ -79,7 +81,7 @@
 1. ~~앱 식별자 확정~~ **완료** — `com.helchanggrow.app`(iOS/Android 공통), `versionCode: 1`, `buildNumber: "1"`. **표시 이름(`name: "hellchang-grow"`)은 아직 개발용 슬러그다** — 스토어 등재명은 제품 결정이라 사용자 지정이 필요하다(`B2`).
 2. **EAS 프로젝트 연결** (`A3`) — `eas.json`은 커밋됐다. 남은 것은 `eas init`으로 `extra.eas.projectId`/`owner`를 채우는 것이며 **Expo 계정이 필요해 사용자만 가능**하다. 그 뒤 `preview` 프로필로 첫 네이티브 빌드를 돌린다(`E5`).
 3. **미사용 네이티브 의존성 정리** (`B6`) — src 참조 0건인 6개. **의존성 변경이라 APPROVAL REQUIRED**.
-4. **개인정보처리방침 + 데이터 안전 답변** (`A5`,`B7`) — 문서 초안은 AI가 쓸 수 있고, 게시 URL과 스토어 콘솔 입력은 **사용자**.
+4. ~~개인정보처리방침 + 데이터 안전 답변 초안~~ **초안 완료** ([docs/PRIVACY.md](docs/PRIVACY.md)). 남은 것: 운영 주체/연락처/시행일 채우기 → 법률 검토 → 공개 URL 게시 → 스토어 콘솔 입력. **사용자만 가능**.
 5. **사진 URI 영속성 수정** (`B4`) — 선택한 사진을 앱 디렉터리로 복사해 저장. 코드 변경이며 GUARDED. `expo-file-system` 의존성이 필요하면 그 시점에 승인을 받는다.
 6. **의존성 패치 버전 정리** (`B5`) — `npx expo install --check`. APPROVAL REQUIRED.
 7. **아이콘/스플래시/스토어 등재 자산 최종본** (`E2`) — 에셋 필요, **사용자**.
