@@ -5,6 +5,7 @@ export const HOME_GYM_REWARD_PER_WORKOUT = 10;
 
 export const HomeGymItemIds = {
   starterRack: 'starter-dumbbell-rack',
+  flatBench: 'flat-bench',
 } as const;
 
 export type HomeGymItemId = (typeof HomeGymItemIds)[keyof typeof HomeGymItemIds];
@@ -17,9 +18,11 @@ export interface HomeGymItemDefinition {
 
 export const HOME_GYM_ITEMS: readonly HomeGymItemDefinition[] = [
   { id: HomeGymItemIds.starterRack, name: '덤벨 랙', cost: 30 },
+  { id: HomeGymItemIds.flatBench, name: '플랫 벤치', cost: 50 },
 ];
 
 export const STARTER_RACK_COST = HOME_GYM_ITEMS[0].cost;
+export const FLAT_BENCH_COST = HOME_GYM_ITEMS[1].cost;
 
 export interface HomeGymState {
   spentCoins: number;
@@ -40,8 +43,6 @@ export async function getHomeGymState(): Promise<HomeGymState> {
   if (!stored) return EMPTY_STATE;
 
   const ownedItemIds = sanitizeItemIds(stored.ownedItemIds);
-  // 이전 vertical slice에는 placedItemIds가 없었다. 이미 산 아이템은 홈에 배치됐다고 표시했으므로
-  // 마이그레이션에서도 그 계약을 보존한다.
   const placedItemIds = stored.placedItemIds === undefined
     ? [...ownedItemIds]
     : sanitizeItemIds(stored.placedItemIds).filter((id) => ownedItemIds.includes(id));
@@ -65,6 +66,10 @@ export function getHomeGymItem(id: HomeGymItemId): HomeGymItemDefinition {
   const item = HOME_GYM_ITEMS.find((candidate) => candidate.id === id);
   if (!item) throw new Error(`Unknown home gym item: ${id}`);
   return item;
+}
+
+export function getNextHomeGymItem(state: HomeGymState): HomeGymItemDefinition | null {
+  return HOME_GYM_ITEMS.find((item) => !state.ownedItemIds.includes(item.id)) ?? null;
 }
 
 export async function buyHomeGymItem(
