@@ -76,3 +76,6 @@ jobs:
 
       - name: Verify release config
         run: npm run verify:release
+
+      - name: Verify home gym gameplay
+        run: npm run verify:home-gym
