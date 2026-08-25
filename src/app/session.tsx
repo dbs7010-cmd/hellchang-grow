@@ -38,9 +38,7 @@ import {
 } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
 import { withObjectParticle } from '@/utils/korean';
-import { LearningStageLabels } from '@/config/danbaek-learning-policy';
-import { buildCopyAttemptLine, MovementFamilyLabels } from '@/config/danbaek-movement-labels';
-import { getDanbaekMovementFamily } from '@/config/danbaek-learning-map';
+import { danbaekSetObservationCopy, describeLearningGain } from '@/utils/danbaek-learning-presence';
 import {
   buildGrowthRevealMuscles,
   buildGrowthHighlight,
@@ -493,13 +491,9 @@ export default function SessionScreen() {
       if (setReactionTimerRef.current) clearTimeout(setReactionTimerRef.current);
       // 어떤 동작인지 알면 단백이가 그것을 따라 한다고 말하고, 모르는 운동(직접 추가 등)은
       // 기존 부위 반응으로 떨어진다 — 아는 척하지 않는다.
-      const observedFamily = currentExercise.exerciseId
-        ? getDanbaekMovementFamily(currentExercise.exerciseId)
-        : undefined;
       setSetReaction(
-        observedFamily
-          ? buildCopyAttemptLine(observedFamily)
-          : getExerciseReactionCopy(resolvedCurrent?.primaryMuscles[0] ?? activeSession.primaryMuscleGroup)
+        danbaekSetObservationCopy(currentExercise.exerciseId) ??
+          getExerciseReactionCopy(resolvedCurrent?.primaryMuscles[0] ?? activeSession.primaryMuscleGroup)
       );
       setReactionTimerRef.current = setTimeout(() => {
         setSetReaction(null);
@@ -1273,17 +1267,20 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
           배운 것이 없으면(계열을 알 수 없는 즉석 운동뿐이면) 이 섹션 자체가 없다.
         */}
         {summary.learning.length > 0 && (
-          <Section title="단백이가 배운 것">
-            <ThemedView type="backgroundElement" style={styles.prBox}>
-              {summary.learning.map((gain) => (
-                <ThemedText key={gain.movementFamily} type="small">
-                  {MovementFamilyLabels[gain.movementFamily]} · {LearningStageLabels[gain.fromStage]} →{' '}
-                  {LearningStageLabels[gain.toStage]}
-                  {gain.fromStage === gain.toStage ? ' (더 지켜보는 중)' : ''}
-                </ThemedText>
+          <Section title="오늘 단백이가 배운 것">
+            <ThemedView type="backgroundElement" style={styles.learningBox}>
+              {summary.learning.map(describeLearningGain).map((copy) => (
+                <View key={copy.movementFamily} style={styles.learningRow}>
+                  <ThemedText type="smallBold" numberOfLines={1} style={styles.learningFamily}>
+                    {copy.familyLabel}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor={copy.stageChanged ? 'text' : 'textSecondary'}>
+                    {copy.line}
+                  </ThemedText>
+                </View>
               ))}
               <ThemedText type="caption" themeColor="textSecondary">
-                단백이는 오늘 본 동작만 따라 합니다.
+                단백이는 오늘 옆에서 본 동작만 따라 합니다.
               </ThemedText>
             </ThemedView>
           </Section>
@@ -1922,6 +1919,24 @@ const styles = StyleSheet.create({
     borderRadius: Radius.medium,
     padding: Spacing.three,
     gap: Spacing.one,
+  },
+  /**
+   * PR 카드와 같은 카드 모양이지만 스타일을 공유하지 않는다 — 학습은 성장/PR과 별개 축이라
+   * 한쪽 카드를 손볼 때 다른 쪽이 따라 움직이면 안 된다.
+   */
+  learningBox: {
+    borderRadius: Radius.medium,
+    padding: Spacing.three,
+    gap: Spacing.one,
+  },
+  learningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  learningFamily: {
+    flexShrink: 1,
   },
   /**
    * PR 축하는 1.8초 뒤 사라지는 연출이다. 흐름에 두면 나타났다 사라질 때마다 세트 조작 UI가

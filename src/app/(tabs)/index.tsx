@@ -13,6 +13,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { AppConfig } from '@/config/app-config';
 import { hasPlayerCharacterModel, StanleyPortraitImage } from '@/config/character-assets';
+import { resolveDanbaekWorldEntry } from '@/config/danbaek-world-entry';
 import { Exercises, getExerciseById, getExercisesByMuscleGroup } from '@/config/exercises';
 import { MuscleGroupLabels, MuscleGroups } from '@/config/muscle-groups';
 import { MuscleDetailToGroup } from '@/types/exercise';
@@ -23,6 +24,7 @@ import { useAppData } from '@/context/app-data-context';
 import { todayDateString } from '@/utils/date';
 import { getThisWeekRecords } from '@/data/workout-repository';
 import { useTheme } from '@/hooks/use-theme';
+import { buildDanbaekPresence } from '@/utils/danbaek-learning-presence';
 import { findPreviousPerformance } from '@/utils/exercise-history';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
@@ -73,6 +75,7 @@ export default function HomeScreen() {
     growth,
     characterAppearance,
     bodyParameters,
+    danbaekLearning,
   } = useAppData();
 
   const { height: windowHeight } = useWindowDimensions();
@@ -102,6 +105,26 @@ export default function HomeScreen() {
     const [topDetail] = gained.reduce((best, entry) => (entry[1] > best[1] ? entry : best));
     return { totalSp, topGroupLabel: MuscleGroupLabels[MuscleDetailToGroup[topDetail]] };
   }, [growth]);
+  /*
+   * 단백이의 학습은 성장(HELL PASS / 오늘 성장 SP)과 **다른 축**이다 — 위의 todayGrowth는
+   * 그대로 두고, 여기서는 "얘가 내 운동을 보고 뭘 따라 하는 중인가"만 한 줄로 말한다.
+   * 계산은 전부 어댑터가 이미 했다. 화면은 문구만 고른다.
+   */
+  const danbaekPresence = useMemo(
+    () => buildDanbaekPresence({ profile: danbaekLearning, exerciseDb: Exercises }),
+    [danbaekLearning]
+  );
+
+  /*
+   * 단백세상 입구. 지금은 seam이 닫혀 있어 항상 null이고 아무것도 그리지 않는다 —
+   * WORLD는 다른 브랜치의 소유라 여기서 화면을 추측해 만들지 않는다. 통합이 seam 한 줄을
+   * 열면 이 자리에 입구가 생긴다 (src/config/danbaek-world-entry.ts).
+   */
+  const worldEntry = useMemo(
+    () => resolveDanbaekWorldEntry({ profile: danbaekLearning }),
+    [danbaekLearning]
+  );
+
   const weeklyVolumeKg = useMemo(() => sumVolumeKg(weekRecords), [weekRecords]);
   const latestBody = useMemo(
     () =>
@@ -298,6 +321,45 @@ export default function HomeScreen() {
               />
               <BodyHudMetric label="운동 기록" value={`${workoutRecords.length}회`} />
             </View>
+
+            {/*
+              단백이의 학습 한 줄. 캐릭터 반대쪽(우상단)에 붙어 "옆에서 보고 있는 존재"로만
+              읽히게 둔다 — 대시보드가 아니고, 성장 표시(HELL PASS / 오늘 성장)를 대체하지도
+              않는다. 실제 기록에서 나온 문구만 나오고, 본 것이 없으면 기다린다고만 말한다.
+            */}
+            <View pointerEvents="none" style={styles.learningPill}>
+              <ThemedText type="captionBold" style={styles.learningHeadline} numberOfLines={2}>
+                {danbaekPresence.headline}
+              </ThemedText>
+              {danbaekPresence.detail && (
+                <ThemedText type="caption" style={styles.learningDetail} numberOfLines={1}>
+                  {danbaekPresence.detail}
+                </ThemedText>
+              )}
+            </View>
+
+            {/*
+              단백세상 입구. seam이 열렸을 때만 나타난다 — 갈 곳이 없는 버튼은 만들지 않는다.
+              여기서 하는 일은 이동뿐이고, WORLD 화면/판정은 APP이 구현하지 않는다.
+            */}
+            {worldEntry && (
+              <Pressable
+                onPress={() => router.push(worldEntry.route)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={`${worldEntry.label} 들어가기`}
+                style={[
+                  styles.worldEntryPill,
+                  { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+                ]}>
+                <ThemedText type="captionBold" numberOfLines={1}>
+                  🌱 {worldEntry.label} ›
+                </ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                  {worldEntry.subLabel}
+                </ThemedText>
+              </Pressable>
+            )}
 
             {/* 실제 3D 모델이 등록되기 전에는 360을 아예 노출하지 않는다 — 눌러봐야 도형
                 placeholder가 도는 빈 기능이다. model3d가 채워지면 이 버튼과 CharacterViewer가
@@ -520,6 +582,39 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     paddingBottom: Spacing.one,
   },
+  /**
+   * 캐릭터 우상단. 좌상단은 신체 HUD(76px)가 이미 쓰고 있어서 반대쪽에 둔다.
+   *
+   * 폭을 넓게 잡을수록 줄바꿈이 줄어 **높이가 낮아진다** — 이 카드가 캐릭터를 덮느냐는
+   * 폭이 아니라 높이가 정한다. 한 줄(제목 최대 2줄 + 근거 1줄)로 묶어 둔 상태에서
+   * 360x800(가장 좁은 지원 크기)에서도 캐릭터 머리 위로 여유가 남는 것을 확인했다.
+   */
+  learningPill: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    maxWidth: '56%',
+    borderWidth: 0,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderRadius: Radius.medium,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    zIndex: 2,
+    boxShadow: HomeColors.hudShadow,
+  },
+  /** 입구는 캐릭터 발치 왼쪽 — [운동 시작] CTA 위를 덮지 않는 자리다. */
+  worldEntryPill: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+    maxWidth: '56%',
+    borderWidth: 1,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+    gap: Spacing.half,
+    zIndex: 3,
+  },
   rotatePill: {
     position: 'absolute',
     right: 0,
@@ -560,6 +655,8 @@ const styles = StyleSheet.create({
   trainerLink: { color: HomeColors.goldStrong },
   statLabel: { color: HomeColors.textSecondary },
   statValue: { color: HomeColors.text, fontWeight: 800, fontVariant: ['tabular-nums'] },
+  learningHeadline: { color: HomeColors.text },
+  learningDetail: { color: HomeColors.textSecondary },
   bodyHudLabel: { color: HomeColors.textSecondary },
   bodyHudValue: { color: HomeColors.text, fontWeight: 800, fontVariant: ['tabular-nums'] },
 });

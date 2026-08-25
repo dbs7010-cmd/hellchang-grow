@@ -41,7 +41,7 @@ const HERO_QUICK_ACTIONS: AiQuickActionId[] = ['what_today', 'build_routine', 'a
 export default function TrainerScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const { workoutRecords, streak, ptContext } = useAppData();
+  const { workoutRecords, streak, ptContext, danbaekLearning } = useAppData();
   const hasRecordedToday = getTodayRecords(workoutRecords).length > 0;
 
   const [stanleyLine] = useState(
@@ -55,8 +55,11 @@ export default function TrainerScreen() {
   /**
    * 무료 PT 브리핑. AI가 아니라 저장된 기록에서 그대로 계산한 문장이라 로그인만 하면 누구나
    * 볼 수 있다 — 값이 없으면 없다고 말하고, 없는 숫자를 만들지 않는다.
+   *
+   * 마지막 한 줄은 단백이 이야기다. 스탠리가 가르치는 상대는 여전히 플레이어이고, 단백이는
+   * 그 옆에서 따라 하는 존재로만 등장한다 (스탠리 → 플레이어 → 단백이).
    */
-  const brief = useMemo(() => buildTrainerBrief(ptContext), [ptContext]);
+  const brief = useMemo(() => buildTrainerBrief(ptContext, danbaekLearning), [ptContext, danbaekLearning]);
 
   const openChat = (action?: AiQuickActionId) => {
     router.push(action ? `/ai-chat?action=${action}` : '/ai-chat');

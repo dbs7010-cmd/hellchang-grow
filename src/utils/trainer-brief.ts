@@ -1,5 +1,8 @@
+import { MovementFamilyLabels } from '@/config/danbaek-movement-labels';
 import { MuscleGroupLabels } from '@/config/muscle-groups';
+import type { DanbaekLearningProfile } from '@/types/danbaek-contract';
 import type { MuscleGroup } from '@/types/exercise';
+import { hasLearnedStage, mostRecentlyObserved } from '@/utils/danbaek-learning-presence';
 import { withObjectParticle, withSubjectParticle, withTopicParticle } from '@/utils/korean';
 import type { PtContext, PtContextExercise } from '@/utils/pt-context';
 
@@ -125,9 +128,39 @@ export function buildExerciseRecordLine(exerciseName: string, recent: PtContextE
   return `최근 ${withSubjectParticle(exerciseName)} ${recent.topSet.weightKg}kg ${recent.topSet.reps}회입니다 (${recent.date}).`;
 }
 
-/** 트레이너 화면 브리핑 블록에 그대로 쓰는 3~4줄. null은 걸러서 렌더한다. */
-export function buildTrainerBrief(context: PtContext): string[] {
-  return [buildStatusLine(context), buildWeeklyLine(context), buildRecentTrainingLine(context), buildPrLine(context)].filter(
-    (line): line is string => Boolean(line)
-  );
+/**
+ * 스탠리가 단백이를 언급하는 한 줄.
+ *
+ * 관계는 **스탠리 → 플레이어 → 단백이** 순서다(헌법 2장). 그래서 이 문장에서도 가르치는
+ * 쪽은 여전히 스탠리이고, 단백이는 옆에서 따라 하는 존재로만 등장한다 — PT를 캐릭터 육성
+ * NPC로 바꾸지 않는다. 학습 상태는 이미 계산된 스냅샷에서만 읽고, 없으면 없다고 말한다.
+ */
+export function buildDanbaekWatchLine(profile: DanbaekLearningProfile): string {
+  const capability = mostRecentlyObserved(profile);
+  if (!capability) return '단백이는 아직 본 게 없습니다. 오늘 한 세트부터 보여주시죠.';
+
+  const label = MovementFamilyLabels[capability.movementFamily];
+  if (hasLearnedStage(capability.learningStage)) {
+    return `${withTopicParticle(label)} 단백이도 따라 할 만큼 봤습니다. 오늘은 무게에 집중하시죠.`;
+  }
+  return `단백이가 옆에서 ${withObjectParticle(label)} 따라 하는 중입니다. 자세는 제가 봅니다.`;
+}
+
+/**
+ * 트레이너 화면 브리핑 블록에 그대로 쓰는 3~5줄. null은 걸러서 렌더한다.
+ *
+ * 단백이 줄은 **선택 인자**다 — 학습 스냅샷을 주지 않는 호출부(기존 검증 포함)는 예전과
+ * 똑같은 브리핑을 받는다.
+ */
+export function buildTrainerBrief(
+  context: PtContext,
+  danbaekLearning?: DanbaekLearningProfile
+): string[] {
+  return [
+    buildStatusLine(context),
+    buildWeeklyLine(context),
+    buildRecentTrainingLine(context),
+    buildPrLine(context),
+    danbaekLearning ? buildDanbaekWatchLine(danbaekLearning) : null,
+  ].filter((line): line is string => Boolean(line));
 }
