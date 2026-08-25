@@ -1,0 +1,40 @@
+name: Danbaek Runtime Guard
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [fix/danbaek-runtime-routing]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
+      - name: Character body contract
+        run: npm run verify:character-body
+      - name: Character runtime routing
+        run: npm run verify:character-routing
+      - name: Workout character motion
+        run: npm run verify:workout-character-motion
+      - name: Growth engine regression
+        run: npm run verify:growth
+      - name: Body state regression
+        run: npm run verify:body
+      - name: Growth reveal regression
+        run: npm run verify:growth-reveal
+      - name: Core loop regression
+        run: npm run verify:core-loop
