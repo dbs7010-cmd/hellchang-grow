@@ -7,7 +7,10 @@
 
 ## 0. 설치
 
-1. EAS 빌드 페이지에서 APK를 내려받는다 — 프로젝트: `@usunge/hellchang-grow`, 프로필 `preview`(내부 배포 APK).
+1. APK를 내려받는다 — **첫 빌드(2026-08-25, v1.0.0 / versionCode 1)**:
+   <https://expo.dev/artifacts/eas/SwLIVzJknhAlbr8rd85CncuFifXPIa1p6rPn_GuB6Qs.apk>
+   (빌드 페이지: <https://expo.dev/accounts/usunge/projects/hellchang-grow/builds/626adae7-fd1d-4532-b3ea-4e68562a2922>)
+   갤럭시에서 이 링크를 직접 열어 받는 것이 가장 빠르다. 이후 빌드는 프로젝트의 Builds 탭에서 받는다.
 2. 갤럭시에서 "출처를 알 수 없는 앱 설치"를 허용하고 APK를 설치한다.
 3. 홈 화면에서 앱 이름이 **헬창키우기**로 보이는지 확인한다(아이콘 아래 이름).
 

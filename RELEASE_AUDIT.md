@@ -18,8 +18,10 @@
 | `npx expo config --type public` | 해석된 설정 확인 (아래 A/B 항목의 근거) |
 | `npx expo export --platform android` | **성공** — production JS 번들 생성, exit 0. 설정 변경·의존성 정리·버전 정렬 뒤에도 매번 다시 확인했다(현재 4.4MB) |
 | `npx expo-doctor` | **21/21 통과** (최초 조사에서는 패치 버전 불일치 7건으로 1개 실패했다) |
+| `npx eas-cli build --platform android --profile preview` | **성공** — 첫 네이티브 빌드가 실제로 만들어졌다(APK, internal). 키스토어는 EAS가 클라우드에서 생성했다 |
 
-확인하지 못한 것: 네이티브 빌드(EAS 계정 필요), 실기기 동작, 스토어 콘솔, 아이콘/스플래시의 시각적 최종 여부.
+확인하지 못한 것: 실기기 동작(설치·실행·권한 다이얼로그), 스토어 콘솔, 아이콘/스플래시의 시각적 최종 여부.
+네이티브 빌드는 더 이상 미확인 항목이 아니다 — Android preview APK가 실제로 만들어졌다.
 번들 안에서 mock 코드가 제거됐는지 문자열로 확인하려 했으나 **Hermes 바이트코드라 문자열 검색이 통하지 않았다**(반드시 있어야 할 문자열도 검색되지 않음). 따라서 mock 제외 근거는 소스의 `__DEV__` 경계와 `npm run verify:monetization`까지다.
 
 ## 요약
@@ -177,7 +179,7 @@ E 항목(실기기 QA)을 대신하지 못하지만, 최근 변경(PR 두 종류
 | E2 | 아이콘/스플래시가 Expo 템플릿 기본인지 | `assets/images/`에 `react-logo*`, `expo-badge*` 등 템플릿 잔재가 함께 있다 — 실제 아이콘을 눈으로 확인 |
 | E3 | 권한 다이얼로그 문구 | 사진 접근 요청 문구가 실기기에서 어떻게 보이는지 |
 | E4 | 사진 보관(B4) 확인 | 사진을 넣은 기록을 만든 뒤 며칠 뒤 [몸 변화]에서 다시 열어 그대로 있는지 본다. 복사가 실패하는 기기라면 기록만 남고 사진 자리가 비어야 한다 — 기록 저장 자체가 실패하면 안 된다 |
-| E5 | EAS preview 빌드 1회 성공 | A1~A3 해결됨 — Android preview 빌드를 실행했다(빌드 id `626adae7-…`). 설치·실행 확인은 [docs/DEVICE_QA.md](docs/DEVICE_QA.md) |
+| E5 | ~~EAS preview 빌드 1회 성공~~ **빌드는 성공** | 2026-08-25 Android preview 빌드 완료(21분, v1.0.0 / versionCode 1, 빌드 `626adae7-…`). **설치·첫 실행 확인은 남아 있다** → [docs/DEVICE_QA.md](docs/DEVICE_QA.md) |
 | E6 | 다양한 화면 크기/저사양 기기 | 세션 화면의 세트 입력·휴식 타이머 중심 |
 
 ---
