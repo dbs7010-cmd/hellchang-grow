@@ -26,19 +26,10 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const { loading, bootstrapFailed, onboardingComplete, reloadAppData } = useAppData();
-
-  // 어떤 화면을 세울지는 순수 규칙이 정한다 (scripts/verify-storage-recovery.ts).
   const screen = resolveBootstrapScreen({ loading, bootstrapFailed, onboardingComplete });
 
-  if (screen === 'splash') {
-    return null;
-  }
+  if (screen === 'splash') return null;
 
-  /*
-   * 저장된 데이터를 읽지 못한 채 부팅이 끝난 경우. 그냥 통과시키면 온보딩이 열리고,
-   * 사용자가 그것을 완료하는 순간 멀쩡히 남아 있던 프로필과 기록을 덮어쓴다.
-   * 그래서 진행시키지 않고, 있는 화면 부품으로 다시 시도할 기회만 준다.
-   */
   if (screen === 'recovery') {
     return (
       <View style={styles.recovery}>
@@ -66,6 +57,7 @@ function RootNavigator() {
         <Stack.Screen name="exercise-detail" />
         <Stack.Screen name="routine-edit" />
         <Stack.Screen name="ai-chat" />
+        <Stack.Screen name="danbaek-world" />
       </Stack.Protected>
     </Stack>
   );
