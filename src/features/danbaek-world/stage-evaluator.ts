@@ -15,10 +15,7 @@ const learningRank = new Map<LearningStage, number>(
   LearningStages.map((stage, index) => [stage, index])
 );
 
-function hasMinimumLearningStage(
-  actual: LearningStage,
-  minimum: LearningStage
-): boolean {
+function hasMinimumLearningStage(actual: LearningStage, minimum: LearningStage): boolean {
   return (learningRank.get(actual) ?? -1) >= (learningRank.get(minimum) ?? Number.MAX_SAFE_INTEGER);
 }
 
@@ -42,8 +39,17 @@ export function evaluateDanbaekWorldStage(
           hasMinimumLearningStage(capability.learningStage, requirement.minimumLearningStage)
       )
     : true;
+
+  // A specific-exercise gate must be satisfied inside the required movement family.
+  // This prevents malformed/cross-family profile data from unlocking a stage merely
+  // because the same exercise id appeared somewhere else in the snapshot.
+  const exerciseCandidates = requirement.movementFamily
+    ? capability
+      ? [capability]
+      : []
+    : profile.capabilities;
   const exerciseSatisfied = requirement.specificExerciseId
-    ? profile.capabilities.some((candidate) =>
+    ? exerciseCandidates.some((candidate) =>
         candidate.representativeExerciseIds.includes(requirement.specificExerciseId!)
       )
     : true;
@@ -52,8 +58,7 @@ export function evaluateDanbaekWorldStage(
     return { outcome: 'pass', stageId: stage.id };
   }
 
-  const recommendedMovementFamily =
-    requirement.movementFamily ?? capability?.movementFamily ?? 'locomotion';
+  const recommendedMovementFamily = requirement.movementFamily ?? capability?.movementFamily ?? 'locomotion';
 
   return {
     outcome: 'block',
