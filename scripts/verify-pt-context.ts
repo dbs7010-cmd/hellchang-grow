@@ -3,7 +3,11 @@
 import { AppConfig } from '@/config/app-config';
 import { Exercises, searchExercises } from '@/config/exercises';
 import { countPeriodPRs, listPRs } from '@/utils/exercise-history';
-import { buildPtContext, matchExerciseInText } from '@/utils/pt-context';
+import {
+  buildPtContext,
+  matchExerciseInText,
+  type PtContext,
+} from '@/utils/pt-context';
 import {
   buildExerciseRecordLine,
   buildPrLine,
@@ -126,6 +130,41 @@ const squatRecord = record({
   check('the weekly line admits an empty week', buildWeeklyLine(context), '이번 주 기록 없음');
   check('the recent line admits there are no sets', buildRecentTrainingLine(context), '최근 세트 기록이 없어서 볼 게 없습니다.');
   check('no PR line is invented when there is no PR', buildPrLine(context), null);
+}
+
+// 1-B. PR 한 줄은 종류를 구분해서 말한다 (DEC-011)
+{
+  const base = buildPtContext({
+    profile: null,
+    bodyHistory: [],
+    workoutRecords: [],
+    streak: emptyStreak,
+    routines: [],
+    activeSession: null,
+    today: TODAY,
+  });
+  const withPr = (pr: PtContext['recentTraining']['recentPRs'][number]): PtContext =>
+    ({ ...base, recentTraining: { ...base.recentTraining, recentPRs: [pr] } }) as PtContext;
+
+  const firstWeight = buildPrLine(
+    withPr({ exerciseId: 'squat', name: '스쿼트', kind: 'weight', weightKg: 65, reps: null, date: '2026-08-25', previousBestWeightKg: null })
+  );
+  check('a first-ever weight is reported as a first record', firstWeight, '스쿼트는 65kg가 첫 기록입니다.');
+
+  const heavier = buildPrLine(
+    withPr({ exerciseId: 'squat', name: '스쿼트', kind: 'weight', weightKg: 70, reps: null, date: '2026-08-25', previousBestWeightKg: 65 })
+  );
+  check('a heavier lift names the weight it beat', heavier, '스쿼트 70kg, 이전 최고 65kg 넘기셨습니다.');
+
+  const moreReps = buildPrLine(
+    withPr({ exerciseId: 'squat', name: '스쿼트', kind: 'reps', weightKg: 65, reps: 12, date: '2026-08-25', previousBestWeightKg: null })
+  );
+  check('a rep PR is never called a first weight record', moreReps, '스쿼트 65kg로 12회, 횟수 기록 넘기셨습니다.');
+
+  const bodyweight = buildPrLine(
+    withPr({ exerciseId: 'pull-up', name: '풀업', kind: 'reps', weightKg: 0, reps: 10, date: '2026-08-25', previousBestWeightKg: null })
+  );
+  check('bodyweight rep PRs do not mention 0kg', bodyweight, '풀업 맨몸로 10회, 횟수 기록 넘기셨습니다.');
 }
 
 // 2. 신체 수치를 한 번도 입력하지 않은 사용자 — 온보딩 체중만 있고 나머지는 null

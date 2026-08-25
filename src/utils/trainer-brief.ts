@@ -67,10 +67,21 @@ export function buildRecentTrainingLine(context: PtContext): string {
   return `최근에 ${head} 하셨습니다.`;
 }
 
-/** 최근 PR 한 줄. 없으면 null (없는 PR을 만들지 않는다). */
+/**
+ * 최근 PR 한 줄. 없으면 null (없는 PR을 만들지 않는다).
+ *
+ * PR은 두 종류다([[decision-log]] DEC-011). 횟수 PR을 중량 기준으로 말하면 거짓이 된다 —
+ * 이미 들어 본 무게를 "첫 기록"이라고 하거나, 늘어난 것이 횟수인데 무게를 넘겼다고 하게 된다.
+ */
 export function buildPrLine(context: PtContext): string | null {
   const [pr] = context.recentTraining.recentPRs;
   if (!pr) return null;
+
+  if (pr.kind === 'reps') {
+    const load = pr.weightKg > 0 ? `${pr.weightKg}kg` : '맨몸';
+    return `${pr.name} ${load}로 ${pr.reps}회, 횟수 기록 넘기셨습니다.`;
+  }
+
   return pr.previousBestWeightKg === null
     ? `${pr.name}는 ${pr.weightKg}kg가 첫 기록입니다.`
     : `${pr.name} ${pr.weightKg}kg, 이전 최고 ${pr.previousBestWeightKg}kg 넘기셨습니다.`;
