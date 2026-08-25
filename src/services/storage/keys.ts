@@ -13,4 +13,5 @@ export const StorageKeys = {
   trainerUsageState: 'hellchang.trainerUsageState.v1',
   referralState: 'hellchang.referralState.v1',
   openEventPassState: 'hellchang.openEventPassState.v1',
+  homeGymState: 'hellchang.homeGymState.v1',
 } as const;
