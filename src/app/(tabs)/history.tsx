@@ -31,6 +31,11 @@ import { WorkoutCategory, WorkoutIntensity } from '@/types/workout';
 import { todayDateString } from '@/utils/date';
 import { countPeriodPRs } from '@/utils/exercise-history';
 import { buildHistoryDays } from '@/utils/history';
+import {
+  buildLearningBoard,
+  learnedFamilyCount,
+  seenFamilyCount,
+} from '@/utils/danbaek-learning-presence';
 import { buildRecommendationContext } from '@/utils/recommendation-context';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import {
@@ -77,6 +82,7 @@ export default function HistoryScreen() {
     canAddPhotoToday,
     nextPhotoAvailableDate,
     characterAppearance,
+    danbaekLearning,
   } = useAppData();
 
   const [period, setPeriod] = useState<Period>('week');
@@ -130,6 +136,19 @@ export default function HistoryScreen() {
     () => historyDays.filter((day) => day.hasPhoto).map((day) => day.date),
     [historyDays]
   );
+
+  /*
+   * 단백이가 이 기록에서 무엇을 배웠는지. 계산은 어댑터가 이미 했고 여기서는 옮겨 적기만
+   * 한다 — 없는 성장 수치를 만들지 않는다.
+   */
+  const learningBoard = useMemo(() => buildLearningBoard(danbaekLearning), [danbaekLearning]);
+  const learningEvidenceLine = useMemo(() => {
+    const seen = seenFamilyCount(danbaekLearning);
+    if (seen === 0) return '아직 단백이가 본 동작이 없어요. 운동을 기록하면 여기에 쌓여요.';
+    const learned = learnedFamilyCount(danbaekLearning);
+    const learnedPart = learned > 0 ? ` 그중 ${learned}가지는 배웠어요.` : '';
+    return `이 기록으로 단백이가 ${seen}가지 동작을 지켜봤어요.${learnedPart}`;
+  }, [danbaekLearning]);
 
   const recommendationContext = useMemo(
     () => buildRecommendationContext(profile, bodyHistory, workoutRecords),
@@ -254,6 +273,27 @@ export default function HistoryScreen() {
             이 기간에는 볼륨으로 계산할 세트 기록이 없어요.
           </ThemedText>
         )}
+      </Section>
+
+      {/*
+        이 화면의 숫자는 통계로 끝나지 않는다 — **이 기록이 단백이가 배운 근거**다.
+        과장하지 않기 위해 여기서 새로 계산하는 값은 없다: 학습 스냅샷이 이미 아는 사실
+        (몇 가지를 봤고, 어디까지 배웠고, 무엇을 몇 번 봤는지)만 옮겨 적는다.
+      */}
+      <Section title="단백이가 배운 근거">
+        <ThemedText type="caption" themeColor="textSecondary">
+          {learningEvidenceLine}
+        </ThemedText>
+        {learningBoard.map((row) => (
+          <View key={row.movementFamily} style={styles.learningRow}>
+            <ThemedText type="small" numberOfLines={1} style={styles.learningLabel}>
+              {row.label}
+            </ThemedText>
+            <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+              {row.stageLabel} · {row.evidenceCount}번 봄
+            </ThemedText>
+          </View>
+        ))}
       </Section>
 
       {profile && (
@@ -555,6 +595,16 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
+  /** 학습 근거는 카드가 아니라 한 줄 로그다 — 통계 카드와 무게를 겨루지 않는다. */
+  learningRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  learningLabel: {
+    flexShrink: 1,
+  },
   bodyRow: {
     flexDirection: 'row',
     alignItems: 'center',

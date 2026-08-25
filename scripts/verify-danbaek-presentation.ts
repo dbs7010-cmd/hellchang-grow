@@ -4,13 +4,15 @@
 import { Exercises } from '@/config/exercises';
 import { DanbaekWorldEntry, resolveDanbaekWorldEntry } from '@/config/danbaek-world-entry';
 import { MovementFamilyLabels } from '@/config/danbaek-movement-labels';
+import { DanbaekStageVoiceLines, MovementFamilyShortLabels } from '@/config/danbaek-voice-lines';
 import { LearningStageLabels } from '@/config/danbaek-learning-policy';
 import type { DanbaekLearningProfile } from '@/types/danbaek-contract';
 import type { WorkoutRecord } from '@/types/workout';
 import { buildDanbaekLearningProfile, diffLearningProfiles } from '@/utils/danbaek-learning';
 import {
-  buildDanbaekPresence,
-  danbaekSetObservationCopy,
+  buildDanbaekSetVoice,
+  buildDanbaekVoice,
+  formatLearningStatus,
   describeLearningGain,
   hasLearnedStage,
   learnedFamilyCount,
@@ -66,50 +68,41 @@ const repeated = (exerciseId: string, times: number, startDay = 1): WorkoutRecor
     });
   });
 
-// ── 1. HOME 현황 — 본 것이 없으면 없다고 말한다 ─────────────────────────────
+// ── 1. 단백이 목소리 — 본 것이 없으면 없다고 말한다 ────────────────────────
 {
-  const presence = buildDanbaekPresence({ profile: profileOf([]), exerciseDb: Exercises });
-  expect('본 것이 없으면 기다리는 상태다', presence.waiting === true);
-  expect('그래도 한 줄은 항상 있다', presence.headline.length > 0);
-  expect('단백이 이야기라는 게 문구에 드러난다', presence.headline.includes('단백이'));
-  expect('근거가 없으면 근거 줄을 만들지 않는다', presence.detail === null);
-  expect('계열을 지어내지 않는다', presence.movementFamily === null);
-  expect('단계도 unseen 그대로다', presence.learningStage === 'unseen');
+  const voice = buildDanbaekVoice(profileOf([]));
+  expect('본 것이 없으면 기다리는 상태다', voice.waiting === true);
+  expect('그래도 한마디는 항상 있다', voice.line.length > 0);
+  expect('상태 한 줄도 항상 있다', voice.status === '아직 본 동작 없음');
+  expect('계열을 지어내지 않는다', voice.movementFamily === null);
+  expect('단계도 unseen 그대로다', voice.learningStage === 'unseen');
   expect(
     '기록이 없다고 죄책감을 주는 말을 쓰지 않는다',
-    !/안 하|못 하|게으|실패|없잖/.test(presence.headline)
+    !/안 하|못 하|게으|실패|없잖/.test(`${voice.line} ${voice.status}`)
   );
 }
 
-// ── 2. HOME 현황 — 실제 기록에서만 나온다 ───────────────────────────────────
+// ── 2. 단백이 목소리 — 실제 기록에서만 나온다 ──────────────────────────────
 {
-  const presence = buildDanbaekPresence({
-    profile: profileOf([record({ id: 'r1', exercises: [exercise('bench-press')] })]),
-    exerciseDb: Exercises,
-  });
-  expect('한 번 봤으면 기다리는 상태가 아니다', presence.waiting === false);
-  expect('본 계열이 그대로 나온다', presence.movementFamily === 'push_horizontal');
-  expect('단계는 어댑터가 준 값 그대로다', presence.learningStage === 'observing');
+  const voice = buildDanbaekVoice(profileOf([record({ id: 'r1', exercises: [exercise('bench-press')] })]));
+  expect('한 번 봤으면 기다리는 상태가 아니다', voice.waiting === false);
+  expect('본 계열이 그대로 나온다', voice.movementFamily === 'push_horizontal');
+  expect('단계는 어댑터가 준 값 그대로다', voice.learningStage === 'observing');
   expect(
-    '문구가 그 계열을 말한다',
-    presence.headline.includes(MovementFamilyLabels.push_horizontal)
+    '상태 한 줄이 그 계열과 단계를 말한다',
+    voice.status === formatLearningStatus('push_horizontal', 'observing')
   );
-  expect('아직 배운 게 아니라 지켜보는 중이다', presence.headline.includes('지켜보는 중'));
-  expect('근거 줄에 실제 운동 이름이 나온다', presence.detail?.includes('벤치프레스') === true);
-  expect(
-    '한 번 본 것을 배웠다고 말하지 않는다',
-    presence.detail !== null && !presence.detail.includes('배웠')
-  );
+  expect('아직 배운 게 아니라 지켜보는 중이다', voice.status.includes('지켜보는 중'));
+  expect('한 번 본 것을 배웠다고 말하지 않는다', !voice.line.includes('배웠') && !voice.line.includes('할 수 있'));
 }
 
-// ── 3. HOME 현황 — 가장 최근에 본 계열을 말한다 ─────────────────────────────
+// ── 3. 단백이 목소리 — 가장 최근에 본 계열을 말한다 ────────────────────────
 {
   const profile = profileOf([
     record({ id: 'old', date: '2026-08-01', createdAt: '2026-08-01T10:00:00.000Z', exercises: [exercise('squat')] }),
     record({ id: 'new', date: '2026-08-20', createdAt: '2026-08-20T10:00:00.000Z', exercises: [exercise('bench-press')] }),
   ]);
-  const presence = buildDanbaekPresence({ profile, exerciseDb: Exercises });
-  expect('나중에 본 계열이 화면에 나온다', presence.movementFamily === 'push_horizontal');
+  expect('나중에 본 계열이 화면에 나온다', buildDanbaekVoice(profile).movementFamily === 'push_horizontal');
 
   // 같은 순간에 두 계열을 봤으면 더 많이 본 쪽이 이긴다 — 같은 입력이면 화면이 흔들리지 않는다.
   const sameMoment = profileOf([
@@ -127,47 +120,38 @@ const repeated = (exerciseId: string, times: number, startDay = 1): WorkoutRecor
   expect('같은 입력이면 같은 결과다', first?.movementFamily === second?.movementFamily);
 }
 
-// ── 4. HOME 현황 — 단계가 오르면 말이 달라진다 ──────────────────────────────
+// ── 4. 단백이 목소리 — 단계가 오르면 말이 달라진다 ─────────────────────────
 {
   const learnedProfile = profileOf(repeated('bench-press', 4));
-  const presence = buildDanbaekPresence({ profile: learnedProfile, exerciseDb: Exercises });
-  expect('네 번 봤으면 배웠다고 말한다', presence.learningStage === 'learned');
-  expect('문구도 배움으로 바뀐다', presence.headline.includes('배웠'));
-  expect('근거 줄도 배움으로 바뀐다', presence.detail?.includes('배웠') === true);
+  const voice = buildDanbaekVoice(learnedProfile);
+  expect('네 번 봤으면 배움 단계다', voice.learningStage === 'learned');
+  expect('상태 한 줄도 배움으로 바뀐다', voice.status.includes(LearningStageLabels.learned));
+  expect('한마디도 그 단계에서만 바뀐다', voice.line === DanbaekStageVoiceLines.learned);
   expect('배운 계열 수를 셀 수 있다', learnedFamilyCount(learnedProfile) === 1);
   expect('배움 미만은 세지 않는다', learnedFamilyCount(profileOf(repeated('bench-press', 1))) === 0);
   expect('배움 이상만 배운 것으로 본다', hasLearnedStage('learned') && !hasLearnedStage('imitating'));
 }
 
-// ── 5. HOME 현황 — 앱이 모르는 운동은 아는 척하지 않는다 ────────────────────
+// ── 5. 단백이 목소리 — 앱이 모르는 운동은 아는 척하지 않는다 ───────────────
 {
-  const presence = buildDanbaekPresence({
-    profile: profileOf([record({ id: 'custom', exercises: [exercise('custom-exercise-xyz')] })]),
-    exerciseDb: Exercises,
-  });
-  expect('매핑되지 않은 운동은 학습으로 보이지 않는다', presence.waiting === true);
-
-  // 계약에는 있는 운동이지만 화면이 가진 DB에 없으면 이름을 지어내지 않는다.
-  const noNames = buildDanbaekPresence({
-    profile: profileOf([record({ id: 'r1', exercises: [exercise('bench-press')] })]),
-    exerciseDb: [],
-  });
-  expect('이름을 모르면 근거 줄을 비운다', noNames.detail === null);
-  expect('그래도 현황 한 줄은 남는다', noNames.headline.includes(MovementFamilyLabels.push_horizontal));
+  const voice = buildDanbaekVoice(
+    profileOf([record({ id: 'custom', exercises: [exercise('custom-exercise-xyz')] })])
+  );
+  expect('매핑되지 않은 운동은 학습으로 보이지 않는다', voice.waiting === true);
+  expect('그런 상태에서도 없는 계열을 말하지 않는다', voice.movementFamily === null);
 }
 
 // ── 6. 세션 관찰 반응 — 아는 동작에서만 단백이가 나온다 ─────────────────────
 {
-  const known = danbaekSetObservationCopy('bench-press');
-  expect('아는 운동이면 단백이가 따라 한다고 말한다', known !== null && known.includes('단백이'));
-  expect('그 동작 이름이 들어간다', known?.includes(MovementFamilyLabels.push_horizontal) === true);
-  expect('따라 한다는 말이 들어간다', known?.includes('따라 해본다') === true);
+  const known = buildDanbaekSetVoice('bench-press');
+  expect('아는 운동이면 단백이가 자기 말로 반응한다', known !== null && known.startsWith('나도 해볼래!'));
+  expect('그 동작 이름이 짧게 들어간다', known?.includes(MovementFamilyShortLabels.push_horizontal) === true);
   expect(
     '세트 반응이 성장/SP 언어로 새지 않는다',
     known !== null && !/SP|레벨|XP|성장/.test(known)
   );
-  expect('직접 추가한 운동은 null이다 (호출부가 기존 반응으로 떨어진다)', danbaekSetObservationCopy('custom-exercise-1') === null);
-  expect('운동 id가 없으면 null이다', danbaekSetObservationCopy(undefined) === null);
+  expect('직접 추가한 운동은 null이다 (호출부가 기존 반응으로 떨어진다)', buildDanbaekSetVoice('custom-exercise-1') === null);
+  expect('운동 id가 없으면 null이다', buildDanbaekSetVoice(undefined) === null);
 }
 
 // ── 7. 결과 리빌 — 단계가 올랐을 때만 올랐다고 말한다 ───────────────────────

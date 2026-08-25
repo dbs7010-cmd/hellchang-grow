@@ -35,3 +35,19 @@ export function withTopicParticle(word: string): string {
 export function withSubjectParticle(word: string): string {
   return attach(word, '이', '가');
 }
+
+/**
+ * 도구격 조사: 풀업**으로** / 벤치프레스**로** / 데드리프트**로**.
+ *
+ * 받침 ㄹ은 예외다 — "케이블로"가 맞고 "케이블으로"는 틀리다. 다른 조사와 달리 받침 유무만
+ * 봐서는 안 되므로 여기서만 종성을 직접 본다.
+ */
+export function withInstrumentalParticle(word: string): string {
+  const last = word.charCodeAt(word.length - 1);
+  const isHangulSyllable = last >= 0xac00 && last <= 0xd7a3;
+  if (!isHangulSyllable) return `${word}로`;
+
+  const finalConsonant = (last - 0xac00) % 28;
+  const isRieul = finalConsonant === 8;
+  return `${word}${finalConsonant === 0 || isRieul ? '로' : '으로'}`;
+}

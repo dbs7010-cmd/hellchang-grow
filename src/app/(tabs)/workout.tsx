@@ -1,6 +1,8 @@
 import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { DanbaekVoiceBubble } from '@/components/character/danbaek-voice-bubble';
 import { ThemedText } from '@/components/themed-text';
 import { NavRow } from '@/components/ui/nav-row';
 import { PrimaryButton } from '@/components/ui/primary-button';
@@ -11,6 +13,7 @@ import { WorkoutCategoryLabels } from '@/config/workout-labels';
 import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { useTheme } from '@/hooks/use-theme';
+import { buildDanbaekVoice, buildLearningBoard } from '@/utils/danbaek-learning-presence';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 
 /**
@@ -26,7 +29,10 @@ import { getTodaysScheduledRoutine } from '@/utils/routine';
 export default function WorkoutHubScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const { routines, workoutRecords, activeSession } = useAppData();
+  const { routines, workoutRecords, activeSession, danbaekLearning } = useAppData();
+
+  const danbaekVoice = useMemo(() => buildDanbaekVoice(danbaekLearning), [danbaekLearning]);
+  const learningBoard = useMemo(() => buildLearningBoard(danbaekLearning), [danbaekLearning]);
 
   const scheduledRoutine = getTodaysScheduledRoutine(routines, new Date().getDay());
   const recentRecords = workoutRecords.slice(0, 3);
@@ -91,6 +97,29 @@ export default function WorkoutHubScreen() {
         )}
       </Section>
 
+      {/*
+        내 운동이 단백이의 학습으로 이어진다는 걸 이 화면에서 한 번 더 보여준다.
+        새로 계산하는 값은 없다 — 이미 만들어진 학습 스냅샷을 짧게 옮겨 적을 뿐이고,
+        아직 본 적 없는 동작은 나열하지 않는다(할 일 목록이 되면 죄책감이 된다).
+      */}
+      <Section title="단백이가 배운 것">
+        <DanbaekVoiceBubble line={danbaekVoice.line} status={danbaekVoice.status} />
+        {learningBoard.length > 0 && (
+          <View style={styles.boardRows}>
+            {learningBoard.map((row) => (
+              <View key={row.movementFamily} style={styles.boardRow}>
+                <ThemedText type="small" numberOfLines={1} style={styles.rowText}>
+                  {row.label}
+                </ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                  {row.stageLabel} · {row.evidenceCount}번 봄
+                </ThemedText>
+              </View>
+            ))}
+          </View>
+        )}
+      </Section>
+
       <Section title="최근 운동">
         {recentRecords.length === 0 ? (
           <ThemedText type="small" themeColor="textSecondary">
@@ -137,6 +166,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Spacing.two,
     paddingVertical: 2,
+  },
+  boardRows: {
+    gap: Spacing.one,
+    paddingTop: Spacing.one,
+  },
+  boardRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
   },
   emptyBlock: {
     gap: Spacing.one,

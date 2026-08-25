@@ -146,6 +146,39 @@ export function buildDanbaekWatchLine(profile: DanbaekLearningProfile): string {
   return `단백이가 옆에서 ${withObjectParticle(label)} 따라 하는 중입니다. 자세는 제가 봅니다.`;
 }
 
+export interface TrainerBriefSections {
+  /** 지금 어떤 상태인가. 화면 맨 위 한 줄. */
+  status: string;
+  /** 오늘 중요한 한 가지. PR > 최근 운동 > 주간 요약 순으로 고른다. */
+  focus: string;
+  /** 그 판단의 근거. 작게 깔린다 — 상태/한 가지와 같은 무게로 읽히면 안 된다. */
+  records: string[];
+}
+
+/**
+ * PT가 실제로 말하는 순서로 나눈다: **지금 상태 → 오늘 중요한 한 가지 → 근거**.
+ *
+ * 예전에는 같은 문장 네댓 줄이 한 카드에 같은 무게로 쌓여서, 읽는 사람이 무엇부터 봐야
+ * 할지 고를 수 없었다. 문장 자체는 그대로 재사용하고 순서와 무게만 정한다 — 새 문장을
+ * 만들지 않으므로 여기서 없는 사실이 생길 수 없다.
+ *
+ * 단백이 이야기는 **여기 들어가지 않는다.** 스탠리 카드 안에 단백이가 있으면 두 역할이
+ * 한 목소리로 섞인다 (화면이 따로 보여준다).
+ */
+export function buildTrainerBriefSections(context: PtContext): TrainerBriefSections {
+  const status = buildStatusLine(context);
+  const prLine = buildPrLine(context);
+  const recentLine = buildRecentTrainingLine(context);
+  const weeklyLine = buildWeeklyLine(context);
+
+  const focus = prLine ?? recentLine;
+  const records = [weeklyLine, focus === recentLine ? null : recentLine].filter(
+    (line): line is string => Boolean(line)
+  );
+
+  return { status, focus, records };
+}
+
 /**
  * 트레이너 화면 브리핑 블록에 그대로 쓰는 3~5줄. null은 걸러서 렌더한다.
  *

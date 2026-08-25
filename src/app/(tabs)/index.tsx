@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PlayerCharacter } from '@/components/character/player-character';
 import { CharacterViewer } from '@/components/character/character-viewer';
+import { DanbaekVoiceBubble } from '@/components/character/danbaek-voice-bubble';
 import { GoldsunBubble } from '@/components/goldsun/goldsun-bubble';
 import { GrowthHud } from '@/components/home/growth-hud';
 import { RecommendedStrip } from '@/components/home/recommended-strip';
@@ -24,7 +25,7 @@ import { useAppData } from '@/context/app-data-context';
 import { todayDateString } from '@/utils/date';
 import { getThisWeekRecords } from '@/data/workout-repository';
 import { useTheme } from '@/hooks/use-theme';
-import { buildDanbaekPresence } from '@/utils/danbaek-learning-presence';
+import { buildDanbaekVoice } from '@/utils/danbaek-learning-presence';
 import { findPreviousPerformance } from '@/utils/exercise-history';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
@@ -107,13 +108,10 @@ export default function HomeScreen() {
   }, [growth]);
   /*
    * 단백이의 학습은 성장(HELL PASS / 오늘 성장 SP)과 **다른 축**이다 — 위의 todayGrowth는
-   * 그대로 두고, 여기서는 "얘가 내 운동을 보고 뭘 따라 하는 중인가"만 한 줄로 말한다.
+   * 그대로 두고, 여기서는 "얘가 내 운동을 보고 뭘 따라 하는 중인가"만 두 층으로 말한다.
    * 계산은 전부 어댑터가 이미 했다. 화면은 문구만 고른다.
    */
-  const danbaekPresence = useMemo(
-    () => buildDanbaekPresence({ profile: danbaekLearning, exerciseDb: Exercises }),
-    [danbaekLearning]
-  );
+  const danbaekVoice = useMemo(() => buildDanbaekVoice(danbaekLearning), [danbaekLearning]);
 
   /*
    * 단백세상 입구. 지금은 seam이 닫혀 있어 항상 null이고 아무것도 그리지 않는다 —
@@ -322,45 +320,6 @@ export default function HomeScreen() {
               <BodyHudMetric label="운동 기록" value={`${workoutRecords.length}회`} />
             </View>
 
-            {/*
-              단백이의 학습 한 줄. 캐릭터 반대쪽(우상단)에 붙어 "옆에서 보고 있는 존재"로만
-              읽히게 둔다 — 대시보드가 아니고, 성장 표시(HELL PASS / 오늘 성장)를 대체하지도
-              않는다. 실제 기록에서 나온 문구만 나오고, 본 것이 없으면 기다린다고만 말한다.
-            */}
-            <View pointerEvents="none" style={styles.learningPill}>
-              <ThemedText type="captionBold" style={styles.learningHeadline} numberOfLines={2}>
-                {danbaekPresence.headline}
-              </ThemedText>
-              {danbaekPresence.detail && (
-                <ThemedText type="caption" style={styles.learningDetail} numberOfLines={1}>
-                  {danbaekPresence.detail}
-                </ThemedText>
-              )}
-            </View>
-
-            {/*
-              단백세상 입구. seam이 열렸을 때만 나타난다 — 갈 곳이 없는 버튼은 만들지 않는다.
-              여기서 하는 일은 이동뿐이고, WORLD 화면/판정은 APP이 구현하지 않는다.
-            */}
-            {worldEntry && (
-              <Pressable
-                onPress={() => router.push(worldEntry.route)}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel={`${worldEntry.label} 들어가기`}
-                style={[
-                  styles.worldEntryPill,
-                  { backgroundColor: theme.backgroundElement, borderColor: theme.border },
-                ]}>
-                <ThemedText type="captionBold" numberOfLines={1}>
-                  🌱 {worldEntry.label} ›
-                </ThemedText>
-                <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                  {worldEntry.subLabel}
-                </ThemedText>
-              </Pressable>
-            )}
-
             {/* 실제 3D 모델이 등록되기 전에는 360을 아예 노출하지 않는다 — 눌러봐야 도형
                 placeholder가 도는 빈 기능이다. model3d가 채워지면 이 버튼과 CharacterViewer가
                 코드 수정 없이 그대로 다시 살아난다. */}
@@ -382,6 +341,18 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/*
+          단백이가 말하는 자리. 스탠리는 무대 **위**에서, 단백이는 무대 **아래**에서 말한다 —
+          예전에는 둘이 캐릭터 머리 위 같은 띠에서 동시에 말해 누가 말하는지 흐려졌다.
+          한마디(단백이 목소리) + 상태 한 줄(정확한 학습 단계) 두 층으로만 말한다.
+        */}
+        <DanbaekVoiceBubble
+          line={danbaekVoice.line}
+          status={danbaekVoice.status}
+          homeLight
+          onPress={() => router.push('/(tabs)/workout')}
+        />
+
         <PrimaryButton
           label={sessionInProgress ? '운동으로 돌아가기' : '운동 시작'}
           subLabel={
@@ -395,6 +366,28 @@ export default function HomeScreen() {
           size="large"
           onPress={handleStartPress}
         />
+
+        {/*
+          단백세상 입구. **CTA가 아니라 CTA 아래 한 줄**이다 — [운동 시작]과 나란히 두면
+          "지금 뭘 해야 하는가"가 두 개가 된다. 역할도 다르다: 운동은 내가 하는 것이고,
+          단백세상은 단백이가 배운 걸 쓰러 가는 곳이다.
+          seam이 닫혀 있으면 아무것도 그리지 않는다 (지금이 그렇다).
+        */}
+        {worldEntry && (
+          <Pressable
+            onPress={() => router.push(worldEntry.route)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`${worldEntry.label} 들어가기`}
+            style={styles.worldEntryRow}>
+            <ThemedText type="captionBold" numberOfLines={1} style={styles.worldEntryLabel}>
+              🌱 {worldEntry.label} ›
+            </ThemedText>
+            <ThemedText type="caption" numberOfLines={1} style={styles.worldEntrySub}>
+              {worldEntry.subLabel}
+            </ThemedText>
+          </Pressable>
+        )}
 
         {!sessionInProgress && (
           <RecommendedStrip
@@ -582,38 +575,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     paddingBottom: Spacing.one,
   },
-  /**
-   * 캐릭터 우상단. 좌상단은 신체 HUD(76px)가 이미 쓰고 있어서 반대쪽에 둔다.
-   *
-   * 폭을 넓게 잡을수록 줄바꿈이 줄어 **높이가 낮아진다** — 이 카드가 캐릭터를 덮느냐는
-   * 폭이 아니라 높이가 정한다. 한 줄(제목 최대 2줄 + 근거 1줄)로 묶어 둔 상태에서
-   * 360x800(가장 좁은 지원 크기)에서도 캐릭터 머리 위로 여유가 남는 것을 확인했다.
-   */
-  learningPill: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    maxWidth: '56%',
-    borderWidth: 0,
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderRadius: Radius.medium,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
-    zIndex: 2,
-    boxShadow: HomeColors.hudShadow,
-  },
-  /** 입구는 캐릭터 발치 왼쪽 — [운동 시작] CTA 위를 덮지 않는 자리다. */
-  worldEntryPill: {
-    position: 'absolute',
-    left: 0,
-    bottom: 0,
-    maxWidth: '56%',
-    borderWidth: 1,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    gap: Spacing.half,
-    zIndex: 3,
+  /** 단백세상 입구는 CTA 아래 한 줄이다 — 골드 CTA와 무게를 겨루지 않는다. */
+  worldEntryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    paddingVertical: Spacing.half,
   },
   rotatePill: {
     position: 'absolute',
@@ -653,10 +621,10 @@ const styles = StyleSheet.create({
   },
   brand: { color: HomeColors.text },
   trainerLink: { color: HomeColors.goldStrong },
+  worldEntryLabel: { color: HomeColors.goldStrong },
+  worldEntrySub: { color: HomeColors.textSecondary },
   statLabel: { color: HomeColors.textSecondary },
   statValue: { color: HomeColors.text, fontWeight: 800, fontVariant: ['tabular-nums'] },
-  learningHeadline: { color: HomeColors.text },
-  learningDetail: { color: HomeColors.textSecondary },
   bodyHudLabel: { color: HomeColors.textSecondary },
   bodyHudValue: { color: HomeColors.text, fontWeight: 800, fontVariant: ['tabular-nums'] },
 });

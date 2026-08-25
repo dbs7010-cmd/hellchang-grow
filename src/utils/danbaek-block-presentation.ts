@@ -1,5 +1,6 @@
 import { LearningStageLabels } from '@/config/danbaek-learning-policy';
 import { MovementFamilyLabels } from '@/config/danbaek-movement-labels';
+import { DanbaekBlockVoiceLines, MovementFamilyShortLabels } from '@/config/danbaek-voice-lines';
 import type { MovementFamily, StageBlock } from '@/types/danbaek-contract';
 import type { ExerciseDefinition, MuscleGroup } from '@/types/exercise';
 import type { WorkoutRecord } from '@/types/workout';
@@ -8,7 +9,7 @@ import {
   requiredExerciseForBlock,
   resolveBlockRoute,
 } from '@/utils/danbaek-block-routing';
-import { withObjectParticle, withTopicParticle } from '@/utils/korean';
+import { withInstrumentalParticle, withObjectParticle, withTopicParticle } from '@/utils/korean';
 import type { QuickStartExercise } from '@/utils/workout-start';
 
 /**
@@ -33,6 +34,15 @@ import type { QuickStartExercise } from '@/utils/workout-start';
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+export interface BlockPrimaryAction {
+  /** 지금 누르면 시작되는 운동. 후보가 하나도 없으면 이 값이 없다. */
+  exercise: QuickStartExercise;
+  /** 버튼에 쓸 문구. */
+  label: string;
+  /** 왜 이 운동인지 한 줄. */
+  note: string;
+}
+
 export interface BlockPresentation {
   /** WORLD가 준 값 그대로. 화면이 다시 판정하지 않는다. */
   stageId: string;
@@ -52,6 +62,17 @@ export interface BlockPresentation {
   muscleGroup?: MuscleGroup;
   /** 후보가 없을 때 화면이 보여줄 안내. 후보가 있으면 null. */
   emptyLine: string | null;
+  /**
+   * 사용자가 알아야 할 세 가지 — 계약 용어가 아니라 사람 말로.
+   *  1) 단백이가 왜 못 지나가는가  2) 무엇을 배우면 되는가  3) 지금 뭘 하면 되는가
+   */
+  danbaekLine: string;
+  whyBlockedLine: string;
+  whatToLearnLine: string;
+  /** 지금 눌러야 할 단 하나의 행동. 후보가 없으면 null. */
+  primaryAction: BlockPrimaryAction | null;
+  /** 그 외 후보. 선택 피로를 만들지 않도록 primary와 분리해서 작게 둔다. */
+  otherExercises: QuickStartExercise[];
 }
 
 /**
@@ -103,6 +124,18 @@ export function buildBlockPresentation(input: {
 
   stanleyLines.push(StanleyRelationshipLine);
 
+  const [first, ...rest] = route.exercises;
+  const primaryAction: BlockPrimaryAction | null = first
+    ? {
+        exercise: first,
+        label: `${withInstrumentalParticle(first.exerciseName)} 시작`,
+        note:
+          required?.id === first.exerciseId
+            ? '이 구간이 요구하는 운동이에요'
+            : `${withObjectParticle(MovementFamilyShortLabels[route.movementFamily])} 단백이가 보고 배워요`,
+      }
+    : null;
+
   return {
     stageId: block.stageId,
     movementFamily: route.movementFamily,
@@ -114,6 +147,14 @@ export function buildBlockPresentation(input: {
     exercises: route.exercises,
     muscleGroup: route.muscleGroup,
     emptyLine: route.exercises.length === 0 ? buildEmptyLine(familyLabel) : null,
+    // 사용자는 계약도 movement family도 알 필요가 없다 — 세 가지만 알면 된다.
+    danbaekLine: first ? DanbaekBlockVoiceLines.needsPractice : DanbaekBlockVoiceLines.noRoute,
+    whyBlockedLine: block.requirement.reason,
+    whatToLearnLine: required
+      ? `${withObjectParticle(required.name)} 더 보여주면 돼요`
+      : `${withObjectParticle(MovementFamilyShortLabels[route.movementFamily])} 더 보여주면 돼요`,
+    primaryAction,
+    otherExercises: rest,
   };
 }
 

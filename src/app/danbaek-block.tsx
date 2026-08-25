@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useMemo, useSyncExternalStore } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { DanbaekVoiceBubble } from '@/components/character/danbaek-voice-bubble';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { PrimaryButton } from '@/components/ui/primary-button';
@@ -92,8 +93,16 @@ export default function DanbaekBlockScreen() {
     );
   }
 
+  const primaryAction = presentation.primaryAction;
+
   return (
     <SubScreen title="단백이가 막힌 곳" accent>
+      {/*
+        사용자가 알아야 할 것은 셋뿐이다: 단백이가 왜 못 지나가는지 / 무엇을 배우면 되는지 /
+        지금 뭘 하면 되는지. movement family나 계약 용어를 이해할 필요는 없다.
+      */}
+      <DanbaekVoiceBubble line={presentation.danbaekLine} status={presentation.whatToLearnLine} />
+
       {/* 스탠리가 말하는 자리. 트레이너 화면과 같은 portrait 슬롯을 쓴다. */}
       <View style={styles.stanleyRow}>
         <ThemedView
@@ -115,42 +124,45 @@ export default function DanbaekBlockScreen() {
         </View>
       </View>
 
-      {/* WORLD가 준 판정을 그대로 보여준다 — 화면이 다시 계산하거나 부풀리지 않는다. */}
-      <Section title="막힌 이유">
-        <ThemedView type="backgroundElement" style={[styles.factCard, { borderColor: theme.border }]}>
-          <FactRow label="필요한 동작" value={presentation.familyLabel} />
-          {presentation.requiredStageLabel && (
-            <FactRow label="필요한 정도" value={presentation.requiredStageLabel} />
-          )}
-          {presentation.requiredExercise && (
-            <FactRow label="요구 운동" value={presentation.requiredExercise.name} />
-          )}
-        </ThemedView>
-      </Section>
+      {/*
+        지금 할 행동은 **하나**로 세운다. 후보를 전부 같은 무게로 늘어놓으면 고르는 일이
+        일이 된다 — 나머지는 아래에 작게 둔다. 순서는 라우팅 어댑터가 정한 그대로다.
+      */}
+      {primaryAction ? (
+        <>
+          <PrimaryButton
+            label={primaryAction.label}
+            subLabel={primaryAction.note}
+            variant="gold"
+            size="large"
+            onPress={() => handleStart(primaryAction.exercise)}
+          />
 
-      {presentation.exercises.length > 0 ? (
-        <Section title="지금 할 수 있는 운동">
-          {presentation.exercises.map((exercise, index) => (
-            <Pressable
-              key={exercise.exerciseId}
-              onPress={() => handleStart(exercise)}
-              accessibilityRole="button"
-              accessibilityLabel={`${exercise.exerciseName}으로 운동 시작`}
-              style={[styles.candidate, { backgroundColor: theme.backgroundElement }]}>
-              <View style={styles.candidateText}>
-                <ThemedText type="smallBold" numberOfLines={1}>
-                  {exercise.exerciseName}
-                </ThemedText>
-                <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                  {describeBlockCandidate(presentation, exercise)}
-                </ThemedText>
-              </View>
-              <ThemedText type="captionBold" style={{ color: theme.gold }}>
-                {index === 0 ? '이 운동으로 시작 ›' : '시작 ›'}
-              </ThemedText>
-            </Pressable>
-          ))}
-        </Section>
+          {presentation.otherExercises.length > 0 && (
+            <Section title="다른 운동으로 해도 돼요">
+              {presentation.otherExercises.map((exercise) => (
+                <Pressable
+                  key={exercise.exerciseId}
+                  onPress={() => handleStart(exercise)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${exercise.exerciseName}으로 운동 시작`}
+                  style={[styles.candidate, { backgroundColor: theme.backgroundElement }]}>
+                  <View style={styles.candidateText}>
+                    <ThemedText type="smallBold" numberOfLines={1}>
+                      {exercise.exerciseName}
+                    </ThemedText>
+                    <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                      {describeBlockCandidate(presentation, exercise)}
+                    </ThemedText>
+                  </View>
+                  <ThemedText type="captionBold" style={{ color: theme.gold }}>
+                    시작 ›
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </Section>
+          )}
+        </>
       ) : (
         /*
           후보가 없는 계열(아직 운동이 매핑되지 않은 carry / locomotion 등). 없는 운동을
@@ -176,19 +188,6 @@ export default function DanbaekBlockScreen() {
 
       <PrimaryButton label="나중에 하기" variant="secondary" onPress={handleClose} />
     </SubScreen>
-  );
-}
-
-function FactRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.factRow}>
-      <ThemedText type="caption" themeColor="textSecondary">
-        {label}
-      </ThemedText>
-      <ThemedText type="smallBold" numberOfLines={1} style={styles.factValue}>
-        {value}
-      </ThemedText>
-    </View>
   );
 }
 
@@ -225,15 +224,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.medium,
     padding: Spacing.three,
     gap: Spacing.one,
-  },
-  factRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
-  },
-  factValue: {
-    flexShrink: 1,
   },
   candidate: {
     flexDirection: 'row',

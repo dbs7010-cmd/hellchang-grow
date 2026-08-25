@@ -38,7 +38,11 @@ import {
 } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
 import { withObjectParticle } from '@/utils/korean';
-import { danbaekSetObservationCopy, describeLearningGain } from '@/utils/danbaek-learning-presence';
+import {
+  buildDanbaekGainVoice,
+  buildDanbaekSetVoice,
+  describeLearningGain,
+} from '@/utils/danbaek-learning-presence';
 import {
   buildGrowthRevealMuscles,
   buildGrowthHighlight,
@@ -492,7 +496,7 @@ export default function SessionScreen() {
       // 어떤 동작인지 알면 단백이가 그것을 따라 한다고 말하고, 모르는 운동(직접 추가 등)은
       // 기존 부위 반응으로 떨어진다 — 아는 척하지 않는다.
       setSetReaction(
-        danbaekSetObservationCopy(currentExercise.exerciseId) ??
+        buildDanbaekSetVoice(currentExercise.exerciseId) ??
           getExerciseReactionCopy(resolvedCurrent?.primaryMuscles[0] ?? activeSession.primaryMuscleGroup)
       );
       setReactionTimerRef.current = setTimeout(() => {
@@ -1118,8 +1122,8 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
     revealPhase === 'pump'
       ? '운동 직후 펌핑'
       : revealPhase === 'before'
-        ? '운동 전 단백이'
-        : (growthHighlight ?? '지금 단백이 실제 몸');
+        ? '운동 전 내 몸'
+        : (growthHighlight ?? '지금 내 실제 몸');
 
   /** 펌핑과 영구 성장의 관계를 한 줄로 짚어 준다 (보조 계층 문구). */
   const revealCaption =
@@ -1206,7 +1210,7 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
             </ThemedView>
             {/* 진행도 숫자가 무엇을 향한 것인지 한 줄로 알려 준다. */}
             <ThemedText type="caption" themeColor="textSecondary">
-              100%가 되면 Stage가 올라 단백이 몸이 실제로 커져요.
+              100%가 되면 Stage가 올라 내 몸이 실제로 커져요.
             </ThemedText>
           </Section>
         )}
@@ -1269,6 +1273,8 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
         {summary.learning.length > 0 && (
           <Section title="오늘 단백이가 배운 것">
             <ThemedView type="backgroundElement" style={styles.learningBox}>
+              {/* 먼저 단백이가 자기 말로 한마디 하고, 정확한 단계는 그 아래에 둔다. */}
+              <ThemedText type="smallBold">🐣 {buildDanbaekGainVoice(summary.learning)}</ThemedText>
               {summary.learning.map(describeLearningGain).map((copy) => (
                 <View key={copy.movementFamily} style={styles.learningRow}>
                   <ThemedText type="smallBold" numberOfLines={1} style={styles.learningFamily}>

@@ -1,13 +1,18 @@
 import { LearningStageLabels, learningStageRank } from '@/config/danbaek-learning-policy';
 import { getDanbaekMovementFamily } from '@/config/danbaek-learning-map';
-import { buildCopyAttemptLine, MovementFamilyLabels } from '@/config/danbaek-movement-labels';
+import { MovementFamilyLabels } from '@/config/danbaek-movement-labels';
+import {
+  DanbaekGainVoiceLines,
+  DanbaekSetVoiceLine,
+  DanbaekStageVoiceLines,
+  MovementFamilyShortLabels,
+} from '@/config/danbaek-voice-lines';
 import type {
   DanbaekLearningProfile,
   LearnedCapability,
   LearningStage,
   MovementFamily,
 } from '@/types/danbaek-contract';
-import type { ExerciseDefinition } from '@/types/exercise';
 import type { LearningGain } from '@/utils/danbaek-learning';
 import { withObjectParticle } from '@/utils/korean';
 
@@ -60,100 +65,121 @@ export function learnedFamilyCount(profile: DanbaekLearningProfile): number {
   return profile.capabilities.filter((capability) => hasLearnedStage(capability.learningStage)).length;
 }
 
-export interface DanbaekPresence {
-  /** 한 줄 요약. 항상 있다 — 본 게 없으면 없다고 말한다. */
-  headline: string;
-  /** 근거 한 줄. 실제 기록이 있을 때만 나온다. */
-  detail: string | null;
-  /** 아직 아무것도 보지 못한 상태인지. 화면이 강조를 줄일 때 쓴다. */
-  waiting: boolean;
+/**
+ * ─── 두 층으로 말하기 ────────────────────────────────────────────────────────
+ *
+ * 단백이는 **자기 말**로 반응하고(PRIMARY), 정확한 상태는 그 아래 짧은 한 줄로 둔다
+ * (SECONDARY). 시스템 설명문을 감정 표현 자리에 놓지 않기 위한 구분이다.
+ *
+ * 두 층 모두 이미 계산된 학습 스냅샷에서만 나온다 — 단계보다 앞선 말은 구조적으로 나올 수
+ * 없다(대사 표가 단계로 색인돼 있다).
+ */
+export interface DanbaekVoice {
+  /** 단백이 자신의 한마디. 항상 있다. */
+  line: string;
+  /** 정확한 상태 한 줄. 본 것이 없으면 그렇다고 말한다. */
+  status: string;
   movementFamily: MovementFamily | null;
   learningStage: LearningStage;
+  /** 아직 아무 동작도 보지 못한 상태인지. */
+  waiting: boolean;
 }
 
-/**
- * 단계별로 단백이가 지금 무엇을 하는 중인지.
- *
- * "네가 커졌다"가 아니라 "얘가 네 동작을 따라 한다"로만 말한다 — 단백이의 학습은 플레이어의
- * 성장(Growth/HELL PASS)과 별개 축이고, 문구가 그 둘을 섞으면 축이 하나로 보인다.
- */
-function headlineFor(capability: LearnedCapability): string {
-  const label = withObjectParticle(MovementFamilyLabels[capability.movementFamily]);
-
-  switch (capability.learningStage) {
-    case 'observing':
-      return `단백이가 옆에서 ${label} 지켜보는 중`;
-    case 'imitating':
-      return `단백이가 ${label} 따라 하는 중`;
-    case 'learned':
-      return `단백이가 ${label} 배웠어요`;
-    case 'familiar':
-      return `단백이가 ${label} 제법 따라 해요`;
-    case 'proficient':
-      return `단백이가 ${label} 능숙하게 해내요`;
-    case 'unseen':
-    default:
-      return '단백이가 옆에서 지켜보는 중';
-  }
+/** `밀기 · 따라 하는 중` — 칩/한 줄 상태 표기. */
+export function formatLearningStatus(
+  movementFamily: MovementFamily,
+  stage: LearningStage
+): string {
+  return `${MovementFamilyShortLabels[movementFamily]} · ${LearningStageLabels[stage]}`;
 }
 
-/**
- * 근거 한 줄. **가장 많이 본 운동**을 말한다 — 계약이 종목별 시각을 주지 않으므로
- * "최근에 배운"이라고 하면 없는 사실이 된다.
- */
-function detailFor(capability: LearnedCapability, exerciseDb: ExerciseDefinition[]): string | null {
-  const [topExerciseId] = capability.representativeExerciseIds;
-  if (!topExerciseId) return null;
-
-  const name = exerciseDb.find((exercise) => exercise.id === topExerciseId)?.name;
-  if (!name) return null;
-
-  return hasLearnedStage(capability.learningStage)
-    ? `${withObjectParticle(name)} 보면서 배웠어요`
-    : `${withObjectParticle(name)} 제일 많이 봤어요`;
-}
-
-/**
- * HOME이 단백이 옆에 띄우는 아주 짧은 학습 현황.
- *
- * 대시보드가 아니다 — 한 줄 + 근거 한 줄이 전부이고, 기록이 없으면 죄책감을 주는 말 대신
- * 기다리고 있다고만 말한다.
- */
-export function buildDanbaekPresence(input: {
-  profile: DanbaekLearningProfile;
-  exerciseDb: ExerciseDefinition[];
-}): DanbaekPresence {
-  const capability = mostRecentlyObserved(input.profile);
+/** 지금 단백이의 목소리 + 상태. 가장 최근에 지켜본 계열 하나를 말한다. */
+export function buildDanbaekVoice(profile: DanbaekLearningProfile): DanbaekVoice {
+  const capability = mostRecentlyObserved(profile);
 
   if (!capability) {
     return {
-      headline: '단백이가 옆에서 지켜보는 중',
-      detail: null,
-      waiting: true,
+      line: DanbaekStageVoiceLines.unseen,
+      status: '아직 본 동작 없음',
       movementFamily: null,
       learningStage: 'unseen',
+      waiting: true,
     };
   }
 
   return {
-    headline: headlineFor(capability),
-    detail: detailFor(capability, input.exerciseDb),
-    waiting: false,
+    line: DanbaekStageVoiceLines[capability.learningStage],
+    status: formatLearningStatus(capability.movementFamily, capability.learningStage),
     movementFamily: capability.movementFamily,
     learningStage: capability.learningStage,
+    waiting: false,
   };
 }
 
 /**
- * 유효 세트를 끝낸 순간 단백이가 보이는 반응.
- *
- * 어떤 동작인지 아는 운동에서만 나온다 — 모르는 운동(직접 추가 등)에는 null을 주고, 호출부가
- * 기존 부위 반응으로 떨어진다. 아는 척하지 않는다.
+ * 세트를 막 끝냈을 때의 한마디 + 무슨 동작인지.
+ * 모르는 운동이면 null — 호출부가 기존 반응으로 떨어진다(아는 척하지 않는다).
  */
-export function danbaekSetObservationCopy(exerciseId: string | undefined): string | null {
+export function buildDanbaekSetVoice(exerciseId: string | undefined): string | null {
   if (!exerciseId) return null;
   const family = getDanbaekMovementFamily(exerciseId);
-  return family ? buildCopyAttemptLine(family) : null;
+  if (!family) return null;
+  return `${DanbaekSetVoiceLine} · ${MovementFamilyShortLabels[family]}`;
+}
+
+/**
+ * 결과 화면에서 오늘 배운 것에 대한 한마디.
+ *
+ * 실제로 단계가 올라간 것이 하나라도 있을 때만 "늘었다"고 말한다 — 아니면 더 봤다고만
+ * 한다(가짜 stage-up 금지, `describeLearningGain`과 같은 기준).
+ */
+export function buildDanbaekGainVoice(gains: LearningGain[]): string | null {
+  if (gains.length === 0) return null;
+  return gains.some((gain) => gain.fromStage !== gain.toStage)
+    ? DanbaekGainVoiceLines.stageUp
+    : DanbaekGainVoiceLines.moreEvidence;
+}
+
+export interface LearningBoardRow {
+  movementFamily: MovementFamily;
+  /** 짧은 동작 이름. */
+  label: string;
+  /** 단계 이름. */
+  stageLabel: string;
+  learningStage: LearningStage;
+  evidenceCount: number;
+}
+
+/**
+ * "단백이가 어디까지 배웠나"를 몇 줄로. 운동/히스토리 화면이 같은 값을 쓴다.
+ *
+ * 본 적 있는 계열만, 많이 본 순서로 낸다 — 아직 본 적 없는 계열까지 늘어놓으면 할 일 목록이
+ * 되고, 그건 죄책감을 만든다. 값은 전부 스냅샷에서 그대로 온다(계산하지 않는다).
+ */
+export function buildLearningBoard(
+  profile: DanbaekLearningProfile,
+  limit = 3
+): LearningBoardRow[] {
+  return profile.capabilities
+    .filter((capability) => capability.evidenceCount > 0)
+    .sort((a, b) =>
+      b.evidenceCount !== a.evidenceCount
+        ? b.evidenceCount - a.evidenceCount
+        : a.movementFamily.localeCompare(b.movementFamily)
+    )
+    .slice(0, limit)
+    .map((capability) => ({
+      movementFamily: capability.movementFamily,
+      label: MovementFamilyShortLabels[capability.movementFamily],
+      stageLabel: LearningStageLabels[capability.learningStage],
+      learningStage: capability.learningStage,
+      evidenceCount: capability.evidenceCount,
+    }));
+}
+
+/** 본 적 있는 계열 수. "몇 가지를 지켜봤나"를 말할 때 쓴다. */
+export function seenFamilyCount(profile: DanbaekLearningProfile): number {
+  return profile.capabilities.filter((capability) => capability.evidenceCount > 0).length;
 }
 
 export interface LearningGainCopy {
