@@ -10,20 +10,19 @@ export interface GrowthHudProps {
   passXpIntoLevel: number;
   passXpForLevel: number;
   passProgress: number;
-  completedWorkoutCount?: number;
   onPress?: () => void;
 }
 
 /**
- * 홈의 게임 진행 HUD. HELL PASS는 기존 진행축을 그대로 유지하고,
- * HomeGymRewardStrip은 완료된 실제 운동 기록만을 보상 입력으로 사용한다.
+ * 홈의 게임 진행 HUD. HELL PASS는 기존 진행축을 그대로 유지한다.
+ * 홈짐 보상은 별도 strip이 저장된 실제 WorkoutRecord를 읽어 계산하므로
+ * HOME CANON과 Workout/Growth 코어의 계약을 바꾸지 않는다.
  */
 export function GrowthHud({
   passLevel,
   passXpIntoLevel,
   passXpForLevel,
   passProgress,
-  completedWorkoutCount = 0,
   onPress,
 }: GrowthHudProps) {
   return (
@@ -53,7 +52,7 @@ export function GrowthHud({
           ›
         </ThemedText>
       </Pressable>
-      <HomeGymRewardStrip completedWorkoutCount={completedWorkoutCount} />
+      <HomeGymRewardStrip />
     </View>
   );
 }
