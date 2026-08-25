@@ -7,7 +7,7 @@
 ## SNAPSHOT
 
 - branch: `feat/v1-monetization-foundation`
-- HEAD: `6999edf` — feat(pr): count a rep PR, not just a heavier lift
+- HEAD: `a14419d` — docs(command-center): log DEC-011 and close the PR extension
   (이 문서를 담은 상태 갱신 커밋이 그 위에 올라간다)
 - last_updated: 2026-08-25
 - last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 14종 전부 PASS(952개 단언)
@@ -57,6 +57,7 @@
 - `8444a0f` 믿을 수 없는 완료 receipt는 버리지 않고 멈춘다([DECISION_LOG.md](DECISION_LOG.md) `DEC-010`). `verify:storage` 139 → 168개
 - ROADMAP M3 구현 현황 조사 — 문서와 코드의 어긋남을 근거와 함께 `docs/ROADMAP.md` 하단 메모로 기록(항목 자체는 수정하지 않음)
 - `6999edf` PR 판정 확장 — 최고 중량 + 같은 중량 최고 횟수(맨몸 포함) 두 종류([DECISION_LOG.md](DECISION_LOG.md) `DEC-011`). `verify:weight-core` 69 → 88개
+- V1 RELEASE AUDIT — 출시 차단 5 / 출시 전 필수 8 / 출시 후 가능 6 / 완료 9 / MANUAL QA 6으로 분류 ([RELEASE_AUDIT.md](RELEASE_AUDIT.md))
 - `b2a3f65` V1 entitlement foundation — 단일 권리 판정 소스 `resolveEntitlement()`, 만료 강제, `verify:entitlement` 55개
 - `ebd5784` 휴식 중 이탈 확인 표시 + stale 종료 확인 정리 (Android 실기기 재현 버그)
 - `d6c3910` 세트 완료 피드백을 휴식 전환 전에 보이도록 유지
@@ -67,21 +68,23 @@
 
 **없음 — verified checkpoint 직후다.** 진행 중인 주 작업 단위가 없다.
 
-**없음 — PR 판정 확장(`6999edf`)이 끝났다.** 사용자가 CURRENT로 승인한 작업이 완료돼 DONE으로
-옮겼고, 문서(PRODUCT_SPEC 15장 / ARCHITECTURE / ROADMAP 메모)도 같은 커밋에서 맞췄다.
+**없음 — V1 RELEASE AUDIT이 끝났다.** 다음 작업은 NEXT의 출시 critical path에서 순서대로 집는다.
+그 중 1·2·4번은 사용자 결정/계정이 선행돼야 하므로 AI가 먼저 시작할 수 없다.
 
 ## NEXT
 
-**다음 항목의 선택은 사용자 몫이다 — M3에 AI가 자율로 집을 수 있는 확정 작업이 남아 있지 않다.**
+**V1 출시 critical path.** 근거와 상세는 [RELEASE_AUDIT.md](RELEASE_AUDIT.md). 순서대로 진행한다 — 앞의 것이 뒤의 것을 막는다.
 
-PR 판정 확장이 닫히면서 순수 함수 영역에서 자동 검증으로 가져갈 수 있는 작업은 소진됐다.
+1. **앱 식별자 확정** (`A1`,`B2`,`B3`) — `ios.bundleIdentifier` / `android.package` / 표시 이름 / 빌드 번호 정책. 한 번 정하면 스토어에서 못 바꾼다 → **사용자 결정 필요**. 값이 정해지면 `app.json` 반영은 AI가 한다(GUARDED).
+2. **EAS 연결 + `eas.json`** (`A2`,`A3`) — Expo 계정이 필요한 `eas init`은 **사용자**, 빌드 프로필 작성은 AI(GUARDED).
+3. **불필요 권한/의존성 정리** (`B1`,`B6`) — `microphonePermission: false`로 `RECORD_AUDIO` 제거는 설정 한 줄. 미사용 네이티브 의존성 6개 정리는 **의존성 변경이라 APPROVAL REQUIRED**.
+4. **개인정보처리방침 + 데이터 안전 답변** (`A5`,`B7`) — 문서 초안은 AI가 쓸 수 있고, 게시 URL과 스토어 콘솔 입력은 **사용자**.
+5. **사진 URI 영속성 수정** (`B4`) — 선택한 사진을 앱 디렉터리로 복사해 저장. 코드 변경이며 GUARDED. `expo-file-system` 의존성이 필요하면 그 시점에 승인을 받는다.
+6. **의존성 패치 버전 정리** (`B5`) — `npx expo install --check`. APPROVAL REQUIRED.
+7. **아이콘/스플래시/스토어 등재 자산 최종본** (`E2`) — 에셋 필요, **사용자**.
+8. **실기기 MANUAL QA** (`E1`,`E3`,`E4`,`E5`,`E6`) → 스토어 제출 (`A4`).
 
-조사 결과(근거는 `docs/ROADMAP.md` 하단 "M3 구현 현황 메모"): AI PT 컨텍스트 연결과 히스토리 신체 지표는 **이미 구현돼 있고**, 나머지는 셋 중 하나다.
-- **에셋이 필요**: 트레이너 아트, 실제 애니메이션 클립 → 승인/자산 없이는 시작할 수 없다
-- **제품 결정이 필요**(APPROVAL REQUIRED): "[이 루틴으로 운동 시작]"(AI가 구조화된 루틴을 돌려주는 계약 + `DEC-003`의 LLM 미연결 방침과 충돌), 대화 로그 세션 간 유지, 실제 서비스 연동 착수
-- **사용자만 가능**: 실기기 kill 절차 수행, 실제 푸시 알림 도입 여부(`expo-notifications` 의존성 추가 = APPROVAL REQUIRED)
-
-즉 다음 "계속"은 **어느 항목을 열 것인지 지정**이 있어야 진행된다. 지정이 오면 그 항목의 등급에 맞춰(GUARDED면 강화 검증까지) 자율 실행한다.
+크래시 리포팅(`B8`)은 위 경로와 독립이지만 출시 전에 결정하는 편이 낫다 — 없으면 초기 사용자 문제를 볼 방법이 없다.
 
 push는 사용자가 명시적으로 요청하기 전까지 하지 않는다.
 

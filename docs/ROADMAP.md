@@ -165,7 +165,7 @@ BODY STATE에서도 실제 캐릭터 그림/에셋, 애니메이션, 식단 화�
 | M3 항목 | 현재 상태 | 근거 |
 | --- | --- | --- |
 | 캐릭터 아트 반영 | **반영됨** — CANON 렌더러가 BodyParameters로 그린다 | `ec40521`, `npm run verify:character-body` |
-| 트레이너 아트 반영 | **미완** — `portraitPlaceholder`가 여전히 이모지 | `src/config/trainers.ts` |
+| 트레이너 아트 반영 | **대부분 반영됨** — 홈/트레이너 탭은 실제 초상 이미지를 쓴다. AI 채팅 화면만 이모지로 남아 있다 | `assets/characters/trainer/stanley_portrait.png`, `src/config/character-assets.ts`, `src/app/ai-chat.tsx` |
 | 세트 완료/PR 연출 | **부분** — 반응/결과 연출은 있고 실제 애니메이션 클립은 없다 | `5a2ae72`, `0dfbe4e`, `verify:workout-character-motion`, `verify:growth-reveal` |
 | AI PT 컨텍스트 연결 | **구현됨** — 최근 기록/PR/루틴/Exercise/진행 중 세션이 압축 컨텍스트로 전달된다 | `src/utils/pt-context.ts`, `src/services/trainer/*`, `npm run verify:pt` |
 | "[이 루틴으로 운동 시작]" | **미착수** — AI가 구조화된 루틴을 돌려주는 계약이 없다. 제품 설계 + LLM 연결 결정이 선행돼야 한다([[decision-log]] `DEC-003`) | `src/app/ai-chat.tsx`, `src/services/trainer/offline-trainer-service.ts` |
