@@ -1,7 +1,16 @@
-/** LOCKED constants from the approved layered Danbaek CANON contract. */
+/**
+ * Danbaek layered body renderer contract.
+ *
+ * VISUAL CANON (2026-08-26): the approved Danbaek reference sheet supersedes the
+ * earlier plain mannequin identity.  Learning/growth semantics stay unchanged;
+ * this file only owns render geometry.  The identity is now: soft white body,
+ * rounded head with the small rice-cake tuft, large friendly eyes, blush, an
+ * expressive mouth and black D training shorts.  Body-region growth remains
+ * driven exclusively by the existing BodyParameters pipeline.
+ */
 export const CharacterBodyConfig = {
   viewBox: { width: 200, height: 280 },
-  stroke: { color: '#111111', width: 3, fill: '#FFFFFF' },
+  stroke: { color: '#171717', width: 3, fill: '#FFFFFF' },
   stageCount: 10,
   stage0BodyProportion: { anchorY: 76, scaleY: 0.8 },
   massScaleMax: 0.18,
@@ -23,9 +32,17 @@ export const CharacterBodyConfig = {
     legLeft: [87, 168], legRight: [113, 168], centerX: 100,
   },
   fixedIdentity: {
-    headPath: 'M100 38 C111 38 119 46 119 57 C119 68 112 75 100 76 C88 76 81 69 81 57 C81 46 89 38 100 38 Z',
-    eyes: { leftX: 94, rightX: 106, y: 54, radius: 1.2 },
-    mouth: 'M96.5 64 Q100 65.5 103.5 63.5',
+    // Wider/softer than the old mannequin head, with the reference's three-lobe tuft.
+    headPath: 'M100 34 C104 28 108 30 108 35 C113 31 118 34 116 39 C127 44 132 54 130 65 C128 78 116 86 100 87 C84 86 72 78 70 65 C68 53 74 43 85 39 C83 34 89 31 93 36 C94 30 99 29 100 34 Z',
+    eyes: { leftX: 89, rightX: 111, y: 58, radius: 3.2 },
+    blush: { leftX: 80, rightX: 120, y: 68, radiusX: 6.5, radiusY: 3.2, color: '#F6B8AE', opacity: 0.55 },
+    mouth: 'M94 69 Q100 77 106 69 Q100 82 94 69 Z',
+    shorts: {
+      path: 'M80 151 Q100 155 120 151 L124 183 Q113 186 102 181 L100 170 L98 181 Q87 186 76 183 Z',
+      fill: '#252525',
+      waist: 'M80 155 Q100 159 120 155',
+      mark: 'D',
+    },
   },
   basePaths: {
     torso: 'M99 76 C90 74 82 77 79 83 C76 95 78 111 80 126 C82 139 81 151 83 160 C84 165 86 168 90 170 C95 172 105 172 111 169 C115 166 116 163 117 159 C119 150 118 139 120 126 C122 111 124 95 121 83 C118 77 110 74 101 76 Z',
