@@ -4,8 +4,10 @@ import {
   FLAT_BENCH_COST,
   getHomeGymItem,
   getNextHomeGymItem,
+  HOME_GYM_RECENT_REWARD_WINDOW_MS,
   HOME_GYM_REWARD_PER_WORKOUT,
   HomeGymItemIds,
+  recentHomeGymRewardCoins,
   STARTER_RACK_COST,
   type HomeGymState,
 } from '@/data/home-gym-repository';
@@ -32,6 +34,13 @@ const spentState: HomeGymState = { spentCoins: 20, ownedItemIds: [], placedItemI
 check('spent coins reduce only the available balance', availableHomeGymCoins(spentState, 5), 30);
 const overspentState: HomeGymState = { spentCoins: 999, ownedItemIds: [], placedItemIds: [] };
 check('available balance cannot become negative', availableHomeGymCoins(overspentState, 1), 0);
+
+const now = Date.parse('2026-08-26T12:00:00.000Z');
+check('fresh completed workout surfaces one reward receipt', recentHomeGymRewardCoins('2026-08-26T11:59:00.000Z', now), HOME_GYM_REWARD_PER_WORKOUT);
+check('old workout does not surface a stale receipt', recentHomeGymRewardCoins('2026-08-26T11:00:00.000Z', now), 0);
+check('future timestamp does not surface a reward receipt', recentHomeGymRewardCoins('2026-08-26T12:01:00.000Z', now), 0);
+check('invalid timestamp does not surface a reward receipt', recentHomeGymRewardCoins('not-a-date', now), 0);
+check('receipt expires exactly after configured window', recentHomeGymRewardCoins(new Date(now - HOME_GYM_RECENT_REWARD_WINDOW_MS - 1).toISOString(), now), 0);
 
 const rack = getHomeGymItem(HomeGymItemIds.starterRack);
 const bench = getHomeGymItem(HomeGymItemIds.flatBench);
