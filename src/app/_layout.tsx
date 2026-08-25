@@ -1,16 +1,10 @@
 import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { StyleSheet, Text, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import { RuntimeBuildIdentity, RuntimeBuildIdentityLabel } from '@/config/runtime-build-identity';
 import { AppDataProvider, useAppData } from '@/context/app-data-context';
 
 SplashScreen.preventAutoHideAsync();
-
-if (__DEV__) {
-  console.info('[runtime-build-identity]', RuntimeBuildIdentity);
-}
 
 export default function RootLayout() {
   // IRON GRAPHITE + WARM GOLD가 고정 캐논이라 네비게이션 chrome도 항상 다크로 맞춘다
@@ -20,19 +14,8 @@ export default function RootLayout() {
       <AppDataProvider>
         <AnimatedSplashOverlay />
         <RootNavigator />
-        {__DEV__ && <RuntimeIdentityBadge />}
       </AppDataProvider>
     </ThemeProvider>
-  );
-}
-
-function RuntimeIdentityBadge() {
-  return (
-    <View pointerEvents="none" style={styles.runtimeIdentityBadge}>
-      <Text numberOfLines={1} style={styles.runtimeIdentityText}>
-        {RuntimeBuildIdentityLabel}
-      </Text>
-    </View>
   );
 }
 
@@ -62,25 +45,3 @@ function RootNavigator() {
     </Stack>
   );
 }
-
-const styles = StyleSheet.create({
-  runtimeIdentityBadge: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    right: 4,
-    zIndex: 99999,
-    elevation: 99999,
-    alignItems: 'center',
-  },
-  runtimeIdentityText: {
-    maxWidth: '100%',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    backgroundColor: 'rgba(0, 0, 0, 0.82)',
-    color: '#ffcf4a',
-    fontSize: 9,
-    fontWeight: '700',
-  },
-});
