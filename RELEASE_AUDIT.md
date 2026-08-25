@@ -1,7 +1,7 @@
 # V1 RELEASE AUDIT
 
 > 2026-08-25 · branch `feat/v1-monetization-foundation` · 기준 커밋 `a14419d`
-> **갱신 2026-08-25** (`abeaf31` 이후): A1/A2/B1/B3/B4/B5/B6/C6 해소, A5/B7은 초안 확보 — 아래 표에 표시했다.
+> **갱신 2026-08-25** (`abeaf31` 이후): A1/A2/B1/B2/B3/B4/B5/B6/C6 해소, A5/B7은 초안 확보 — 아래 표에 표시했다.
 > 설정 항목은 이제 `npm run verify:release`(22개)가 지킨다 — 식별자·권한·EAS 프로필·V1 경계가 틀어지면 검증이 실패한다.
 > **새 기능을 구현하지 않았다.** 저장소의 현재 상태만 조사하고 분류했다.
 > 관련: [PROJECT_STATE.md](PROJECT_STATE.md) · [DECISION_LOG.md](DECISION_LOG.md) · [FAILURE_LOG.md](FAILURE_LOG.md)
@@ -14,7 +14,7 @@
 | --- | --- |
 | `npx tsc --noEmit` | PASS |
 | `npm run lint` | PASS |
-| verify 스크립트 15종 | PASS (988 단언, FAIL 0 — `verify:release` 22개, 사진 파일 이름 14개 포함) |
+| verify 스크립트 15종 | PASS (990 단언, FAIL 0 — `verify:release` 25개, 사진 파일 이름 14개 포함) |
 | `npx expo config --type public` | 해석된 설정 확인 (아래 A/B 항목의 근거) |
 | `npx expo export --platform android` | **성공** — production JS 번들 생성, exit 0. 설정 변경·의존성 정리·버전 정렬 뒤에도 매번 다시 확인했다(현재 4.4MB) |
 | `npx expo-doctor` | **21/21 통과** (최초 조사에서는 패치 버전 불일치 7건으로 1개 실패했다) |
@@ -27,7 +27,7 @@
 | 분류 | 최초 조사 | 현재 남은 것 |
 | --- | --- | --- |
 | A. 출시 차단 (BLOCKER) | 5 | **3** (A3 EAS 연결 · A4 계정/서명 · A5 개인정보처리방침) |
-| B. 출시 전 필수 (REQUIRED) | 8 | **3** (B2 표시 이름 · B7 데이터 안전 · B8 크래시 리포팅) |
+| B. 출시 전 필수 (REQUIRED) | 8 | **2** (B7 데이터 안전 콘솔 입력 · B8 크래시 리포팅) |
 | C. 출시 후 가능 (POST-LAUNCH) | 6 | **5** (C6 README 해소) |
 | D. 이미 완료 (DONE) | 9 | 9 |
 | E. MANUAL QA | 6 | 6 |
@@ -83,7 +83,7 @@ E 항목(실기기 QA)을 대신하지 못하지만, 최근 변경(PR 두 종류
 | # | 항목 | 확인된 사실 | 조치 |
 | --- | --- | --- | --- |
 | B1 | ~~쓰지 않는 마이크 권한~~ **해소** | `expo-image-picker` 플러그인에 `microphonePermission: false`, `cameraPermission: false`를 넣었다. 재확인 결과 해석된 설정에 `RECORD_AUDIO`가 **0건**이고 권한 배열 자체가 사라졌다(앱은 사진 라이브러리만 쓴다) | — |
-| B2 | **앱 표시 이름이 개발용 슬러그** | `name: "hellchang-grow"` — 제품명 "헬창키우기"가 아니다 | 표시 이름/스토어 등재명 확정 |
+| B2 | ~~앱 표시 이름이 개발용 슬러그~~ **해소** | 사용자 확정으로 `name: "헬창키우기"`(기기 홈 화면·스토어 등재명). `slug`은 EAS 연결 값이라 `hellchang-grow` 그대로 두고, `verify:release`가 이름이 슬러그로 되돌아가는 것을 막는다 | — |
 | B3 | ~~버전 정책 없음~~ **해소** | `android.versionCode: 1`, `ios.buildNumber: "1"`을 명시하고 `eas.json`의 `appVersionSource`를 `local`로 뒀다 — 빌드 때 파일이 조용히 바뀌지 않고, 올릴 때만 저장소에서 올린다 | 릴리스마다 수동 증가(자동 증가를 원하면 결정 필요) |
 | B4 | ~~선택한 사진이 나중에 사라질 수 있다~~ **해소** | 기록을 저장하는 순간 문서 디렉터리(`body-photos/`)로 복사하고 그 경로를 남긴다(`services/storage/photo-store.ts`). 복사 지점은 `addBodyHistoryEntry` 한 곳이라 온보딩·히스토리 양쪽이 함께 덮인다. 실패하면 원래 URI로 떨어져 기록 저장은 막지 않는다. `expo-file-system`을 승인받아 `package.json`에 선언했다(`~57.0.5`) | 이미 저장된 옛 기록의 사진은 되살릴 수 없다. 실기기 확인은 `E4` |
 | B5 | ~~의존성 패치 버전 불일치~~ **해소** | `npx expo install --fix`로 정렬했다(승인). expo 57.0.14→57.0.16, expo-router 57.0.14→57.0.16, expo-image-picker 57.0.11→57.0.13, expo-splash-screen 57.0.7→57.0.8, expo-linking 57.0.6→57.0.7. 전부 SDK 57 안의 패치 버전이다. `expo-doctor` 21/21 | — |
