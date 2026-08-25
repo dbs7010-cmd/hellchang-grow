@@ -31,6 +31,7 @@ export interface CharacterMotionStageProps {
   /**
    * 방금 자극한 부위에 대한 단백이의 한 줄. 이 자리 안에 겹쳐 그리므로 레이아웃 높이를
    * 늘리지 않고, 세트 입력/휴식 UI를 밀어내지도 않는다. 표현 전용 값이다.
+   * 유효 세트 완료에서만 들어오므로 동시에 GYM BATTLE의 즉시 적중 피드백을 보여 준다.
    */
   reactionCopy?: string | null;
   height: number;
@@ -46,6 +47,11 @@ export interface CharacterMotionStageProps {
  * 움직인다. 종목마다 애니메이션을 만들지 않으며, 이번 단계에서는 실제 스프라이트 없이
  * 축/진폭/속도만 다른 placeholder 모션이다.
  *
+ * 세트 완료 시 보이는 `HIT!`는 전투 상태를 새로 저장하거나 Growth/Workout 계산을
+ * 변경하지 않는다. 세션이 이미 "유효 세트"라고 판정해 reactionCopy를 넘긴 순간에만
+ * 같은 화면에서 공격이 적중했다는 표현을 얹는다. 실제 누적 HP/피해는 GYM BATTLE의
+ * 저장된 WorkoutRecord 기반 계산이 계속 단일 근거다.
+ *
  * 실제 모션 에셋이 준비되면 바꿀 곳은 두 군데뿐이다 — motion family registry와
  * character asset registry. 세션 화면 코드는 그대로 둔다.
  */
@@ -60,6 +66,7 @@ export function CharacterMotionStage({
 }: CharacterMotionStageProps) {
   const theme = useTheme();
   const progress = useSharedValue(0);
+  const hitProgress = useSharedValue(0);
   const reducedMotion = useReducedMotion();
   const profile = getCharacterMotionProfile(state, family, reducedMotion);
   const durationMs = profile.durationMs;
@@ -86,6 +93,27 @@ export function CharacterMotionStage({
     };
   }, [durationMs, profile.repeats, progress, reducedMotion, state, family]);
 
+  useEffect(() => {
+    cancelAnimation(hitProgress);
+    if (!reactionCopy) {
+      hitProgress.set(0);
+      return;
+    }
+    if (reducedMotion) {
+      hitProgress.set(1);
+      return;
+    }
+    hitProgress.set(0);
+    hitProgress.set(
+      withSequence(
+        withTiming(1, { duration: 90 }),
+        withTiming(0.7, { duration: 110 }),
+        withTiming(1, { duration: 100 })
+      )
+    );
+    return () => cancelAnimation(hitProgress);
+  }, [hitProgress, reactionCopy, reducedMotion]);
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: progress.get() * profile.translateX },
@@ -93,6 +121,14 @@ export function CharacterMotionStage({
       { rotateZ: `${progress.get() * profile.rotateDeg}deg` },
       { scaleX: 1 + progress.get() * profile.scaleXDelta },
       { scaleY: 1 + progress.get() * profile.scaleYDelta },
+    ],
+  }));
+
+  const hitStyle = useAnimatedStyle(() => ({
+    opacity: hitProgress.get(),
+    transform: [
+      { translateY: -8 * hitProgress.get() },
+      { scale: 0.86 + 0.2 * hitProgress.get() },
     ],
   }));
 
@@ -110,11 +146,26 @@ export function CharacterMotionStage({
         />
       </Animated.View>
       {reactionCopy && (
-        <View style={[styles.reaction, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-          <ThemedText type="caption" numberOfLines={1}>
-            {reactionCopy}
-          </ThemedText>
-        </View>
+        <>
+          <Animated.View
+            style={[
+              styles.hit,
+              { backgroundColor: theme.backgroundElement, borderColor: theme.gold },
+              hitStyle,
+            ]}>
+            <ThemedText type="smallBold" style={{ color: theme.gold }}>
+              HIT!
+            </ThemedText>
+            <ThemedText type="caption" themeColor="textSecondary">
+              몬스터 적중
+            </ThemedText>
+          </Animated.View>
+          <View style={[styles.reaction, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+            <ThemedText type="caption" numberOfLines={1}>
+              {reactionCopy}
+            </ThemedText>
+          </View>
+        </>
       )}
     </View>
   );
@@ -136,5 +187,16 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: 1,
     maxWidth: '92%',
+  },
+  /** 유효 세트가 확정된 순간에만 뜨는 전투 적중 배지. 저장/성장 계산과 무관한 표현층이다. */
+  hit: {
+    position: 'absolute',
+    right: Spacing.three,
+    top: 42,
+    alignItems: 'center',
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.half,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
   },
 });
