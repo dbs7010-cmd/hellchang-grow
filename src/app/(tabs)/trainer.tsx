@@ -6,7 +6,6 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ChipRow } from '@/components/ui/chip-row';
-import { NavRow } from '@/components/ui/nav-row';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { Section } from '@/components/ui/section';
@@ -22,17 +21,10 @@ import { buildTrainerBrief } from '@/utils/trainer-brief';
 import { getGreetingLine } from '@/utils/trainer-dialogue';
 
 /**
- * 09 TRAINER — "내 담당 PT에게 들어왔다"는 느낌의 화면.
+ * 09 TRAINER — 담당 PT에게 상태를 확인하고 바로 상담/운동으로 이어지는 화면.
  *
- * 상단 골드썬이 HERO다. 실제 반신 아트가 들어올 자리(StanleyPortraitImage)를 확보만 해두고,
- * 채워지면 레이아웃 변경 없이 그대로 교체된다.
- *
- * 4개 메뉴가 같은 무게로 보이던 문제를 고쳤다: [AI 상담]이 Primary이고
- * 루틴 관리 / 몸 변화 / 성장 리포트는 그 아래 보조 navigation row다.
- *
- * 빠른 질문은 기존 AI 구조(AiQuickActionIds + mock AI 서비스)에 그대로 연결된다 —
- * 여기서 새로운 가짜 응답을 만들지 않는다. 무료/광고/구독 접근 게이트도 AI 상담 화면의
- * 기존 경로를 그대로 통과한다.
+ * 다른 탭으로 가는 중복 링크는 두지 않는다. 루틴은 운동 탭, 몸 변화는 히스토리,
+ * 성장 리포트는 HOME/HELL PASS에서 확인한다. 이 화면의 역할은 코칭으로 제한한다.
  */
 
 /** 트레이너 화면에 노출하는 빠른 질문. 전체 목록은 AI 상담 화면 안에 있다. */
@@ -41,8 +33,9 @@ const HERO_QUICK_ACTIONS: AiQuickActionId[] = ['what_today', 'build_routine', 'a
 export default function TrainerScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const { workoutRecords, streak, ptContext } = useAppData();
+  const { workoutRecords, streak, ptContext, activeSession } = useAppData();
   const hasRecordedToday = getTodayRecords(workoutRecords).length > 0;
+  const sessionInProgress = activeSession && activeSession.status !== 'completed';
 
   const [stanleyLine] = useState(
     () =>
@@ -52,10 +45,6 @@ export default function TrainerScreen() {
       }).text
   );
 
-  /**
-   * 무료 PT 브리핑. AI가 아니라 저장된 기록에서 그대로 계산한 문장이라 로그인만 하면 누구나
-   * 볼 수 있다 — 값이 없으면 없다고 말하고, 없는 숫자를 만들지 않는다.
-   */
   const brief = useMemo(() => buildTrainerBrief(ptContext), [ptContext]);
 
   const openChat = (action?: AiQuickActionId) => {
@@ -97,7 +86,7 @@ export default function TrainerScreen() {
 
       <PrimaryButton
         label="AI 상담"
-        subLabel="오늘 뭘 할지 물어보세요"
+        subLabel="운동 · 자세 · 식단을 스탠리에게 물어보세요"
         variant="gold"
         size="large"
         onPress={() => openChat()}
@@ -114,11 +103,12 @@ export default function TrainerScreen() {
         ))}
       </ChipRow>
 
-      <Section title="내 기록 보기">
-        <NavRow label="루틴 관리" value="내 루틴 보기" onPress={() => router.push('/(tabs)/workout')} />
-        <NavRow label="몸 변화" value="체중 · 사진 비교" onPress={() => router.push('/(tabs)/history')} />
-        <NavRow label="성장 리포트" value="HELL PASS 진행도" onPress={() => router.push('/pass')} />
-      </Section>
+      <PrimaryButton
+        label={sessionInProgress ? '운동으로 돌아가기' : '이대로 운동 시작'}
+        subLabel={sessionInProgress ? '진행 중인 세션이 있어요' : '운동 선택 화면으로 이동'}
+        variant="secondary"
+        onPress={() => router.push(sessionInProgress ? '/session' : '/workout-start')}
+      />
     </ScreenScroll>
   );
 }
@@ -129,7 +119,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Spacing.three,
   },
-  /** 실제 반신 아트 비율(3:4)을 미리 잡아둔 슬롯. */
   portraitSlot: {
     width: 96,
     height: 128,
