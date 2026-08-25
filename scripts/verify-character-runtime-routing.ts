@@ -1,6 +1,6 @@
 // Static regression guard for the LOCKED Danbaek player identity.
-// This deliberately checks source boundaries as well as geometry: a correct renderer is useless
-// if a screen can bypass it with a legacy PNG.
+// It checks executable import/require boundaries rather than prose comments, so documentation can
+// name forbidden legacy paths without creating a false positive.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -27,8 +27,8 @@ const registry = read('src/config/character-assets.ts');
 expect('PlayerCharacter always uses CharacterSilhouette', player.includes('<CharacterSilhouette'));
 expect('PlayerCharacter has no image runtime', !player.includes("from 'expo-image'") && !player.includes('<Image'));
 expect('player registry cannot resolve a runtime image', /resolveCharacterAsset[\s\S]*return undefined;/.test(registry));
-expect('legacy player_main.png is not registered', !registry.includes('player_main.png'));
-expect('CANON reference PNGs are not registered', !registry.includes('reference_v3'));
+expect('legacy player image is not registered', !/require\([^)]*assets\/characters\/player/.test(registry));
+expect('CANON reference image is not registered', !/require\([^)]*danbaek\/canon\/reference_v3/.test(registry));
 
 const runtimeFiles = [
   ...walk('src/app'),
@@ -38,9 +38,14 @@ const runtimeFiles = [
 
 const forbiddenAssetRefs = runtimeFiles.filter((file) => {
   const source = read(file);
-  return /assets\/characters\/(?:player|danbaek\/canon\/reference_v3)/.test(source);
+  const importOrRequire = /(?:from\s*['\"]|require\(\s*['\"])([^'\"]+)['\"]/g;
+  for (const match of source.matchAll(importOrRequire)) {
+    const target = match[1] ?? '';
+    if (/assets\/characters\/(?:player|danbaek\/canon\/reference_v3)/.test(target)) return true;
+  }
+  return false;
 });
-expect('no app/component/config runtime imports legacy or CANON reference player images', forbiddenAssetRefs.length === 0, forbiddenAssetRefs);
+expect('no runtime import/require uses legacy or CANON reference player images', forbiddenAssetRefs.length === 0, forbiddenAssetRefs);
 
 const directSilhouetteUsers = runtimeFiles.filter((file) => {
   if (file.endsWith('player-character.tsx') || file.endsWith('character-viewer.tsx')) return false;
