@@ -38,7 +38,7 @@ export default function DanbaekWorldScreen() {
   return (
     <SubScreen title="단백세상" accent>
       <View style={styles.worldCard}>
-        <ThemedText type="eyebrow" themeColor="gold">자동 모험 · PROOF</ThemedText>
+        <ThemedText type="captionBold" themeColor="gold">자동 모험 · PROOF</ThemedText>
         <View style={styles.path}>
           {['출발', '밀기 관문', '벤치몬스터'].map((label, index) => {
             const cleared = index < scene.clearedStageIds.length;
@@ -60,7 +60,7 @@ export default function DanbaekWorldScreen() {
 
       <View style={styles.resultCard}>
         <ThemedText type="heading">{scene.title}</ThemedText>
-        <ThemedText type="body" themeColor="textSecondary">{scene.body}</ThemedText>
+        <ThemedText themeColor="textSecondary">{scene.body}</ThemedText>
         {scene.state === 'blocked' ? (
           <PrimaryButton
             label={scene.actionLabel}
