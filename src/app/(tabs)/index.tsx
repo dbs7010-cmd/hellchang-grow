@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PlayerCharacter } from '@/components/character/player-character';
 import { CharacterViewer } from '@/components/character/character-viewer';
+import { DanbaekVoiceBubble } from '@/components/character/danbaek-voice-bubble';
 import { GoldsunBubble } from '@/components/goldsun/goldsun-bubble';
 import { GrowthHud } from '@/components/home/growth-hud';
 import { RecommendedStrip } from '@/components/home/recommended-strip';
@@ -13,6 +14,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { AppConfig } from '@/config/app-config';
 import { hasPlayerCharacterModel, StanleyPortraitImage } from '@/config/character-assets';
+import { resolveDanbaekWorldEntry } from '@/config/danbaek-world-entry';
 import { Exercises, getExerciseById, getExercisesByMuscleGroup } from '@/config/exercises';
 import { MuscleGroupLabels, MuscleGroups } from '@/config/muscle-groups';
 import { MuscleDetailToGroup } from '@/types/exercise';
@@ -23,6 +25,7 @@ import { useAppData } from '@/context/app-data-context';
 import { todayDateString } from '@/utils/date';
 import { getThisWeekRecords } from '@/data/workout-repository';
 import { useTheme } from '@/hooks/use-theme';
+import { buildDanbaekVoice } from '@/utils/danbaek-learning-presence';
 import { findPreviousPerformance } from '@/utils/exercise-history';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
@@ -73,6 +76,7 @@ export default function HomeScreen() {
     growth,
     characterAppearance,
     bodyParameters,
+    danbaekLearning,
   } = useAppData();
 
   const { height: windowHeight } = useWindowDimensions();
@@ -102,6 +106,23 @@ export default function HomeScreen() {
     const [topDetail] = gained.reduce((best, entry) => (entry[1] > best[1] ? entry : best));
     return { totalSp, topGroupLabel: MuscleGroupLabels[MuscleDetailToGroup[topDetail]] };
   }, [growth]);
+  /*
+   * 단백이의 학습은 성장(HELL PASS / 오늘 성장 SP)과 **다른 축**이다 — 위의 todayGrowth는
+   * 그대로 두고, 여기서는 "얘가 내 운동을 보고 뭘 따라 하는 중인가"만 두 층으로 말한다.
+   * 계산은 전부 어댑터가 이미 했다. 화면은 문구만 고른다.
+   */
+  const danbaekVoice = useMemo(() => buildDanbaekVoice(danbaekLearning), [danbaekLearning]);
+
+  /*
+   * 단백세상 입구. 지금은 seam이 닫혀 있어 항상 null이고 아무것도 그리지 않는다 —
+   * WORLD는 다른 브랜치의 소유라 여기서 화면을 추측해 만들지 않는다. 통합이 seam 한 줄을
+   * 열면 이 자리에 입구가 생긴다 (src/config/danbaek-world-entry.ts).
+   */
+  const worldEntry = useMemo(
+    () => resolveDanbaekWorldEntry({ profile: danbaekLearning }),
+    [danbaekLearning]
+  );
+
   const weeklyVolumeKg = useMemo(() => sumVolumeKg(weekRecords), [weekRecords]);
   const latestBody = useMemo(
     () =>
@@ -320,6 +341,18 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/*
+          단백이가 말하는 자리. 스탠리는 무대 **위**에서, 단백이는 무대 **아래**에서 말한다 —
+          예전에는 둘이 캐릭터 머리 위 같은 띠에서 동시에 말해 누가 말하는지 흐려졌다.
+          한마디(단백이 목소리) + 상태 한 줄(정확한 학습 단계) 두 층으로만 말한다.
+        */}
+        <DanbaekVoiceBubble
+          line={danbaekVoice.line}
+          status={danbaekVoice.status}
+          homeLight
+          onPress={() => router.push('/(tabs)/workout')}
+        />
+
         <PrimaryButton
           label={sessionInProgress ? '운동으로 돌아가기' : '운동 시작'}
           subLabel={
@@ -333,6 +366,28 @@ export default function HomeScreen() {
           size="large"
           onPress={handleStartPress}
         />
+
+        {/*
+          단백세상 입구. **CTA가 아니라 CTA 아래 한 줄**이다 — [운동 시작]과 나란히 두면
+          "지금 뭘 해야 하는가"가 두 개가 된다. 역할도 다르다: 운동은 내가 하는 것이고,
+          단백세상은 단백이가 배운 걸 쓰러 가는 곳이다.
+          seam이 닫혀 있으면 아무것도 그리지 않는다 (지금이 그렇다).
+        */}
+        {worldEntry && (
+          <Pressable
+            onPress={() => router.push(worldEntry.route)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`${worldEntry.label} 들어가기`}
+            style={styles.worldEntryRow}>
+            <ThemedText type="captionBold" numberOfLines={1} style={styles.worldEntryLabel}>
+              🌱 {worldEntry.label} ›
+            </ThemedText>
+            <ThemedText type="caption" numberOfLines={1} style={styles.worldEntrySub}>
+              {worldEntry.subLabel}
+            </ThemedText>
+          </Pressable>
+        )}
 
         {!sessionInProgress && (
           <RecommendedStrip
@@ -520,6 +575,14 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     paddingBottom: Spacing.one,
   },
+  /** 단백세상 입구는 CTA 아래 한 줄이다 — 골드 CTA와 무게를 겨루지 않는다. */
+  worldEntryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    paddingVertical: Spacing.half,
+  },
   rotatePill: {
     position: 'absolute',
     right: 0,
@@ -558,6 +621,8 @@ const styles = StyleSheet.create({
   },
   brand: { color: HomeColors.text },
   trainerLink: { color: HomeColors.goldStrong },
+  worldEntryLabel: { color: HomeColors.goldStrong },
+  worldEntrySub: { color: HomeColors.textSecondary },
   statLabel: { color: HomeColors.textSecondary },
   statValue: { color: HomeColors.text, fontWeight: 800, fontVariant: ['tabular-nums'] },
   bodyHudLabel: { color: HomeColors.textSecondary },
