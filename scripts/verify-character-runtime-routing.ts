@@ -1,6 +1,4 @@
-// Static regression guard for the LOCKED Danbaek player identity.
-// It checks executable import/require boundaries rather than prose comments, so documentation can
-// name forbidden legacy paths without creating a false positive.
+// Static regression guard for the LOCKED Danbaek player identity and cross-screen body continuity.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -22,13 +20,27 @@ const walk = (dir: string): string[] =>
   });
 
 const player = read('src/components/character/player-character.tsx');
+const viewer = read('src/components/character/character-viewer.tsx');
 const registry = read('src/config/character-assets.ts');
+const onboarding = read('src/app/(onboarding)/index.tsx');
+const home = read('src/app/(tabs)/index.tsx');
+const history = read('src/app/(tabs)/history.tsx');
+const session = read('src/app/session.tsx');
 
 expect('PlayerCharacter always uses CharacterSilhouette', player.includes('<CharacterSilhouette'));
 expect('PlayerCharacter has no image runtime', !player.includes("from 'expo-image'") && !player.includes('<Image'));
+expect('PlayerCharacter resolves missing body props from current AppData body', player.includes('currentBodyParameters') && player.includes('bodyOverride ?? currentBodyParameters'));
 expect('player registry cannot resolve a runtime image', /resolveCharacterAsset[\s\S]*return undefined;/.test(registry));
 expect('legacy player image is not registered', !/require\([^)]*assets\/characters\/player/.test(registry));
 expect('CANON reference image is not registered', !/require\([^)]*danbaek\/canon\/reference_v3/.test(registry));
+
+expect('onboarding renders through PlayerCharacter', onboarding.includes('<PlayerCharacter'));
+expect('HOME renders through PlayerCharacter', home.includes('<PlayerCharacter'));
+expect('HISTORY renders through PlayerCharacter', history.includes('<PlayerCharacter'));
+expect('SESSION routes live body through CharacterMotionStage', session.includes('bodyParameters={bodyParameters}'));
+expect('RESULT keeps explicit reveal body snapshot', session.includes('bodyParameters={displayedBody}'));
+expect('BEFORE/AFTER comparison keeps explicit snapshot', session.includes('bodyParameters={bodyParameters}'));
+expect('360 fallback receives current persistent body', viewer.includes('const { bodyParameters } = useAppData()') && viewer.includes('bodyParameters={bodyParameters}'));
 
 const runtimeFiles = [
   ...walk('src/app'),
