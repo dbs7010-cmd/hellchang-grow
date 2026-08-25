@@ -1,5 +1,6 @@
 import { MuscleGroupLabels } from '@/config/muscle-groups';
 import type { MuscleGroup } from '@/types/exercise';
+import { withObjectParticle, withSubjectParticle, withTopicParticle } from '@/utils/korean';
 import type { PtContext, PtContextExercise } from '@/utils/pt-context';
 
 /**
@@ -83,7 +84,7 @@ export function buildPrLine(context: PtContext): string | null {
   }
 
   return pr.previousBestWeightKg === null
-    ? `${pr.name}는 ${pr.weightKg}kg가 첫 기록입니다.`
+    ? `${withTopicParticle(pr.name)} ${pr.weightKg}kg가 첫 기록입니다.`
     : `${pr.name} ${pr.weightKg}kg, 이전 최고 ${pr.previousBestWeightKg}kg 넘기셨습니다.`;
 }
 
@@ -109,7 +110,7 @@ export function buildTodayPlanLine(
   if (groupExerciseNames.length === 0) {
     return `오늘은 ${label} 어떠십니까?`;
   }
-  return `한동안 ${label}를 안 하셨네요. ${groupExerciseNames.slice(0, 2).join(', ')}부터 가시죠.`;
+  return `한동안 ${withObjectParticle(label)} 안 하셨네요. ${groupExerciseNames.slice(0, 2).join(', ')}부터 가시죠.`;
 }
 
 /**
@@ -118,8 +119,10 @@ export function buildTodayPlanLine(
  */
 export function buildExerciseRecordLine(exerciseName: string, recent: PtContextExercise | null): string {
   if (!recent) return `아직 ${exerciseName} 기록이 없네요.`;
-  if (!recent.topSet) return `${exerciseName}는 ${recent.date}에 ${recent.setCount}세트 하셨습니다.`;
-  return `최근 ${exerciseName}가 ${recent.topSet.weightKg}kg ${recent.topSet.reps}회입니다 (${recent.date}).`;
+  if (!recent.topSet) {
+    return `${withTopicParticle(exerciseName)} ${recent.date}에 ${recent.setCount}세트 하셨습니다.`;
+  }
+  return `최근 ${withSubjectParticle(exerciseName)} ${recent.topSet.weightKg}kg ${recent.topSet.reps}회입니다 (${recent.date}).`;
 }
 
 /** 트레이너 화면 브리핑 블록에 그대로 쓰는 3~4줄. null은 걸러서 렌더한다. */

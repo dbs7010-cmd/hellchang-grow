@@ -1,20 +1,9 @@
 import { AppConfig } from '@/config/app-config';
+import { withObjectParticle } from '@/utils/korean';
 
 export interface NumericRange {
   min: number;
   max: number;
-}
-
-/**
- * 한글 목적격 조사(을/를)를 받침에 맞게 붙인다.
- * "키을(를) 확인해주세요" 같은 어색한 문구 대신 "키를 확인해주세요"가 되게 한다.
- */
-function withObjectParticle(label: string): string {
-  const last = label.charCodeAt(label.length - 1);
-  const isHangulSyllable = last >= 0xac00 && last <= 0xd7a3;
-  if (!isHangulSyllable) return `${label}을`;
-  const hasFinalConsonant = (last - 0xac00) % 28 !== 0;
-  return `${label}${hasFinalConsonant ? '을' : '를'}`;
 }
 
 /** ok를 판별자로 둬서 호출부에서 값/에러가 확실히 좁혀지게 한다. */

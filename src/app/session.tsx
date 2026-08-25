@@ -37,6 +37,7 @@ import {
   PrEvent,
 } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
+import { withObjectParticle } from '@/utils/korean';
 import {
   buildGrowthRevealMuscles,
   buildGrowthHighlight,
@@ -1223,7 +1224,7 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
             </View>
             <ThemedText type="caption" themeColor="textSecondary" style={styles.centered}>
               {growthCamera
-                ? `${growthCamera.label}를 같은 배율로 확대해 비교했어요. 펌핑이 아닌 오늘의 영구 성장입니다.`
+                ? `${withObjectParticle(growthCamera.label)} 같은 배율로 확대해 비교했어요. 펌핑이 아닌 오늘의 영구 성장입니다.`
                 : '펌핑이 아닌 오늘의 영구 성장만 비교했어요.'}
             </ThemedText>
           </Section>

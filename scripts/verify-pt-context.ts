@@ -3,6 +3,7 @@
 import { AppConfig } from '@/config/app-config';
 import { Exercises, searchExercises } from '@/config/exercises';
 import { countPeriodPRs, listPRs } from '@/utils/exercise-history';
+import { withObjectParticle, withSubjectParticle, withTopicParticle } from '@/utils/korean';
 import {
   buildPtContext,
   matchExerciseInText,
@@ -130,6 +131,24 @@ const squatRecord = record({
   check('the weekly line admits an empty week', buildWeeklyLine(context), '이번 주 기록 없음');
   check('the recent line admits there are no sets', buildRecentTrainingLine(context), '최근 세트 기록이 없어서 볼 게 없습니다.');
   check('no PR line is invented when there is no PR', buildPrLine(context), null);
+}
+
+// 1-A. 한글 조사는 받침을 보고 붙인다 — 문장에 박아 두면 "등를"이 그대로 나간다
+{
+  check('받침이 있으면 을', withObjectParticle('등'), '등을');
+  check('받침이 없으면 를', withObjectParticle('하체'), '하체를');
+  check('가슴은 받침이 있다', withObjectParticle('가슴'), '가슴을');
+  check('어깨는 받침이 없다', withObjectParticle('어깨'), '어깨를');
+  check('팔도 받침이 있다', withObjectParticle('팔'), '팔을');
+
+  check('풀업은 받침이 있다', withTopicParticle('풀업'), '풀업은');
+  check('벤치프레스는 받침이 없다', withTopicParticle('벤치프레스'), '벤치프레스는');
+  check('풀업이 주격', withSubjectParticle('풀업'), '풀업이');
+  check('벤치프레스가 주격', withSubjectParticle('벤치프레스'), '벤치프레스가');
+
+  // 한글이 아닌 글자로 끝나면 받침을 알 수 없다 — 읽었을 때 무난한 쪽으로 둔다.
+  check('영문으로 끝나도 문장이 깨지지 않는다', withObjectParticle('EZ-bar'), 'EZ-bar을');
+  check('숫자로 끝나도 마찬가지', withTopicParticle('스쿼트 3'), '스쿼트 3은');
 }
 
 // 1-B. PR 한 줄은 종류를 구분해서 말한다 (DEC-011)
