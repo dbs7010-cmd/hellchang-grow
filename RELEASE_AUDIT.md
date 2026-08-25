@@ -1,7 +1,7 @@
 # V1 RELEASE AUDIT
 
 > 2026-08-25 · branch `feat/v1-monetization-foundation` · 기준 커밋 `a14419d`
-> **갱신 2026-08-25** (`abeaf31` 이후): A1/A2/B1/B3/B4/C6 해소, A5/B7은 초안 확보 — 아래 표에 표시했다.
+> **갱신 2026-08-25** (`abeaf31` 이후): A1/A2/B1/B3/B4/B6/C6 해소, A5/B7은 초안 확보 — 아래 표에 표시했다.
 > 설정 항목은 이제 `npm run verify:release`(22개)가 지킨다 — 식별자·권한·EAS 프로필·V1 경계가 틀어지면 검증이 실패한다.
 > **새 기능을 구현하지 않았다.** 저장소의 현재 상태만 조사하고 분류했다.
 > 관련: [PROJECT_STATE.md](PROJECT_STATE.md) · [DECISION_LOG.md](DECISION_LOG.md) · [FAILURE_LOG.md](FAILURE_LOG.md)
@@ -27,7 +27,7 @@
 | 분류 | 최초 조사 | 현재 남은 것 |
 | --- | --- | --- |
 | A. 출시 차단 (BLOCKER) | 5 | **3** (A3 EAS 연결 · A4 계정/서명 · A5 개인정보처리방침) |
-| B. 출시 전 필수 (REQUIRED) | 8 | **5** (B2 표시 이름 · B5 패치 버전 · B6 미사용 의존성 · B7 데이터 안전 · B8 크래시 리포팅) |
+| B. 출시 전 필수 (REQUIRED) | 8 | **4** (B2 표시 이름 · B5 패치 버전 · B7 데이터 안전 · B8 크래시 리포팅) |
 | C. 출시 후 가능 (POST-LAUNCH) | 6 | **5** (C6 README 해소) |
 | D. 이미 완료 (DONE) | 9 | 9 |
 | E. MANUAL QA | 6 | 6 |
@@ -56,8 +56,8 @@
 | B2 | **앱 표시 이름이 개발용 슬러그** | `name: "hellchang-grow"` — 제품명 "헬창키우기"가 아니다 | 표시 이름/스토어 등재명 확정 |
 | B3 | ~~버전 정책 없음~~ **해소** | `android.versionCode: 1`, `ios.buildNumber: "1"`을 명시하고 `eas.json`의 `appVersionSource`를 `local`로 뒀다 — 빌드 때 파일이 조용히 바뀌지 않고, 올릴 때만 저장소에서 올린다 | 릴리스마다 수동 증가(자동 증가를 원하면 결정 필요) |
 | B4 | ~~선택한 사진이 나중에 사라질 수 있다~~ **해소** | 기록을 저장하는 순간 문서 디렉터리(`body-photos/`)로 복사하고 그 경로를 남긴다(`services/storage/photo-store.ts`). 복사 지점은 `addBodyHistoryEntry` 한 곳이라 온보딩·히스토리 양쪽이 함께 덮인다. 실패하면 원래 URI로 떨어져 기록 저장은 막지 않는다. `expo-file-system`을 승인받아 `package.json`에 선언했다(`~57.0.5`) | 이미 저장된 옛 기록의 사진은 되살릴 수 없다. 실기기 확인은 `E4` |
-| B5 | **의존성 패치 버전 불일치 7개** | `expo-doctor`: `expo`, `expo-router`, `expo-image-picker`, `expo-splash-screen`, `expo-constants`, `expo-linking`, `@expo/ui` | `npx expo install --check`. **의존성 변경은 APPROVAL REQUIRED** |
-| B6 | **쓰지 않는 네이티브 의존성 6개** | `src`에서 참조 0건: `expo-device`, `expo-symbols`, `expo-glass-effect`, `@expo/ui`, `expo-web-browser`, `expo-font` | 실제 미사용인지 확인 후 정리. 네이티브 모듈은 빌드 크기와 권한 표면을 늘린다. **의존성 변경은 APPROVAL REQUIRED** |
+| B5 | **의존성 패치 버전 불일치 6개** | `expo-doctor`: `expo`, `expo-router`, `expo-image-picker`, `expo-splash-screen`, `expo-constants`, `expo-linking` (`@expo/ui`는 B6에서 직접 의존성에서 빠졌다) | `npx expo install --check`. **의존성 변경은 APPROVAL REQUIRED** |
+| B6 | ~~쓰지 않는 네이티브 의존성 6개~~ **해소** | 여섯 개를 직접 의존성에서 뺐다(승인). 다만 효과가 갈린다 — `expo-device`/`expo-web-browser`는 요구하는 패키지가 없어 **트리에서 완전히 빠졌고**, `expo-symbols`/`expo-glass-effect`/`@expo/ui`는 `expo-router`가, `expo-font`는 `expo`가 의존해 **여전히 설치·링크된다**(얻은 것은 정직한 manifest). `expo export` 성공으로 빠진 참조가 없음을 확인 | — |
 | B7 | **데이터 안전/개인정보 답변 — 시트 확보, 입력 대기** | [docs/PRIVACY.md](docs/PRIVACY.md) 2부에 Play 데이터 안전 / Apple 라벨 답변을 항목별 근거와 함께 정리했다. 확인된 사실: 저장은 전부 기기 로컬(14개 키), 사진은 경로만 저장하고 업로드 경로가 없다, 외부 통신은 AI PT `fetch` 하나뿐이며 현재 **엔드포인트 미설정**(`resolveTrainerEndpointUrl()` → null). AI PT를 켜면 키·체중·체지방률·골격근량과 운동 기록이 전송되므로 답변이 "건강·피트니스 수집"으로 바뀐다 | 스토어 콘솔 입력 — **사용자만 가능** |
 | B8 | **크래시 리포팅 없음** | 저장소에 crash/analytics SDK가 없다 | 초기 사용자 문제를 볼 방법이 없다. 도입은 **의존성 추가 = APPROVAL REQUIRED** |
 
