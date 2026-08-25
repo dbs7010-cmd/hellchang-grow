@@ -7,7 +7,7 @@
 ## SNAPSHOT
 
 - branch: `feat/v1-monetization-foundation`
-- HEAD: `1796e62` — chore(deps): drop the packages this app never imports
+- HEAD: `d9f9a99` — chore(deps): match the versions this SDK expects
   (이 문서를 담은 상태 갱신 커밋이 그 위에 올라간다)
 - last_updated: 2026-08-25
 - last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 15종 전부 PASS(988개 단언)
@@ -64,6 +64,7 @@
 - `7305e34` README를 템플릿에서 실제 제품 문서로 교체
 - `f9da419` 사진을 앱 보관 자리로 복사(`B4`) — 캐시가 지워져도 [몸 변화] 사진이 남는다. `expo-file-system` 선언은 사용자 승인
 - `1796e62` 쓰지 않는 직접 의존성 6개 제거(`B6`, 승인) — 그중 2개는 트리에서 완전히 빠졌고 4개는 expo/expo-router가 계속 요구한다
+- `d9f9a99` SDK 57 패치 버전 정렬(`B5`, 승인) — `expo-doctor` 21/21, 실패 항목 없음
 - `b2a3f65` V1 entitlement foundation — 단일 권리 판정 소스 `resolveEntitlement()`, 만료 강제, `verify:entitlement` 55개
 - `ebd5784` 휴식 중 이탈 확인 표시 + stale 종료 확인 정리 (Android 실기기 재현 버그)
 - `d6c3910` 세트 완료 피드백을 휴식 전환 전에 보이도록 유지
@@ -87,7 +88,7 @@
 3. ~~미사용 네이티브 의존성 정리~~ **완료** (`1796e62`). 남은 의존성 사안은 패치 버전 6건(`B5`)이며 여전히 APPROVAL REQUIRED다.
 4. ~~개인정보처리방침 + 데이터 안전 답변 초안~~ **초안 완료** ([docs/PRIVACY.md](docs/PRIVACY.md)). 남은 것: 운영 주체/연락처/시행일 채우기 → 법률 검토 → 공개 URL 게시 → 스토어 콘솔 입력. **사용자만 가능**.
 5. ~~사진 URI 영속성 수정~~ **완료** (`f9da419`). 옛 기록의 사진은 되살릴 수 없고, 실기기 확인은 `E4`로 남았다.
-6. **의존성 패치 버전 정리** (`B5`) — `npx expo install --check`. APPROVAL REQUIRED.
+6. ~~의존성 패치 버전 정리~~ **완료** (`d9f9a99`). `expo-doctor`가 21/21로 통과한다 — 남은 의존성 사안은 크래시 리포팅 도입 여부(`B8`)뿐이다.
 7. **아이콘/스플래시/스토어 등재 자산 최종본** (`E2`) — 에셋 필요, **사용자**.
 8. **실기기 MANUAL QA** (`E1`,`E3`,`E4`,`E5`,`E6`) → 스토어 제출 (`A4`).
 
