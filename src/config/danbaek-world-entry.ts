@@ -26,7 +26,7 @@ export function resolveDanbaekWorldEntry(input: {
   const seam = input.seam ?? DanbaekWorldEntry;
   if (!seam.available || !seam.route) return null;
   const learned = input.profile.capabilities.filter((capability) =>
-    capability.learningStage === 'learned' || capability.learningStage === 'proficient' || capability.learningStage === 'mastered'
+    capability.learningStage === 'learned' || capability.learningStage === 'familiar' || capability.learningStage === 'proficient'
   ).length;
   return {
     route: seam.route,
