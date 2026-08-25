@@ -7,10 +7,10 @@
 ## SNAPSHOT
 
 - branch: `feat/v1-monetization-foundation`
-- HEAD: `3f29487` — fix(history): show the body entry the user just saved
+- HEAD: `c18fd05` — fix(trainer): stop calling a rep PR a first weight record
   (이 문서를 담은 상태 갱신 커밋이 그 위에 올라간다)
 - last_updated: 2026-08-25
-- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 15종 전부 PASS(1,005개 단언)
+- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 15종 전부 PASS(1,009개 단언)
 - remote: `origin/feat/v1-monetization-foundation` — 사용자 승인 하에 fast-forward push (force 금지)
 - worktree: 추적 대상 clean. 남은 untracked는 EXPERIMENTAL 항목뿐이다 (아래 WORKTREE 참조)
 
@@ -69,6 +69,7 @@
 - 브라우저 스모크 테스트 — 온보딩 → 세션 → 세트 기록 → 종료 → 결과까지 실제로 클릭 확인(콘솔 에러 0, XP·볼륨·PR 표시·완료 정리 모두 기대값). 실기기 QA는 여전히 남아 있다
 - `4ef24ae` 표시 이름 `헬창키우기` 확정(`B2`, 사용자 결정) — slug은 EAS 연결 값이라 유지, `verify:release`가 되돌아감을 막는다
 - `3f29487` 2차 브라우저 QA에서 찾은 버그 수정 — 같은 날 두 번째 신체 기록이 화면에 반영되지 않던 정렬 문제. rep PR 전체 경로와 새로고침 세션 복구도 함께 확인
+- `c18fd05` 3차 브라우저 QA — PT가 횟수 PR을 "중량 첫 기록"이라고 말하던 문제 수정(`DEC-011` 마무리). 루틴 만들기/수정은 정상
 - `b2a3f65` V1 entitlement foundation — 단일 권리 판정 소스 `resolveEntitlement()`, 만료 강제, `verify:entitlement` 55개
 - `ebd5784` 휴식 중 이탈 확인 표시 + stale 종료 확인 정리 (Android 실기기 재현 버그)
 - `d6c3910` 세트 완료 피드백을 휴식 전환 전에 보이도록 유지
