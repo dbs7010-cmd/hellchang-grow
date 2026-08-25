@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { PlayerCharacter } from '@/components/character/player-character';
-import { CharacterViewer } from '@/components/character/character-viewer';
 import { ThemedText } from '@/components/themed-text';
 import { BarChart } from '@/components/ui/bar-chart';
 import { Chip } from '@/components/ui/chip';
@@ -80,7 +79,6 @@ export default function HistoryScreen() {
   } = useAppData();
 
   const [period, setPeriod] = useState<Period>('week');
-  const [viewerOpen, setViewerOpen] = useState(false);
   const [weightKg, setWeightKg] = useState('');
   const [bodyFatPercent, setBodyFatPercent] = useState('');
   const [skeletalMuscleKg, setSkeletalMuscleKg] = useState('');
@@ -295,7 +293,6 @@ export default function HistoryScreen() {
               />
             </View>
             <View style={styles.bodyActions}>
-              <PrimaryButton label="360도 보기" variant="secondary" onPress={() => setViewerOpen(true)} />
               {photoDates.length >= 2 ? (
                 <PrimaryButton
                   label={compareOpen ? '사진 비교 닫기' : `사진 비교 (${photoDates.length}장)`}
@@ -539,16 +536,6 @@ export default function HistoryScreen() {
             ))
           )}
         </Section>
-      )}
-
-      {profile && (
-        <CharacterViewer
-          visible={viewerOpen}
-          onClose={() => setViewerOpen(false)}
-          genderExpression={profile.genderExpression}
-          size={profile.bodyParameters.size}
-          tone={profile.bodyParameters.tone}
-        />
       )}
     </ScreenScroll>
   );
