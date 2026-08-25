@@ -3,7 +3,9 @@ import {
   type DanbaekLearningProfile,
 } from '@/types/danbaek-contract';
 import { runDanbaekAdventure } from '@/features/danbaek-world/adventure-runner';
+import { presentDanbaekWorldBlock } from '@/features/danbaek-world/presentation';
 import { DanbaekWorldProofStages } from '@/features/danbaek-world/proof-stages';
+import { evaluateDanbaekWorldStage } from '@/features/danbaek-world/stage-evaluator';
 
 let passed = 0;
 let failed = 0;
@@ -61,11 +63,42 @@ check('arrival passes before first gate', firstRun.clearedStageIds.includes('pro
 check('insufficient push blocks horizontal gate', firstRun.outcome === 'blocked');
 check('block identifies push family', firstRun.block?.recommendedMovementFamily === 'push_horizontal');
 check('WORLD does not mutate input profile', JSON.stringify(insufficient) === beforeSnapshot);
+if (firstRun.block) {
+  const presentation = presentDanbaekWorldBlock(firstRun.block);
+  check('block presentation routes to Stanley', presentation.actionLabel === '스탠리에게 배우러 가기');
+  check('block presentation preserves movement family', presentation.recommendedMovementFamily === 'push_horizontal');
+}
 
 const secondRun = runDanbaekAdventure(DanbaekWorldProofStages, learnedWithoutBench);
 check('learned push passes family gate', secondRun.clearedStageIds.includes('proof-horizontal-push-gate'));
 check('specific bench gate still blocks without bench evidence', secondRun.currentStageId === 'proof-bench-gate');
 check('specific gate uses specific exercise explanation', secondRun.block?.explanationKey === 'world.block.specific_exercise_required');
+if (secondRun.block) {
+  const presentation = presentDanbaekWorldBlock(secondRun.block);
+  check('specific exercise id survives handoff', presentation.specificExerciseId === 'bench-press');
+}
+
+const malformedCrossFamily: DanbaekLearningProfile = {
+  ...learnedWithoutBench,
+  capabilities: [
+    learnedWithoutBench.capabilities[0],
+    {
+      movementFamily: 'pull_horizontal',
+      learningStage: 'proficient',
+      evidenceCount: 99,
+      lastObservedAt: '2026-08-25T00:00:00.000Z',
+      representativeExerciseIds: ['bench-press'],
+    },
+  ],
+};
+const benchGate = DanbaekWorldProofStages.find((stage) => stage.id === 'proof-bench-gate');
+check('proof bench gate exists', Boolean(benchGate));
+if (benchGate) {
+  check(
+    'specific exercise in wrong movement family cannot unlock gate',
+    evaluateDanbaekWorldStage(benchGate, malformedCrossFamily).outcome === 'block'
+  );
+}
 
 const thirdRun = runDanbaekAdventure(DanbaekWorldProofStages, learnedBench);
 check('additional APP-provided bench evidence clears same route', thirdRun.outcome === 'cleared');
