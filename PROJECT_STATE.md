@@ -7,10 +7,10 @@
 ## SNAPSHOT
 
 - branch: `feat/v1-monetization-foundation`
-- HEAD: `1ce7022` — chore(release): set the app identity and drop the permission we never use
+- HEAD: `7305e34` — docs(readme): replace the create-expo-app template
   (이 문서를 담은 상태 갱신 커밋이 그 위에 올라간다)
 - last_updated: 2026-08-25
-- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 14종 전부 PASS(952개 단언)
+- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 15종 전부 PASS(974개 단언)
 - remote: `origin/feat/v1-monetization-foundation` — 사용자 승인 하에 fast-forward push (force 금지)
 - worktree: 추적 대상 clean. 남은 untracked는 EXPERIMENTAL 항목뿐이다 (아래 WORKTREE 참조)
 
@@ -60,6 +60,8 @@
 - V1 RELEASE AUDIT — 출시 차단 5 / 출시 전 필수 8 / 출시 후 가능 6 / 완료 9 / MANUAL QA 6으로 분류 ([RELEASE_AUDIT.md](RELEASE_AUDIT.md))
 - 출시 준비 1~3단계 일부 — 앱 식별자 `com.helchanggrow.app`(사용자 승인), `eas.json` 3개 프로필, 불필요 권한 제거(`RECORD_AUDIO` 0건). 출시 차단 5 → 3
 - 개인정보처리방침 초안 + 스토어 데이터 안전 답변 시트 ([docs/PRIVACY.md](docs/PRIVACY.md)) — 코드에서 확인한 사실만, 운영 주체 정보는 빈칸
+- `948ee48` `npm run verify:release` 22개 — 식별자/권한/EAS 프로필/V1 경계가 틀어지면 검증이 잡는다(틀린 설정으로 negative test 확인)
+- `7305e34` README를 템플릿에서 실제 제품 문서로 교체
 - `b2a3f65` V1 entitlement foundation — 단일 권리 판정 소스 `resolveEntitlement()`, 만료 강제, `verify:entitlement` 55개
 - `ebd5784` 휴식 중 이탈 확인 표시 + stale 종료 확인 정리 (Android 실기기 재현 버그)
 - `d6c3910` 세트 완료 피드백을 휴식 전환 전에 보이도록 유지
@@ -70,9 +72,9 @@
 
 **없음 — verified checkpoint 직후다.** 진행 중인 주 작업 단위가 없다.
 
-**없음 — AI가 승인 없이 진행할 수 있는 출시 준비 작업이 소진됐다.**
-설정(식별자/eas.json/권한)과 문서(개인정보처리방침 초안, 데이터 안전 답변 시트)까지 끝냈다.
-남은 것은 전부 계정·게시·제품 결정·의존성 승인이다.
+**없음.** 설정(식별자/eas.json/권한), 문서(개인정보처리방침 초안·데이터 안전 시트·README),
+그리고 그 설정을 지키는 검증(`verify:release`)까지 끝냈다. 남은 것은 전부 계정·게시·제품
+결정·의존성 승인이며 아래 NEXT에 누가 해야 하는지 적어 뒀다.
 
 ## NEXT
 
