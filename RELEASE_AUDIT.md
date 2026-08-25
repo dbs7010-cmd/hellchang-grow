@@ -1,7 +1,7 @@
 # V1 RELEASE AUDIT
 
 > 2026-08-25 · branch `feat/v1-monetization-foundation` · 기준 커밋 `a14419d`
-> **갱신 2026-08-25** (`abeaf31` 이후): A1/A2/B1/B3/C6 해소, A5/B7은 초안 확보 — 아래 표에 표시했다.
+> **갱신 2026-08-25** (`abeaf31` 이후): A1/A2/B1/B3/B4/C6 해소, A5/B7은 초안 확보 — 아래 표에 표시했다.
 > 설정 항목은 이제 `npm run verify:release`(22개)가 지킨다 — 식별자·권한·EAS 프로필·V1 경계가 틀어지면 검증이 실패한다.
 > **새 기능을 구현하지 않았다.** 저장소의 현재 상태만 조사하고 분류했다.
 > 관련: [PROJECT_STATE.md](PROJECT_STATE.md) · [DECISION_LOG.md](DECISION_LOG.md) · [FAILURE_LOG.md](FAILURE_LOG.md)
@@ -14,7 +14,7 @@
 | --- | --- |
 | `npx tsc --noEmit` | PASS |
 | `npm run lint` | PASS |
-| verify 스크립트 15종 | PASS (974 단언, FAIL 0 — 신규 `verify:release` 22개 포함) |
+| verify 스크립트 15종 | PASS (988 단언, FAIL 0 — `verify:release` 22개, 사진 파일 이름 14개 포함) |
 | `npx expo config --type public` | 해석된 설정 확인 (아래 A/B 항목의 근거) |
 | `npx expo export --platform android` | **성공** — production JS 번들 `4.3MB` 생성, exit 0 (식별자/권한 변경 후 재실행도 성공) |
 | `npx expo-doctor` | 21개 중 20개 통과, 1개 실패(패치 버전 불일치 7개) |
@@ -27,7 +27,7 @@
 | 분류 | 최초 조사 | 현재 남은 것 |
 | --- | --- | --- |
 | A. 출시 차단 (BLOCKER) | 5 | **3** (A3 EAS 연결 · A4 계정/서명 · A5 개인정보처리방침) |
-| B. 출시 전 필수 (REQUIRED) | 8 | **6** (B2 표시 이름 · B4 사진 URI · B5 패치 버전 · B6 미사용 의존성 · B7 데이터 안전 · B8 크래시 리포팅) |
+| B. 출시 전 필수 (REQUIRED) | 8 | **5** (B2 표시 이름 · B5 패치 버전 · B6 미사용 의존성 · B7 데이터 안전 · B8 크래시 리포팅) |
 | C. 출시 후 가능 (POST-LAUNCH) | 6 | **5** (C6 README 해소) |
 | D. 이미 완료 (DONE) | 9 | 9 |
 | E. MANUAL QA | 6 | 6 |
@@ -55,7 +55,7 @@
 | B1 | ~~쓰지 않는 마이크 권한~~ **해소** | `expo-image-picker` 플러그인에 `microphonePermission: false`, `cameraPermission: false`를 넣었다. 재확인 결과 해석된 설정에 `RECORD_AUDIO`가 **0건**이고 권한 배열 자체가 사라졌다(앱은 사진 라이브러리만 쓴다) | — |
 | B2 | **앱 표시 이름이 개발용 슬러그** | `name: "hellchang-grow"` — 제품명 "헬창키우기"가 아니다 | 표시 이름/스토어 등재명 확정 |
 | B3 | ~~버전 정책 없음~~ **해소** | `android.versionCode: 1`, `ios.buildNumber: "1"`을 명시하고 `eas.json`의 `appVersionSource`를 `local`로 뒀다 — 빌드 때 파일이 조용히 바뀌지 않고, 올릴 때만 저장소에서 올린다 | 릴리스마다 수동 증가(자동 증가를 원하면 결정 필요) |
-| B4 | **선택한 사진이 나중에 사라질 수 있다** | `history.tsx`가 `ImagePicker`가 준 URI를 그대로 `photoReference`로 저장한다. 앱 전용 저장소로 복사하지 않는다(`FileSystem` 사용처 0건) | 선택 직후 앱 디렉터리로 복사하고 그 경로를 저장. **`expo-file-system`이 이미 node_modules에 있지만(57.0.4, 다른 패키지의 의존성) `package.json`에 선언돼 있지 않다** — 선언은 의존성 변경이라 APPROVAL REQUIRED다. 선언 없이 쓰면 다음 의존성 정리 때 조용히 사라진다 |
+| B4 | ~~선택한 사진이 나중에 사라질 수 있다~~ **해소** | 기록을 저장하는 순간 문서 디렉터리(`body-photos/`)로 복사하고 그 경로를 남긴다(`services/storage/photo-store.ts`). 복사 지점은 `addBodyHistoryEntry` 한 곳이라 온보딩·히스토리 양쪽이 함께 덮인다. 실패하면 원래 URI로 떨어져 기록 저장은 막지 않는다. `expo-file-system`을 승인받아 `package.json`에 선언했다(`~57.0.5`) | 이미 저장된 옛 기록의 사진은 되살릴 수 없다. 실기기 확인은 `E4` |
 | B5 | **의존성 패치 버전 불일치 7개** | `expo-doctor`: `expo`, `expo-router`, `expo-image-picker`, `expo-splash-screen`, `expo-constants`, `expo-linking`, `@expo/ui` | `npx expo install --check`. **의존성 변경은 APPROVAL REQUIRED** |
 | B6 | **쓰지 않는 네이티브 의존성 6개** | `src`에서 참조 0건: `expo-device`, `expo-symbols`, `expo-glass-effect`, `@expo/ui`, `expo-web-browser`, `expo-font` | 실제 미사용인지 확인 후 정리. 네이티브 모듈은 빌드 크기와 권한 표면을 늘린다. **의존성 변경은 APPROVAL REQUIRED** |
 | B7 | **데이터 안전/개인정보 답변 — 시트 확보, 입력 대기** | [docs/PRIVACY.md](docs/PRIVACY.md) 2부에 Play 데이터 안전 / Apple 라벨 답변을 항목별 근거와 함께 정리했다. 확인된 사실: 저장은 전부 기기 로컬(14개 키), 사진은 경로만 저장하고 업로드 경로가 없다, 외부 통신은 AI PT `fetch` 하나뿐이며 현재 **엔드포인트 미설정**(`resolveTrainerEndpointUrl()` → null). AI PT를 켜면 키·체중·체지방률·골격근량과 운동 기록이 전송되므로 답변이 "건강·피트니스 수집"으로 바뀐다 | 스토어 콘솔 입력 — **사용자만 가능** |
@@ -99,7 +99,7 @@
 | E1 | 세션 중 앱 kill 후 복구 | `scripts/verify-storage-recovery.ts` 하단 6단계 절차 |
 | E2 | 아이콘/스플래시가 Expo 템플릿 기본인지 | `assets/images/`에 `react-logo*`, `expo-badge*` 등 템플릿 잔재가 함께 있다 — 실제 아이콘을 눈으로 확인 |
 | E3 | 권한 다이얼로그 문구 | 사진 접근 요청 문구가 실기기에서 어떻게 보이는지 |
-| E4 | 사진 URI 만료(B4) 재현 | 사진 등록 후 며칠 뒤 [몸 변화]에서 다시 열어 보기 |
+| E4 | 사진 보관(B4) 확인 | 사진을 넣은 기록을 만든 뒤 며칠 뒤 [몸 변화]에서 다시 열어 그대로 있는지 본다. 복사가 실패하는 기기라면 기록만 남고 사진 자리가 비어야 한다 — 기록 저장 자체가 실패하면 안 된다 |
 | E5 | EAS preview 빌드 1회 성공 | A1~A3 해결 후 |
 | E6 | 다양한 화면 크기/저사양 기기 | 세션 화면의 세트 입력·휴식 타이머 중심 |
 

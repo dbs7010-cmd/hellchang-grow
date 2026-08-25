@@ -7,10 +7,10 @@
 ## SNAPSHOT
 
 - branch: `feat/v1-monetization-foundation`
-- HEAD: `7305e34` — docs(readme): replace the create-expo-app template
+- HEAD: `f9da419` — fix(history): keep the photo the user picked
   (이 문서를 담은 상태 갱신 커밋이 그 위에 올라간다)
 - last_updated: 2026-08-25
-- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 15종 전부 PASS(974개 단언)
+- last_verified: 2026-08-25 — `tsc` / `lint` PASS + verify 스크립트 15종 전부 PASS(988개 단언)
 - remote: `origin/feat/v1-monetization-foundation` — 사용자 승인 하에 fast-forward push (force 금지)
 - worktree: 추적 대상 clean. 남은 untracked는 EXPERIMENTAL 항목뿐이다 (아래 WORKTREE 참조)
 
@@ -62,6 +62,7 @@
 - 개인정보처리방침 초안 + 스토어 데이터 안전 답변 시트 ([docs/PRIVACY.md](docs/PRIVACY.md)) — 코드에서 확인한 사실만, 운영 주체 정보는 빈칸
 - `948ee48` `npm run verify:release` 22개 — 식별자/권한/EAS 프로필/V1 경계가 틀어지면 검증이 잡는다(틀린 설정으로 negative test 확인)
 - `7305e34` README를 템플릿에서 실제 제품 문서로 교체
+- `f9da419` 사진을 앱 보관 자리로 복사(`B4`) — 캐시가 지워져도 [몸 변화] 사진이 남는다. `expo-file-system` 선언은 사용자 승인
 - `b2a3f65` V1 entitlement foundation — 단일 권리 판정 소스 `resolveEntitlement()`, 만료 강제, `verify:entitlement` 55개
 - `ebd5784` 휴식 중 이탈 확인 표시 + stale 종료 확인 정리 (Android 실기기 재현 버그)
 - `d6c3910` 세트 완료 피드백을 휴식 전환 전에 보이도록 유지
@@ -84,7 +85,7 @@
 2. **EAS 프로젝트 연결** (`A3`) — `eas.json`은 커밋됐다. 남은 것은 `eas init`으로 `extra.eas.projectId`/`owner`를 채우는 것이며 **Expo 계정이 필요해 사용자만 가능**하다. 그 뒤 `preview` 프로필로 첫 네이티브 빌드를 돌린다(`E5`).
 3. **미사용 네이티브 의존성 정리** (`B6`) — src 참조 0건인 6개. **의존성 변경이라 APPROVAL REQUIRED**.
 4. ~~개인정보처리방침 + 데이터 안전 답변 초안~~ **초안 완료** ([docs/PRIVACY.md](docs/PRIVACY.md)). 남은 것: 운영 주체/연락처/시행일 채우기 → 법률 검토 → 공개 URL 게시 → 스토어 콘솔 입력. **사용자만 가능**.
-5. **사진 URI 영속성 수정** (`B4`) — 선택한 사진을 앱 디렉터리로 복사해 저장. 코드 변경이며 GUARDED. `expo-file-system` 의존성이 필요하면 그 시점에 승인을 받는다.
+5. ~~사진 URI 영속성 수정~~ **완료** (`f9da419`). 옛 기록의 사진은 되살릴 수 없고, 실기기 확인은 `E4`로 남았다.
 6. **의존성 패치 버전 정리** (`B5`) — `npx expo install --check`. APPROVAL REQUIRED.
 7. **아이콘/스플래시/스토어 등재 자산 최종본** (`E2`) — 에셋 필요, **사용자**.
 8. **실기기 MANUAL QA** (`E1`,`E3`,`E4`,`E5`,`E6`) → 스토어 제출 (`A4`).
