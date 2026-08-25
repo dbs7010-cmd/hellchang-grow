@@ -1,6 +1,5 @@
 import { readJSON, writeJSON } from '@/services/storage/local-storage';
-
-const HOME_GYM_KEY = 'hellchang.homeGymState.v1';
+import { StorageKeys } from '@/services/storage/keys';
 
 export const HOME_GYM_REWARD_PER_WORKOUT = 10;
 export const STARTER_RACK_COST = 30;
@@ -13,7 +12,7 @@ export interface HomeGymState {
 const EMPTY_STATE: HomeGymState = { spentCoins: 0, ownedItemIds: [] };
 
 export async function getHomeGymState(): Promise<HomeGymState> {
-  const stored = await readJSON<Partial<HomeGymState>>(HOME_GYM_KEY);
+  const stored = await readJSON<Partial<HomeGymState>>(StorageKeys.homeGymState);
   if (!stored) return EMPTY_STATE;
   return {
     spentCoins: Number.isFinite(stored.spentCoins) && (stored.spentCoins ?? 0) >= 0 ? stored.spentCoins! : 0,
@@ -42,6 +41,6 @@ export async function buyStarterRack(
     spentCoins: state.spentCoins + STARTER_RACK_COST,
     ownedItemIds: [...state.ownedItemIds, 'starter-dumbbell-rack'],
   };
-  await writeJSON(HOME_GYM_KEY, next);
+  await writeJSON(StorageKeys.homeGymState, next);
   return next;
 }
