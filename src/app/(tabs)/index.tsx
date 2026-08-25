@@ -14,10 +14,13 @@ import { ThemedView } from '@/components/themed-view';
 import { AppConfig } from '@/config/app-config';
 import { hasPlayerCharacterModel, StanleyPortraitImage } from '@/config/character-assets';
 import { Exercises, getExerciseById, getExercisesByMuscleGroup } from '@/config/exercises';
-import { MuscleGroups } from '@/config/muscle-groups';
+import { MuscleGroupLabels, MuscleGroups } from '@/config/muscle-groups';
+import { MuscleDetailToGroup } from '@/types/exercise';
+import type { MuscleGroupDetail } from '@/types/exercise';
 import { StanleyTrainer } from '@/config/trainers';
 import { BottomTabInset, HomeColors, Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
+import { todayDateString } from '@/utils/date';
 import { getThisWeekRecords } from '@/data/workout-repository';
 import { useTheme } from '@/hooks/use-theme';
 import { findPreviousPerformance } from '@/utils/exercise-history';
@@ -67,6 +70,7 @@ export default function HomeScreen() {
     activeSession,
     routines,
     passProgress,
+    growth,
     characterAppearance,
     bodyParameters,
   } = useAppData();
@@ -78,6 +82,26 @@ export default function HomeScreen() {
   const [stageHeight, setStageHeight] = useState(0);
 
   const weekRecords = useMemo(() => getThisWeekRecords(workoutRecords), [workoutRecords]);
+
+  /*
+   * 오늘 운동으로 얻은 성장. GrowthEngine이 이미 저장해 둔 당일 집계(growth.daily)를 읽기만
+   * 한다 — 여기서 SP를 계산하거나 저장하지 않는다.
+   *
+   * 이 줄이 없으면 운동의 결과가 결과 화면에서 한 번 보이고 끝난다. 홈으로 돌아왔을 때
+   * "오늘 뭘 키웠는지"가 남아 있어야 운동이 게임의 입력으로 느껴진다.
+   */
+  const todayGrowth = useMemo(() => {
+    if (growth.daily.date !== todayDateString()) return null;
+    const gained = Object.entries(growth.daily.spByMuscle).filter(([, sp]) => (sp ?? 0) > 0) as [
+      MuscleGroupDetail,
+      number,
+    ][];
+    if (gained.length === 0) return null;
+
+    const totalSp = gained.reduce((sum, [, sp]) => sum + sp, 0);
+    const [topDetail] = gained.reduce((best, entry) => (entry[1] > best[1] ? entry : best));
+    return { totalSp, topGroupLabel: MuscleGroupLabels[MuscleDetailToGroup[topDetail]] };
+  }, [growth]);
   const weeklyVolumeKg = useMemo(() => sumVolumeKg(weekRecords), [weekRecords]);
   const latestBody = useMemo(
     () =>
@@ -199,6 +223,21 @@ export default function HomeScreen() {
             <HomeStat label="연속" value={'🔥 ' + streak.currentStreakDays + '일'} />
             <HomeStat label="이번 주 볼륨" value={weeklyVolumeKg > 0 ? formatVolumeKg(weeklyVolumeKg) : '-'} />
           </View>
+
+          {/*
+            오늘 운동한 날에만 나타난다 — 평소 홈은 그대로 두고, 운동한 날에만 그 결과가
+            홈까지 따라온다. 누르면 성장 리포트로 간다.
+          */}
+          {todayGrowth && (
+            <Pressable onPress={() => router.push('/pass')} hitSlop={6} style={styles.todayGrowthRow}>
+              <ThemedText type="captionBold" style={{ color: HomeColors.gold }}>
+                오늘 성장 +{Math.round(todayGrowth.totalSp * 10) / 10} SP
+              </ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary">
+                {todayGrowth.topGroupLabel} 중심 ›
+              </ThemedText>
+            </Pressable>
+          )}
         </View>
 
         <View style={styles.stage}>
@@ -500,6 +539,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     gap: Spacing.two,
     boxShadow: HomeColors.shadow,
+  },
+  todayGrowthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   statsRow: {
     flexDirection: 'row',

@@ -1,4 +1,6 @@
+import type { MuscleGroup } from '@/types/exercise';
 import type { PtContext, PtExerciseBrief } from '@/utils/pt-context';
+import type { QuickStartExercise } from '@/utils/workout-start';
 
 export type AiQuickActionId =
   | 'what_today'
@@ -8,8 +10,24 @@ export type AiQuickActionId =
   | 'ask_form'
   | 'weekly_summary';
 
+/**
+ * PT가 "오늘 이거 하시죠"라고 말할 때 함께 오는 **실행 가능한 계획**.
+ *
+ * 문장만 돌려주면 화면이 그 문장을 다시 해석해야 하고, 사용자는 PT 말을 듣고 운동 시작
+ * 화면으로 가서 같은 부위를 손으로 다시 골라야 한다. 그래서 말과 같은 근거(부위 + 운동)를
+ * 구조로도 같이 넘긴다 — 화면은 이 값을 그대로 startWorkoutSession에 넘기면 된다.
+ *
+ * 없을 수도 있다(기록 질문, 식단 질문 등). 있을 때만 시작 버튼이 뜬다.
+ */
+export interface AiTrainerPlan {
+  muscleGroup: MuscleGroup;
+  exercises: QuickStartExercise[];
+}
+
 export interface AiTrainerMessage {
   text: string;
+  /** 이 답변으로 바로 시작할 수 있는 운동. 기록/식단 답변에는 없다. */
+  plan?: AiTrainerPlan;
   /**
    * 이 답변이 실제 AI에서 온 것인지, 앱이 기록만 보고 만든 것인지.
    * 화면은 이 값으로 "AI 연결 전"임을 사용자에게 정직하게 표시한다.

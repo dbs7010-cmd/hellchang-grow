@@ -3,8 +3,10 @@ import { MuscleGroups } from '@/config/muscle-groups';
 import {
   AITrainerService,
   AiTrainerMessage,
+  AiTrainerPlan,
   AiTrainerRequest,
 } from '@/services/trainer/ai-trainer-service';
+import { resolveExercise } from '@/utils/exercise-spec';
 import { matchExerciseInText } from '@/utils/pt-context';
 import {
   buildExerciseRecordLine,
@@ -28,13 +30,13 @@ export class OfflineTrainerService implements AITrainerService {
   readonly isAiConnected = false;
 
   async send(request: AiTrainerRequest): Promise<AiTrainerMessage> {
-    return { text: this.answer(request), source: 'offline' };
+    return { text: this.answer(request), source: 'offline', plan: this.planFor(request) };
   }
 
   private answer(request: AiTrainerRequest): string {
     const { context, quickActionId, text } = request;
 
-    if (quickActionId === 'what_today') return this.todayPlan(context);
+    if (this.isTodayPlanQuestion(request)) return this.todayPlan(context);
     if (quickActionId === 'review_today' || quickActionId === 'weekly_summary') {
       return [buildStatusLine(context), buildWeeklyLine(context), buildRecentTrainingLine(context), buildPrLine(context)]
         .filter(Boolean)
@@ -60,7 +62,6 @@ export class OfflineTrainerService implements AITrainerService {
       return buildExerciseRecordLine(matched.name, recent);
     }
 
-    if (/오늘|뭐\s*하|추천/.test(text)) return this.todayPlan(context);
     if (/기록|최근|이번\s*주|볼륨|연속/.test(text)) {
       return [buildStatusLine(context), buildWeeklyLine(context), buildRecentTrainingLine(context)]
         .filter(Boolean)
@@ -70,15 +71,61 @@ export class OfflineTrainerService implements AITrainerService {
     return '아직 AI가 연결되지 않아서 자유 질문은 못 받습니다. 기록 관련해서는 위 빠른 질문으로 물어보시죠.';
   }
 
-  private todayPlan(context: AiTrainerRequest['context']): string {
+  /** "오늘 뭐 하지"류 질문인가. 문장과 계획이 같은 조건에서 갈리도록 여기 하나만 본다. */
+  private isTodayPlanQuestion(request: AiTrainerRequest): boolean {
+    if (request.quickActionId === 'what_today') return true;
+    if (request.quickActionId) return false;
+    // 특정 운동을 물었으면 그 운동 기록이 먼저다 — 오늘 계획을 들이밀지 않는다.
+    if (request.exercise ?? this.matchExercise(request.text)) return false;
+    return /오늘|뭐\s*하|추천/.test(request.text);
+  }
+
+  /** 아직 안 한 부위와 그 부위 대표 운동. 문장과 계획이 같은 근거를 쓰도록 한 곳에서 고른다. */
+  private todayPlanTarget(context: AiTrainerRequest['context']) {
     const trained = new Set(
       context.recentTraining.recentExercises
         .map((entry) => Exercises.find((exercise) => exercise.id === entry.exerciseId)?.primaryMuscleGroup)
         .filter(Boolean)
     );
-    const untouched = MuscleGroups.find((group) => !trained.has(group)) ?? null;
-    const names = untouched ? getExercisesByMuscleGroup(untouched).slice(0, 2).map((e) => e.name) : [];
-    return buildTodayPlanLine(context, untouched, names);
+    const muscleGroup = MuscleGroups.find((group) => !trained.has(group)) ?? null;
+    const exercises = muscleGroup ? getExercisesByMuscleGroup(muscleGroup).slice(0, 4) : [];
+    return { muscleGroup, exercises };
+  }
+
+  private todayPlan(context: AiTrainerRequest['context']): string {
+    const { muscleGroup, exercises } = this.todayPlanTarget(context);
+    return buildTodayPlanLine(
+      context,
+      muscleGroup,
+      exercises.slice(0, 2).map((exercise) => exercise.name)
+    );
+  }
+
+  /**
+   * PT가 말한 그 운동으로 **바로 시작할 수 있게** 계획을 함께 낸다.
+   *
+   * 문장만 주면 사용자는 PT 말을 듣고 운동 시작 화면으로 가서 같은 부위를 손으로 다시
+   * 골라야 한다. 세션이 기대하는 모양(QuickStartExercise)으로 맞춰 두면 화면은 이 값을
+   * 그대로 startWorkoutSession에 넘기면 된다.
+   */
+  private planFor(request: AiTrainerRequest): AiTrainerPlan | undefined {
+    if (!this.isTodayPlanQuestion(request)) return undefined;
+
+    const { muscleGroup, exercises } = this.todayPlanTarget(request.context);
+    if (!muscleGroup || exercises.length === 0) return undefined;
+
+    return {
+      muscleGroup,
+      exercises: exercises.map((exercise) => {
+        const resolved = resolveExercise(exercise, Exercises);
+        return {
+          exerciseId: resolved.id,
+          exerciseName: resolved.name,
+          targetSets: resolved.defaultSets,
+          defaultRestSeconds: resolved.defaultRestSeconds,
+        };
+      }),
+    };
   }
 
   /** 질문에 앱 운동 DB의 운동이 들어 있으면 그 운동으로 본다. DB에 없는 운동은 만들지 않는다. */

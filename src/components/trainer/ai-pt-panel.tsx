@@ -9,6 +9,7 @@ import { ChipRow } from '@/components/ui/chip-row';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { TextField } from '@/components/ui/text-field';
 import { AiQuickActionIds, AiQuickActionLabels } from '@/config/ai-quick-actions';
+import { MuscleGroupLabels } from '@/config/muscle-groups';
 import { StanleyTrainer } from '@/config/trainers';
 import { QuickActionPrompts } from '@/config/trainer-persona';
 import { Radius, Spacing } from '@/constants/theme';
@@ -17,6 +18,7 @@ import {
   AiQuickActionId,
   AiTrainerHistoryEntry,
   AiTrainerMessage,
+  AiTrainerPlan,
 } from '@/services/trainer/ai-trainer-service';
 import { createId } from '@/utils/id';
 
@@ -26,6 +28,8 @@ interface AiPtMessage {
   text: string;
   /** 트레이너 메시지가 실제 AI에서 온 것인지, 기록으로 계산한 것인지 */
   source?: AiTrainerMessage['source'];
+  /** 이 답변으로 바로 시작할 수 있는 운동. 있으면 말풍선 아래 시작 버튼이 뜬다. */
+  plan?: AiTrainerPlan;
 }
 
 export interface AiPtPanelProps {
@@ -42,9 +46,20 @@ export interface AiPtPanelProps {
     quickActionId?: AiQuickActionId;
     history: AiTrainerHistoryEntry[];
   }) => Promise<AiTrainerMessage | null>;
+  /**
+   * PT가 제안한 운동으로 바로 세션을 시작한다. 넘기지 않으면 시작 버튼이 뜨지 않는다
+   * (대화만 보는 화면에서 운동이 시작되는 일은 없다).
+   */
+  onStartPlan?: (plan: AiTrainerPlan) => void | Promise<void>;
 }
 
-export function AiPtPanel({ accessLabel, aiConnected, initialQuickAction, onSend }: AiPtPanelProps) {
+export function AiPtPanel({
+  accessLabel,
+  aiConnected,
+  initialQuickAction,
+  onSend,
+  onStartPlan,
+}: AiPtPanelProps) {
   const theme = useTheme();
   const [messages, setMessages] = useState<AiPtMessage[]>([]);
   const [inputText, setInputText] = useState('');
@@ -83,7 +98,13 @@ export function AiPtPanel({ accessLabel, aiConnected, initialQuickAction, onSend
       }
       setMessages((prev) => [
         ...prev,
-        { id: createId('ai-msg'), role: 'trainer', text: reply.text, source: reply.source },
+        {
+          id: createId('ai-msg'),
+          role: 'trainer',
+          text: reply.text,
+          source: reply.source,
+          plan: reply.plan,
+        },
       ]);
     } catch (caught) {
       // 대화는 그대로 두고 오류만 알린다 — 실패했다고 지금까지 한 이야기를 날리지 않는다.
@@ -152,7 +173,20 @@ export function AiPtPanel({ accessLabel, aiConnected, initialQuickAction, onSend
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         {messages.map((message) => (
-          <MessageBubble key={message.id} role={message.role} text={message.text} />
+          <View key={message.id}>
+            <MessageBubble role={message.role} text={message.text} />
+            {/*
+              PT가 말한 그 운동으로 바로 들어간다 — 사용자가 같은 부위를 운동 시작 화면에서
+              다시 고르게 하지 않는다. 계획이 실려 온 답변에만 뜬다.
+            */}
+            {message.plan && onStartPlan && (
+              <PrimaryButton
+                label={'이대로 운동 시작 · ' + MuscleGroupLabels[message.plan.muscleGroup]}
+                variant="gold"
+                onPress={() => onStartPlan(message.plan!)}
+              />
+            )}
+          </View>
         ))}
 
         {loading && <TypingIndicator />}

@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 
 import { AiPtPanel } from '@/components/trainer/ai-pt-panel';
@@ -8,7 +8,7 @@ import { SubScreen } from '@/components/ui/sub-screen';
 import { AiQuickActionIds } from '@/config/ai-quick-actions';
 import { StanleyTrainer } from '@/config/trainers';
 import { useAppData } from '@/context/app-data-context';
-import { AiQuickActionId } from '@/services/trainer/ai-trainer-service';
+import { AiQuickActionId, AiTrainerPlan } from '@/services/trainer/ai-trainer-service';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 
 /**
@@ -30,11 +30,13 @@ export default function AiChatScreen() {
     trainerUsage,
     aiConnected,
     adProviderAvailable,
+    startWorkoutSession,
     watchRewardedAd,
     subscribeMock,
     sendPtMessage,
   } = useAppData();
 
+  const router = useRouter();
   const [aiPanelOpened, setAiPanelOpened] = useState(hasAiPtAccess);
 
   const [adFailed, setAdFailed] = useState(false);
@@ -46,6 +48,21 @@ export default function AiChatScreen() {
     const granted = await watchRewardedAd();
     if (granted) setAiPanelOpened(true);
     else setAdFailed(true);
+  };
+
+  /**
+   * PT가 제안한 운동으로 바로 세션에 들어간다.
+   *
+   * 운동 시작 화면과 **같은 액션 하나**를 쓴다 — 시작 방식이 늘어도 세션이 만들어지는 규칙은
+   * 하나다. router.replace라 뒤로 가기가 상담 화면으로 돌아오지 않는다(운동 중에 상담 화면이
+   * 뒤에 남아 있을 이유가 없다).
+   */
+  const handleStartPlan = async (plan: AiTrainerPlan) => {
+    await startWorkoutSession('strength', {
+      primaryMuscleGroup: plan.muscleGroup,
+      initialExercises: plan.exercises,
+    });
+    router.replace('/session');
   };
 
   const handleSubscribe = async () => {
@@ -65,6 +82,7 @@ export default function AiChatScreen() {
           aiConnected={aiConnected}
           initialQuickAction={initialQuickAction}
           onSend={sendPtMessage}
+          onStartPlan={handleStartPlan}
         />
       ) : (
         <>
