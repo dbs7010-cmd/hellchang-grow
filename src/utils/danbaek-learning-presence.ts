@@ -40,3 +40,7 @@ export function buildLearningBoard(profile: DanbaekLearningProfile, limit = 3) {
 export function seenFamilyCount(profile: DanbaekLearningProfile): number {
   return profile.capabilities.filter((capability) => capability.evidenceCount > 0).length;
 }
+
+export function learnedFamilyCount(profile: DanbaekLearningProfile): number {
+  return profile.capabilities.filter((capability) => capability.learningStage === 'learned' || capability.learningStage === 'familiar' || capability.learningStage === 'proficient').length;
+}
