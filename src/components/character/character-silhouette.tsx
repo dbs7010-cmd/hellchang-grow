@@ -45,9 +45,11 @@ function CharacterSilhouetteComponent({
   }, [idle, breatheY]);
   const breatheStyle = useAnimatedStyle(() => ({ transform: [{ translateY: breatheY.value }] }));
   const geometry = buildCharacterBodyGeometry({ bodyParameters });
-  const { basePaths, fixedIdentity, regions, stage0BodyProportion, stroke } = CharacterBodyConfig;
-  const bodyProportionTransform = `translate(0 ${stage0BodyProportion.anchorY}) scale(1 ${stage0BodyProportion.scaleY}) translate(0 -${stage0BodyProportion.anchorY})`;
-  const bodyTransform = `translate(100 78) scale(${geometry.massScale}) translate(-100 -78)`;
+  const { basePaths, fixedIdentity, regions, seams, stage0BodyProportion, stroke } = CharacterBodyConfig;
+  // Stage 0 proportion correction must preserve the CANON neck/head seam. The old anchorY=76
+  // scaled the torso root itself upward, leaving the fixed head behind and visually detaching identity.
+  const bodyProportionTransform = `translate(0 ${seams.neckLeft[1]}) scale(1 ${stage0BodyProportion.scaleY}) translate(0 -${seams.neckLeft[1]})`;
+  const bodyTransform = `translate(100 ${seams.neckLeft[1]}) scale(${geometry.massScale}) translate(-100 -${seams.neckLeft[1]})`;
 
   return (
     <View style={[styles.wrapper, scale !== 1 && styles.fitted]}>
