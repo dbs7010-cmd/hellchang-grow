@@ -55,7 +55,8 @@
     "verify:monetization": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-monetization.ts",
     "verify:release": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-release-config.ts",
     "verify:learning": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-danbaek-learning.ts",
-    "verify:danbaek-world": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-danbaek-world.ts"
+    "verify:danbaek-world": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-danbaek-world.ts",
+    "verify:integration-gate-1": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-integration-gate-1.ts"
   },
   "private": true
 }
