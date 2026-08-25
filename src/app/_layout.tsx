@@ -1,5 +1,6 @@
-import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, Stack, ThemeProvider, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
@@ -7,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Spacing } from '@/constants/theme';
 import { AppDataProvider, useAppData } from '@/context/app-data-context';
+import { consumeDanbaekWorldWorkoutReturn, getDanbaekWorldWorkoutReturn, subscribeToDanbaekWorldWorkoutReturn } from '@/services/world/world-return';
 import { resolveBootstrapScreen } from '@/utils/stored-state';
 
 SplashScreen.preventAutoHideAsync();
@@ -16,7 +18,19 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { loading, bootstrapFailed, onboardingComplete, reloadAppData } = useAppData();
+  const router = useRouter();
+  const { loading, bootstrapFailed, onboardingComplete, reloadAppData, activeSession } = useAppData();
+  const returnToWorld = useSyncExternalStore(subscribeToDanbaekWorldWorkoutReturn, getDanbaekWorldWorkoutReturn, getDanbaekWorldWorkoutReturn);
+  const sawWorldWorkoutSession = useRef(false);
+
+  useEffect(() => {
+    if (returnToWorld && activeSession && activeSession.status !== 'completed') sawWorldWorkoutSession.current = true;
+    if (!returnToWorld || activeSession || !sawWorldWorkoutSession.current || loading) return;
+    if (!consumeDanbaekWorldWorkoutReturn()) return;
+    sawWorldWorkoutSession.current = false;
+    router.replace('/danbaek-world');
+  }, [returnToWorld, activeSession, loading, router]);
+
   const screen = resolveBootstrapScreen({ loading, bootstrapFailed, onboardingComplete });
   if (screen === 'splash') return null;
   if (screen === 'recovery') return <View style={styles.recovery}><ThemedText type="heading">데이터를 불러오지 못했어요</ThemedText><ThemedText type="caption" themeColor="textSecondary">저장된 기록은 그대로 있어요. 다시 시도해 주세요.</ThemedText><PrimaryButton label="다시 시도" onPress={reloadAppData} /></View>;
