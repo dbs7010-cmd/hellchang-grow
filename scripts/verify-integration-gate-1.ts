@@ -19,9 +19,20 @@ function record(id: string, exerciseId: string, date: string): WorkoutRecord {
     sessionId: `session-${id}`,
     date,
     durationMinutes: 30,
-    category: exercise.category,
-    exercises: [{ exerciseId, name: exercise.name, sets: [{ weightKg: 40, reps: 10, completed: true }] }],
-  } as WorkoutRecord;
+    category: 'strength',
+    title: exercise.name,
+    completed: true,
+    createdAt: `${date}T12:00:00.000Z`,
+    exercises: [{
+      id: `${id}-${exerciseId}`,
+      exerciseId,
+      name: exercise.name,
+      sets: 1,
+      reps: 10,
+      weightKg: 40,
+      setDetails: [{ id: `${id}-${exerciseId}-set-1`, weightKg: 40, reps: 10, completed: true }],
+    }],
+  };
 }
 
 const pushUpRecords = [
@@ -30,7 +41,7 @@ const pushUpRecords = [
   record('push-3', 'push-up', '2026-08-22'),
   record('push-4', 'push-up', '2026-08-23'),
 ];
-const before = buildDanbaekLearningProfile(pushUpRecords, '2026-08-26T00:00:00.000Z');
+const before = buildDanbaekLearningProfile({ records: pushUpRecords, generatedAt: '2026-08-26T00:00:00.000Z' });
 const blocked = runDanbaekAdventure(DanbaekWorldProofStages, before);
 check('real push records clear movement-family gate', blocked.clearedStageIds.includes('proof-horizontal-push-gate'));
 check('same profile blocks specific bench gate', blocked.currentStageId === 'proof-bench-gate' && blocked.block !== null);
@@ -41,11 +52,11 @@ check('APP offers real mapped exercises', route.exercises.length > 0);
 check('APP route includes bench press required by gate', route.exercises.some((exercise) => exercise.exerciseId === 'bench-press'));
 
 const afterRecords = [...pushUpRecords, record('bench-1', 'bench-press', '2026-08-25')];
-const after = buildDanbaekLearningProfile(afterRecords, '2026-08-26T01:00:00.000Z');
+const after = buildDanbaekLearningProfile({ records: afterRecords, generatedAt: '2026-08-26T01:00:00.000Z' });
 const cleared = runDanbaekAdventure(DanbaekWorldProofStages, after);
 check('real bench workout changes APP-owned evidence', after.capabilities.find((cap) => cap.movementFamily === 'push_horizontal')?.representativeExerciseIds.includes('bench-press') === true);
 check('same WORLD route clears after real bench evidence', cleared.outcome === 'cleared');
-check('WORLD evaluation did not mutate APP profile', JSON.stringify(after) === JSON.stringify(buildDanbaekLearningProfile(afterRecords, '2026-08-26T01:00:00.000Z')));
+check('WORLD evaluation did not mutate APP profile', JSON.stringify(after) === JSON.stringify(buildDanbaekLearningProfile({ records: afterRecords, generatedAt: '2026-08-26T01:00:00.000Z' })));
 
 console.log(`\nIntegration Gate 1: ${passed} PASS / ${failed} FAIL`);
 if (failed > 0) process.exitCode = 1;
