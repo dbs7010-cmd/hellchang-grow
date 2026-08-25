@@ -92,6 +92,7 @@ import { addXp, computePassLevelProgress } from '@/utils/pass';
 import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/character-appearance';
 import { buildPtContext, buildPtExerciseBrief, matchExerciseInText, PtContext } from '@/utils/pt-context';
 import { resolveRewardedAdGrant } from '@/utils/ad-reward';
+import { buildDanbaekLearningProfile, diffLearningProfiles, type LearningGain } from '@/utils/danbaek-learning';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { resolveOnboardingState } from '@/utils/stored-state';
 import { buildWorkoutSessionResult } from '@/utils/workout-session-result';
@@ -192,6 +193,13 @@ export interface EndSessionSummary {
    * 결과 화면/성장 연출이 이 값만 그대로 쓰면 된다.
    */
   bodyParametersWithPump: DanbaekBodyParameters;
+  /**
+   * 이번 운동으로 단백이가 무엇을 배웠는가 (rebuild 학습 계약).
+   *
+   * GrowthEngine 결과(`growth`)와 **별개의 축**이다 — 성장 계산은 그대로 두고, 같은 운동
+   * 기록을 학습의 눈으로 한 번 더 읽은 것뿐이다. 배운 것이 없으면 빈 배열이다.
+   */
+  learning: LearningGain[];
 }
 
 interface AppDataContextValue extends AppDataState {
@@ -796,6 +804,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       })
     );
 
+    // 학습 비교용 스냅샷 — 이 세션이 저장되기 **전**의 기록이다.
+    const recordsBeforeSession = state.workoutRecords;
+
     const prs = detectPRs(completed, state.workoutRecords);
 
     /**
@@ -949,6 +960,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       throw new Error('Session completion receipt is missing its final result snapshot.');
     }
 
+    // 저장이 끝난 뒤의 기록으로 다시 읽는다. 학습은 기록에서만 나오므로, 기록이 남지
+    // 않았다면 배운 것도 없다.
+    const learning = diffLearningProfiles(
+      buildDanbaekLearningProfile({ records: recordsBeforeSession, generatedAt: nowIso }),
+      buildDanbaekLearningProfile({ records: await getWorkoutRecords(), generatedAt: nowIso })
+    );
+
     return {
       durationMinutes: snapshot.durationMinutes,
       category: snapshot.category,
@@ -966,6 +984,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       bodyParametersBefore: snapshot.bodyParametersBefore,
       bodyParametersAfter: snapshot.bodyParametersAfter,
       bodyParametersWithPump: snapshot.bodyParametersWithPump,
+      learning,
     };
   }, [state.workoutRecords, state.routines, state.pass, state.bodyHistory, state.profile, state.growth]);
 
