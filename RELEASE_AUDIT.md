@@ -1,6 +1,7 @@
 # V1 RELEASE AUDIT
 
 > 2026-08-25 · branch `feat/v1-monetization-foundation` · 기준 커밋 `a14419d`
+> **갱신 2026-08-25** (`abeaf31` 이후): A1/A2/B1/B3 해소 — 아래 표에 표시했다.
 > **새 기능을 구현하지 않았다.** 저장소의 현재 상태만 조사하고 분류했다.
 > 관련: [PROJECT_STATE.md](PROJECT_STATE.md) · [DECISION_LOG.md](DECISION_LOG.md) · [FAILURE_LOG.md](FAILURE_LOG.md)
 
@@ -14,7 +15,7 @@
 | `npm run lint` | PASS |
 | verify 스크립트 14종 | PASS (952 단언, FAIL 0) |
 | `npx expo config --type public` | 해석된 설정 확인 (아래 A/B 항목의 근거) |
-| `npx expo export --platform android` | **성공** — production JS 번들 `4.3MB` 생성, exit 0 |
+| `npx expo export --platform android` | **성공** — production JS 번들 `4.3MB` 생성, exit 0 (식별자/권한 변경 후 재실행도 성공) |
 | `npx expo-doctor` | 21개 중 20개 통과, 1개 실패(패치 버전 불일치 7개) |
 
 확인하지 못한 것: 네이티브 빌드(EAS 계정 필요), 실기기 동작, 스토어 콘솔, 아이콘/스플래시의 시각적 최종 여부.
@@ -22,13 +23,15 @@
 
 ## 요약
 
-| 분류 | 개수 |
-| --- | --- |
-| A. 출시 차단 (BLOCKER) | 5 |
-| B. 출시 전 필수 (REQUIRED) | 8 |
-| C. 출시 후 가능 (POST-LAUNCH) | 6 |
-| D. 이미 완료 (DONE) | 9 |
-| E. MANUAL QA | 6 |
+| 분류 | 최초 조사 | 현재 남은 것 |
+| --- | --- | --- |
+| A. 출시 차단 (BLOCKER) | 5 | **3** (A3 EAS 연결 · A4 계정/서명 · A5 개인정보처리방침) |
+| B. 출시 전 필수 (REQUIRED) | 8 | **6** (B2 표시 이름 · B4 사진 URI · B5 패치 버전 · B6 미사용 의존성 · B7 데이터 안전 · B8 크래시 리포팅) |
+| C. 출시 후 가능 (POST-LAUNCH) | 6 | 6 |
+| D. 이미 완료 (DONE) | 9 | 9 |
+| E. MANUAL QA | 6 | 6 |
+
+남은 출시 차단 3건은 **전부 계정·문서 쪽이며 AI가 대신할 수 없다**(A3·A4는 계정, A5는 게시 URL이 필요하다).
 
 ---
 
@@ -36,8 +39,8 @@
 
 | # | 항목 | 확인된 사실 | 필요한 것 |
 | --- | --- | --- | --- |
-| A1 | **앱 식별자 없음** | `app.json`에 `ios.bundleIdentifier`, `android.package`가 **둘 다 없다** | 식별자 확정(예: `com.<회사>.hellchanggrow`). 한 번 정하면 스토어에서 바꿀 수 없다 — 사용자 결정 |
-| A2 | **EAS 빌드 설정 없음** | `eas.json` 파일이 없고, `.gitignore`가 `/ios` `/android`를 제외한다(관리형 워크플로) | `eas.json`(preview/production 프로필). 네이티브 프로젝트가 저장소에 없으므로 EAS 없이는 스토어 바이너리를 만들 수 없다 |
+| A1 | ~~앱 식별자 없음~~ **해소** | 사용자 승인으로 `com.helchanggrow.app`을 iOS/Android 양쪽에 설정했다. `npx expo config`로 확인 | — |
+| A2 | ~~EAS 빌드 설정 없음~~ **해소** | `eas.json` 추가 — development / preview(APK, 내부 배포) / production(AAB) 세 프로필. `appVersionSource: "local"`이라 버전 숫자의 원본은 이 저장소다 | 실제 빌드 실행은 A3·A4 이후(MANUAL) |
 | A3 | **EAS 프로젝트 미연결** | 해석된 설정의 `extra`에 `eas.projectId`가 없고 `owner`도 없다 | `eas init`으로 프로젝트 연결 (Expo 계정 필요 — MANUAL) |
 | A4 | **스토어 계정·서명 키 없음** | 저장소에서 확인 가능한 서명/자격 증명이 없다(정상 — 저장소에 두면 안 된다) | Google Play 개발자 계정, Apple Developer Program, 키스토어/배포 인증서 — **사용자만 가능** |
 | A5 | **개인정보처리방침 없음** | `src` / `docs` / `README` 어디에도 개인정보·약관 문구나 링크가 없다 | 두 스토어 모두 제출 필수. 앱이 사진 라이브러리에 접근하므로 더더욱 필요 |
@@ -48,9 +51,9 @@
 
 | # | 항목 | 확인된 사실 | 조치 |
 | --- | --- | --- | --- |
-| B1 | **쓰지 않는 마이크 권한이 붙는다** | 해석된 Android 권한에 `android.permission.RECORD_AUDIO`가 **유일한 권한으로** 들어 있다. 출처는 `expo-image-picker` 플러그인 기본값(`node_modules/expo-image-picker/plugin/build/withImagePicker.js`)이다. 앱에는 녹음 기능이 없다 | 플러그인 설정에 `microphonePermission: false` 추가. 불필요한 민감 권한은 Play 심사·데이터 안전 답변에서 바로 문제가 된다 |
+| B1 | ~~쓰지 않는 마이크 권한~~ **해소** | `expo-image-picker` 플러그인에 `microphonePermission: false`, `cameraPermission: false`를 넣었다. 재확인 결과 해석된 설정에 `RECORD_AUDIO`가 **0건**이고 권한 배열 자체가 사라졌다(앱은 사진 라이브러리만 쓴다) | — |
 | B2 | **앱 표시 이름이 개발용 슬러그** | `name: "hellchang-grow"` — 제품명 "헬창키우기"가 아니다 | 표시 이름/스토어 등재명 확정 |
-| B3 | **버전 정책 없음** | `version: "1.0.0"`만 있고 `android.versionCode` / `ios.buildNumber`가 없다 | 빌드 번호 자동 증가(EAS `autoIncrement`) 또는 수동 정책 확정 |
+| B3 | ~~버전 정책 없음~~ **해소** | `android.versionCode: 1`, `ios.buildNumber: "1"`을 명시하고 `eas.json`의 `appVersionSource`를 `local`로 뒀다 — 빌드 때 파일이 조용히 바뀌지 않고, 올릴 때만 저장소에서 올린다 | 릴리스마다 수동 증가(자동 증가를 원하면 결정 필요) |
 | B4 | **선택한 사진이 나중에 사라질 수 있다** | `history.tsx`가 `ImagePicker`가 준 URI를 그대로 `photoReference`로 저장한다. 앱 전용 저장소로 복사하지 않는다(`FileSystem` 사용처 0건) | 선택 직후 앱 디렉터리로 복사하고 그 경로를 저장. 지금 구조에서는 며칠 뒤 [몸 변화] 전후 비교 사진이 깨질 수 있다 |
 | B5 | **의존성 패치 버전 불일치 7개** | `expo-doctor`: `expo`, `expo-router`, `expo-image-picker`, `expo-splash-screen`, `expo-constants`, `expo-linking`, `@expo/ui` | `npx expo install --check`. **의존성 변경은 APPROVAL REQUIRED** |
 | B6 | **쓰지 않는 네이티브 의존성 6개** | `src`에서 참조 0건: `expo-device`, `expo-symbols`, `expo-glass-effect`, `@expo/ui`, `expo-web-browser`, `expo-font` | 실제 미사용인지 확인 후 정리. 네이티브 모듈은 빌드 크기와 권한 표면을 늘린다. **의존성 변경은 APPROVAL REQUIRED** |
