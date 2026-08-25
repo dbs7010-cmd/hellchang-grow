@@ -6,12 +6,12 @@ import { HomeColors, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import {
   availableHomeGymCoins,
-  buyStarterRack,
+  buyHomeGymItem,
   getHomeGymState,
+  getNextHomeGymItem,
   HOME_GYM_REWARD_PER_WORKOUT,
   HomeGymItemIds,
   type HomeGymState,
-  STARTER_RACK_COST,
 } from '@/data/home-gym-repository';
 
 export function HomeGymRewardStrip() {
@@ -25,25 +25,24 @@ export function HomeGymRewardStrip() {
     getHomeGymState().then((loaded) => {
       if (!cancelled) setState(loaded);
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   const coins = useMemo(
     () => (state ? availableHomeGymCoins(state, completedWorkoutCount) : 0),
     [completedWorkoutCount, state]
   );
-  const ownsRack = state?.ownedItemIds.includes(HomeGymItemIds.starterRack) ?? false;
+  const nextItem = state ? getNextHomeGymItem(state) : null;
   const rackPlaced = state?.placedItemIds.includes(HomeGymItemIds.starterRack) ?? false;
+  const benchPlaced = state?.placedItemIds.includes(HomeGymItemIds.flatBench) ?? false;
 
   if (!state || completedWorkoutCount === 0) return null;
 
   const handleBuy = async () => {
-    if (saving || ownsRack || coins < STARTER_RACK_COST) return;
+    if (saving || !nextItem || coins < nextItem.cost) return;
     setSaving(true);
     try {
-      const next = await buyStarterRack(state, completedWorkoutCount);
+      const next = await buyHomeGymItem(state, completedWorkoutCount, nextItem.id);
       if (next) setState(next);
     } finally {
       setSaving(false);
@@ -54,115 +53,80 @@ export function HomeGymRewardStrip() {
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.copy}>
-          <ThemedText type="captionBold" style={styles.title}>
-            🪙 홈짐 {coins}
-          </ThemedText>
+          <ThemedText type="captionBold" style={styles.title}>🪙 홈짐 {coins}</ThemedText>
           <ThemedText type="caption" style={styles.subtitle}>
-            {rackPlaced ? '운동으로 만든 내 홈짐' : `운동 1회 = 홈짐 코인 ${HOME_GYM_REWARD_PER_WORKOUT}`}
+            {rackPlaced || benchPlaced ? '운동으로 만든 내 홈짐' : `운동 1회 = 홈짐 코인 ${HOME_GYM_REWARD_PER_WORKOUT}`}
           </ThemedText>
         </View>
-        {!ownsRack && (
+        {nextItem && (
           <Pressable
             onPress={handleBuy}
-            disabled={saving || coins < STARTER_RACK_COST}
-            style={[styles.buyButton, coins < STARTER_RACK_COST && styles.buyButtonDisabled]}
+            disabled={saving || coins < nextItem.cost}
+            style={[styles.buyButton, coins < nextItem.cost && styles.buyButtonDisabled]}
             accessibilityRole="button"
-            accessibilityLabel={`덤벨 랙 구매, ${STARTER_RACK_COST} 코인`}>
+            accessibilityLabel={`${nextItem.name} 구매, ${nextItem.cost} 코인`}>
             <ThemedText type="captionBold" style={styles.buyText}>
-              {coins >= STARTER_RACK_COST ? `덤벨 랙 ${STARTER_RACK_COST}` : `${coins}/${STARTER_RACK_COST}`}
+              {coins >= nextItem.cost ? `${nextItem.name} ${nextItem.cost}` : `${coins}/${nextItem.cost}`}
             </ThemedText>
           </Pressable>
         )}
       </View>
 
-      {rackPlaced && (
-        <View style={styles.placedObject} accessibilityLabel="내 홈짐에 배치된 덤벨 랙">
-          <View style={styles.rackVisual} pointerEvents="none">
-            <View style={styles.rackPost} />
-            <View style={[styles.rackPost, styles.rackPostRight]} />
-            <View style={styles.rackShelf} />
-            <View style={[styles.dumbbell, styles.dumbbellLeft]} />
-            <View style={[styles.dumbbell, styles.dumbbellRight]} />
-          </View>
-          <View style={styles.objectCopy}>
-            <ThemedText type="smallBold" style={styles.objectName}>덤벨 랙</ThemedText>
-            <ThemedText type="caption" style={styles.subtitle}>내 홈짐에 배치됨 · 영구 소유</ThemedText>
-          </View>
+      {(rackPlaced || benchPlaced) && (
+        <View style={styles.gymFloor} accessibilityLabel="내 홈짐에 배치된 운동 기구">
+          {rackPlaced && (
+            <View style={styles.placedObject}>
+              <View style={styles.rackVisual} pointerEvents="none">
+                <View style={styles.rackPost} /><View style={[styles.rackPost, styles.rackPostRight]} />
+                <View style={styles.rackShelf} /><View style={[styles.dumbbell, styles.dumbbellLeft]} />
+                <View style={[styles.dumbbell, styles.dumbbellRight]} />
+              </View>
+              <ThemedText type="captionBold" style={styles.objectName}>덤벨 랙</ThemedText>
+            </View>
+          )}
+          {benchPlaced && (
+            <View style={styles.placedObject}>
+              <View style={styles.benchVisual} pointerEvents="none">
+                <View style={styles.benchPad} /><View style={[styles.benchLeg, styles.benchLegLeft]} />
+                <View style={[styles.benchLeg, styles.benchLegRight]} />
+              </View>
+              <ThemedText type="captionBold" style={styles.objectName}>플랫 벤치</ThemedText>
+            </View>
+          )}
         </View>
+      )}
+
+      {state.ownedItemIds.length > 0 && (
+        <ThemedText type="caption" style={styles.subtitle}>
+          홈짐 기구 {state.ownedItemIds.length}/2 · 구매 즉시 영구 배치
+        </ThemedText>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    gap: Spacing.two,
-    marginTop: Spacing.one,
-    paddingTop: Spacing.two,
-    borderTopWidth: 1,
-    borderTopColor: HomeColors.border,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
-  },
+  container: { gap: Spacing.two, marginTop: Spacing.one, paddingTop: Spacing.two, borderTopWidth: 1, borderTopColor: HomeColors.border },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.two },
   copy: { flex: 1, gap: 2 },
   title: { color: HomeColors.goldStrong },
   subtitle: { color: HomeColors.textSecondary },
-  buyButton: {
-    borderRadius: Radius.pill,
-    backgroundColor: HomeColors.surfaceGold,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
-  },
+  buyButton: { borderRadius: Radius.pill, backgroundColor: HomeColors.surfaceGold, paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
   buyButtonDisabled: { opacity: 0.45 },
   buyText: { color: HomeColors.goldStrong },
-  placedObject: {
-    minHeight: 54,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    borderRadius: Radius.medium,
-    backgroundColor: HomeColors.surfaceMuted,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
-  },
-  rackVisual: {
-    width: 58,
-    height: 42,
-    position: 'relative',
-  },
-  rackPost: {
-    position: 'absolute',
-    left: 8,
-    top: 3,
-    width: 4,
-    height: 36,
-    borderRadius: 2,
-    backgroundColor: HomeColors.textSecondary,
-  },
+  gymFloor: { minHeight: 70, flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.three, borderRadius: Radius.medium, backgroundColor: HomeColors.surfaceMuted, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  placedObject: { flex: 1, alignItems: 'center', gap: 3 },
+  rackVisual: { width: 58, height: 42, position: 'relative' },
+  rackPost: { position: 'absolute', left: 8, top: 3, width: 4, height: 36, borderRadius: 2, backgroundColor: HomeColors.textSecondary },
   rackPostRight: { left: 46 },
-  rackShelf: {
-    position: 'absolute',
-    left: 7,
-    right: 7,
-    top: 24,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: HomeColors.textSecondary,
-  },
-  dumbbell: {
-    position: 'absolute',
-    top: 16,
-    width: 17,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: HomeColors.goldStrong,
-  },
+  rackShelf: { position: 'absolute', left: 7, right: 7, top: 24, height: 4, borderRadius: 2, backgroundColor: HomeColors.textSecondary },
+  dumbbell: { position: 'absolute', top: 16, width: 17, height: 8, borderRadius: 4, backgroundColor: HomeColors.goldStrong },
   dumbbellLeft: { left: 13 },
   dumbbellRight: { right: 13 },
-  objectCopy: { flex: 1, gap: 1 },
+  benchVisual: { width: 66, height: 42, position: 'relative' },
+  benchPad: { position: 'absolute', left: 4, right: 4, top: 13, height: 10, borderRadius: 5, backgroundColor: HomeColors.goldStrong },
+  benchLeg: { position: 'absolute', top: 22, width: 4, height: 16, borderRadius: 2, backgroundColor: HomeColors.textSecondary },
+  benchLegLeft: { left: 15 },
+  benchLegRight: { right: 15 },
   objectName: { color: HomeColors.text },
 });
