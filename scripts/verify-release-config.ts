@@ -15,6 +15,9 @@ import packageJson from '../package.json' with { type: 'json' };
  */
 
 const APP_ID = 'com.helchanggrow.app';
+const APP_DISPLAY_NAME = '헬창키우기';
+/** EAS 프로젝트가 이 값으로 연결된다 — 이름과 달리 함부로 바꾸지 않는다. */
+const APP_SLUG = 'hellchang-grow';
 
 let failures = 0;
 function expect(name: string, condition: boolean) {
@@ -35,7 +38,9 @@ const appJsonText = JSON.stringify(appJson);
   expect('Android 패키지 이름이 있다', typeof app.android?.package === 'string');
   expect('두 식별자가 승인된 값과 같다', app.ios?.bundleIdentifier === APP_ID && app.android?.package === APP_ID);
   expect('iOS와 Android가 같은 식별자를 쓴다', app.ios?.bundleIdentifier === app.android?.package);
-  expect('slug이 있다 (EAS 프로젝트 연결에 쓰인다)', typeof app.slug === 'string' && app.slug.length > 0);
+  expect('slug이 그대로다 (EAS 프로젝트가 이 값으로 연결된다)', app.slug === APP_SLUG);
+  expect('표시 이름이 제품명이다', app.name === APP_DISPLAY_NAME);
+  expect('표시 이름이 개발용 슬러그로 되돌아가지 않았다', app.name !== app.slug);
   expect('딥링크 scheme이 있다', typeof app.scheme === 'string' && app.scheme.length > 0);
 }
 
