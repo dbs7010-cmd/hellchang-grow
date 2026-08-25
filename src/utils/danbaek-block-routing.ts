@@ -44,10 +44,30 @@ export function exerciseIdsForMovementFamily(movementFamily: MovementFamily): st
 }
 
 /**
+ * 스테이지가 콕 집어 요구한 운동. **실제 Exercise DB에 있을 때만** 후보가 된다 —
+ * 계약에 있는 id라도 앱이 모르는 운동이면 이름조차 만들어 낼 수 없다(계약 4항: 특정 운동
+ * 요구는 예외적 콘텐츠이고, 없는 운동을 지어내느니 계열 후보로 안내하는 편이 정직하다).
+ */
+export function requiredExerciseForBlock(
+  block: StageBlock,
+  exerciseDb: ExerciseDefinition[]
+): ExerciseDefinition | null {
+  const requiredId = block.requirement.specificExerciseId;
+  if (!requiredId) return null;
+  return exerciseDb.find((exercise) => exercise.id === requiredId) ?? null;
+}
+
+/**
  * 막힌 계열을 오늘 할 수 있는 운동으로 바꾼다.
  *
- * 후보 순서: **내가 해본 적 있는 운동 먼저**, 그다음 DB 순서. 한 번도 안 해본 기구만
- * 들이밀어 "이건 못 해요"가 되는 상황을 줄인다(운동 시작 화면의 추천과 같은 원칙).
+ * 후보 순서:
+ *   1) 스테이지가 콕 집어 요구한 운동 (있고, 실제로 DB에 있을 때만)
+ *   2) **내가 해본 적 있는 운동** — 한 번도 안 해본 기구만 들이밀어 "이건 못 해요"가 되는
+ *      상황을 줄인다 (운동 시작 화면의 추천과 같은 원칙)
+ *   3) 그 계열의 나머지 DB 순서
+ *
+ * 요구 운동이 계열 밖이어도 첫 후보로 둔다 — 그게 스테이지가 실제로 요구한 것이고, 그것을
+ * 빼면 화면이 "요구는 A인데 B를 하세요"가 된다.
  */
 export function resolveBlockRoute(input: {
   block: StageBlock;
@@ -69,12 +89,19 @@ export function resolveBlockRoute(input: {
     }
   }
 
+  const required = requiredExerciseForBlock(block, exerciseDb);
+
   const ordered = [
+    ...(required ? [required] : []),
     ...familiarIds
       .map((id) => inFamily.find((exercise) => exercise.id === id))
       .filter((exercise): exercise is ExerciseDefinition => Boolean(exercise)),
     ...inFamily.filter((exercise) => !familiarIds.includes(exercise.id)),
-  ].slice(0, limit);
+  ]
+    .filter(
+      (exercise, index, all) => all.findIndex((other) => other.id === exercise.id) === index
+    )
+    .slice(0, limit);
 
   const exercises: QuickStartExercise[] = ordered.map((exercise) => {
     const resolved = resolveExercise(exercise, exerciseDb);
