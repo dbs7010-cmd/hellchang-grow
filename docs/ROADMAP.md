@@ -172,6 +172,6 @@ BODY STATE에서도 실제 캐릭터 그림/에셋, 애니메이션, 식단 화�
 | 대화 로그 세션 간 유지 | **결정 미정 그대로** — 로컬 state뿐 | `src/components/trainer/ai-pt-panel.tsx` |
 | 히스토리 신체 지표 | **반영됨** — 체지방률/골격근량 입력과 표시가 있다(전후 비교 확장은 별개) | `src/app/(tabs)/history.tsx` |
 | 알림/리마인더 | **부분** — 앱 안 알림 화면은 있고, 실제 푸시/리마인더는 없다(`expo-notifications` 미설치) | `src/app/notifications.tsx`, `package.json` |
-| PR 판정 확장 | **미착수** — 여전히 "이전보다 높은 중량" 단순 기준 | `src/utils/exercise-history.ts` |
+| PR 판정 확장 | **구현됨** — 최고 중량 + 같은 중량 최고 횟수(맨몸 포함) 두 종류. 1RM 계산은 여전히 없다 | `src/utils/exercise-history.ts`, `npm run verify:weight-core` |
 | kill 복구 실기기 검증 | **절차만 확보** — 재현 가능한 수동 절차가 있고 아직 수행되지 않았다 | `scripts/verify-storage-recovery.ts` 하단 |
 | 실제 서비스 연동 | **경계까지만** — remote PT 어댑터/entitlement/광고 어댑터 경계는 있고 실제 연결은 없다. `DEC-003` 유지 | `b2a3f65`, `10e4169`, `4b23f17` |

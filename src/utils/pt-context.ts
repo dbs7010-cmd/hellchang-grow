@@ -43,7 +43,11 @@ export interface PtContextExercise {
 export interface PtContextPr {
   exerciseId: string;
   name: string;
+  /** 'weight'(최고 중량 갱신) / 'reps'(같은 중량 최고 횟수 갱신) */
+  kind: 'weight' | 'reps';
   weightKg: number;
+  /** rep PR에서 달성한 횟수. */
+  reps: number | null;
   date: string;
   /** 이전 최고 중량. 이 운동을 처음 한 것이면 null. */
   previousBestWeightKg: number | null;
@@ -164,7 +168,9 @@ export function buildPtContext(input: {
     .map<PtContextPr>((pr) => ({
       exerciseId: pr.exerciseId,
       name: pr.exerciseName,
+      kind: pr.kind,
       weightKg: pr.weightKg,
+      reps: pr.reps ?? null,
       date: pr.date,
       previousBestWeightKg: pr.previousBestWeightKg ?? null,
     }));

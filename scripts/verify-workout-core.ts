@@ -247,7 +247,13 @@ const NOW_MS = NOW.getTime();
   });
 
   check('a new best weight is reported as a personal record', result.personalRecords, [
-    { exerciseId: 'bench-press', exerciseName: '벤치프레스', weightKg: 90, previousBestWeightKg: 85 },
+    {
+      exerciseId: 'bench-press',
+      exerciseName: '벤치프레스',
+      kind: 'weight',
+      weightKg: 90,
+      previousBestWeightKg: 85,
+    },
   ]);
   check(
     'the result agrees with the existing detectPRs judgement',

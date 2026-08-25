@@ -177,7 +177,7 @@ createSession(category, id, nowIso, options?)     → status: 'active', activeSi
 
 **이전 기록 조회 (`src/utils/exercise-history.ts`).** `findPreviousPerformance(exerciseId, records)`가 Exercise ID 기준으로 가장 최근 세션의 날짜/세트 구성/최고 중량을 반환한다. `setDetails`가 없는 과거(legacy) 기록은 요약 필드(`sets`/`reps`/`weightKg`)로부터 단일 세트를 근사해 fallback한다 — 데이터 마이그레이션 없이 과거 기록도 그대로 조회된다. `session.tsx`의 `PreviousPerformanceLine`과 `workout.tsx`의 운동 상세 패널이 이 함수 하나를 공유한다.
 
-**PR 판정.** `detectPRs(session, records)`는 완료된 세트만 대상으로, 같은 `exerciseId`의 과거 최고 중량보다 **엄격히 높은** 중량을 기록한 경우만 PR로 판정한다(동률은 PR 아님, 1RM 계산 없음). `endWorkoutSession()`이 세션 종료 시 한 번 호출하고, 결과(`PrEvent[]`)가 종료 요약 화면에 "NEW PR" 카드로 노출된다.
+**PR 판정.** `detectPRs(session, records)`는 완료된 세트(유효 세트)만 대상으로 두 종류를 판정한다 — `kind: 'weight'`는 같은 `exerciseId`의 과거 최고 중량보다 **엄격히 높은** 중량(동률은 PR 아님), `kind: 'reps'`는 **전에 해본 적 있는 같은 중량에서** 그때보다 많은 횟수다. 중량 0/미입력은 하나의 중량 구간(맨몸)으로 묶여 횟수로만 겨룬다. 처음 쓰는 중량에서는 횟수 PR이 나지 않고, 한 운동에서 둘이 겹치면 `weight`만 남는다. **1RM 계산은 하지 않는다.** 판정 규칙은 `detectPRs`(세션 중) / `listPRs`(저장된 기록 전체) 두 함수가 공유하고, `countPeriodPRs`는 `listPRs`를 그대로 세므로 화면들이 서로 다른 숫자를 말할 수 없다. `endWorkoutSession()`이 세션 종료 시 한 번 호출하고, 결과(`PrEvent[]`)가 종료 요약 화면에 "NEW PR" 카드로 노출된다. XP는 종류별로 `AppConfig.passXpPerPr` / `passXpPerRepPr`에서 온다.
 
 **PASS 진행도 (`src/utils/pass.ts`, `src/types/pass.ts`).** `PassState`는 누적 XP(`xp`)만 저장하고, 레벨/진행률은 항상 `computePassLevelProgress(xp)`(`level = floor(xp / passXpPerLevel) + 1`)로 계산해 저장하지 않는다. `endWorkoutSession()`이 세션 완료 시 `passXpPerSession` + (PR 개수 × `passXpPerPr`) + (루틴 완료 시 `passXpPerRoutineCompletion`)을 더해 저장한다. 홈 화면 상단의 작은 진행 바(`ProgressBar` + "HELL PASS Lv.N")가 유일한 노출 지점이며, **PASS XP는 실제 사용자의 체중/체형 파라미터를 직접 변경하지 않는다** — 2장의 성장 원칙을 PASS에도 동일하게 적용한다.
 
@@ -189,7 +189,7 @@ createSession(category, id, nowIso, options?)     → status: 'active', activeSi
 - 휴식이 끝나면 대기 세트가 이미 준비된 ACTIVE 화면으로 돌아온다. 휴식 중 [다음 세트 시작]은 남은 휴식을 건너뛴다.
 - 화면에 항상 보이는 정보: 현재 운동명 · `getSetProgress()`의 "N / M 세트" · 중량 · 횟수 · 지난 기록 한 줄 · 휴식 상태 · 다음 운동 · [운동 종료].
 
-**WorkoutSessionResult (`src/types/growth.ts`, `src/utils/workout-session-result.ts`).** 세션과 성장 계산 사이의 **유일한 계약**이다. `buildWorkoutSessionResult()`는 순수 함수이며 완료된 세트만 담는다: `sessionId / startedAt / endedAt / activeSeconds / exercises(세트 상세·부위·SP 비율 포함) / totalSets / totalReps / totalVolumeKg / personalRecords / bodyWeightKg / volumeByMuscleGroup`. PR 판정 기준은 기존 `detectPRs`와 같은 누적 최고 중량이며, **이번 세션이 기록으로 저장되기 전에** 계산한다. `bodyWeightKg`는 실제 입력된 값(최근 신체 기록 → 프로필)만 읽어 넘기고 없으면 비운다 — 결과가 실제 신체 수치를 만들지 않는다.
+**WorkoutSessionResult (`src/types/growth.ts`, `src/utils/workout-session-result.ts`).** 세션과 성장 계산 사이의 **유일한 계약**이다. `buildWorkoutSessionResult()`는 순수 함수이며 완료된 세트만 담는다: `sessionId / startedAt / endedAt / activeSeconds / exercises(세트 상세·부위·SP 비율 포함) / totalSets / totalReps / totalVolumeKg / personalRecords / bodyWeightKg / volumeByMuscleGroup`. `personalRecords`는 규칙을 복제하지 않고 `detectPRs()`를 그대로 호출해 채우며, **이번 세션이 기록으로 저장되기 전에** 계산한다. `bodyWeightKg`는 실제 입력된 값(최근 신체 기록 → 프로필)만 읽어 넘기고 없으면 비운다 — 결과가 실제 신체 수치를 만들지 않는다.
 
 **GrowthEngine 경계 (`src/services/growth/`).** 흐름은 `WorkoutSession → WorkoutSessionResult → GrowthEngine → Muscle SP → 캐릭터`다. 현재는 인터페이스와 no-op 구현만 있고(`noopGrowthEngine`), `endWorkoutSession()`이 결과를 넘기는 호출부는 이미 살아 있다 — 다음 작업에서 엔진 구현만 채우면 되고 호출부는 바뀌지 않는다. 엔진이 돌려주는 것은 게임 진행도(부위별 SP)이며, **실제 체중/체지방률/골격근량이나 캐릭터 외형 파라미터를 만들거나 바꾸지 않는다**(2장의 성장 원칙).
 

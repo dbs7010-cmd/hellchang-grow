@@ -29,7 +29,13 @@ import { EndSessionSummary, useAppData } from '@/context/app-data-context';
 import { useTheme } from '@/hooks/use-theme';
 import { WorkoutRecord, WorkoutSetEntry } from '@/types/workout';
 import { SessionExerciseEntry, WorkoutSession } from '@/types/workout-session';
-import { detectPRs, findPreviousPerformance, PrEvent } from '@/utils/exercise-history';
+import {
+  describePrAchievement,
+  describePrPrevious,
+  detectPRs,
+  findPreviousPerformance,
+  PrEvent,
+} from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
 import {
   buildGrowthRevealMuscles,
@@ -74,7 +80,9 @@ interface SessionSummaryWithLine extends EndSessionSummary {
 }
 
 function prKey(pr: PrEvent) {
-  return `${pr.exerciseId}-${pr.weightKg}`;
+  // 같은 운동의 같은 중량이라도 종류가 다르면 다른 사건이다. 반대로 같은 중량에서 횟수를
+  // 한 번 더 늘릴 때마다 축하가 다시 뜨지는 않게, 횟수는 키에 넣지 않는다.
+  return `${pr.exerciseId}-${pr.kind}-${pr.weightKg}`;
 }
 
 /**
@@ -1238,8 +1246,8 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
               <PRBadge />
               {summary.prs.map((pr) => (
                 <ThemedText key={pr.exerciseId} type="small">
-                  {pr.exerciseName} {pr.weightKg}kg
-                  {pr.previousBestWeightKg ? ` (이전 ${pr.previousBestWeightKg}kg)` : ' (첫 기록)'}
+                  {pr.exerciseName} {describePrAchievement(pr)}
+                  {describePrPrevious(pr) ? ` (이전 ${describePrPrevious(pr)})` : ' (첫 기록)'}
                 </ThemedText>
               ))}
             </ThemedView>
@@ -1631,7 +1639,7 @@ function PrCelebrationOverlay({ pr }: { pr: PrEvent }) {
         🏆 NEW PR
       </ThemedText>
       <ThemedText type="smallBold">
-        {pr.exerciseName} {pr.weightKg}kg
+        {pr.exerciseName} {describePrAchievement(pr)}
       </ThemedText>
     </Animated.View>
   );

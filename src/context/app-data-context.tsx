@@ -829,7 +829,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
     const xpAwarded =
       AppConfig.passXpPerSession +
-      prs.length * AppConfig.passXpPerPr +
+      prs.reduce(
+        (sum, pr) => sum + (pr.kind === 'reps' ? AppConfig.passXpPerRepPr : AppConfig.passXpPerPr),
+        0
+      ) +
       (routineCompleted ? AppConfig.passXpPerRoutineCompletion : 0);
     const newXp = addXp(state.pass.xp, xpAwarded);
 

@@ -6,7 +6,7 @@ import type {
 } from '@/types/growth';
 import type { WorkoutRecord } from '@/types/workout';
 import type { WorkoutSession } from '@/types/workout-session';
-import { findAllTimeBestWeight } from '@/utils/exercise-history';
+import { detectPRs } from '@/utils/exercise-history';
 import { estimateOneRepMax } from '@/utils/growth-calculation';
 import { isEffectiveSet } from '@/utils/workout-session';
 import { resolveExercise } from '@/utils/exercise-spec';
@@ -82,19 +82,10 @@ export function buildWorkoutSessionResult(input: {
       estimatedOneRepMaxKg: estimateExerciseOneRepMax(entry.exerciseId, records, sets),
     });
 
-    // PR 판정 기준은 detectPRs와 동일하다 — 지금까지의 전체 최고 중량을 넘겼는가.
-    if (maxWeightKg !== undefined) {
-      const previousBestWeightKg = findAllTimeBestWeight(entry.exerciseId, records);
-      if (previousBestWeightKg === undefined || maxWeightKg > previousBestWeightKg) {
-        personalRecords.push({
-          exerciseId: entry.exerciseId,
-          exerciseName: entry.exerciseName,
-          weightKg: maxWeightKg,
-          previousBestWeightKg,
-        });
-      }
-    }
   }
+
+  // PR은 여기서 다시 판정하지 않는다 — detectPRs 하나가 세션 화면/결과/통계에 같은 답을 준다.
+  personalRecords.push(...detectPRs(session, records));
 
   // 소수점이 끝없이 늘어나지 않게 부위별 볼륨만 반올림한다 (표시/저장 모두에서 읽기 쉽게).
   for (const group of Object.keys(volumeByMuscleGroup) as MuscleGroup[]) {

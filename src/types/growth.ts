@@ -58,9 +58,15 @@ export interface SessionExerciseResult {
 export interface SessionPersonalRecord {
   exerciseId: string;
   exerciseName: string;
+  /** 'weight'(최고 중량 갱신) / 'reps'(같은 중량 최고 횟수 갱신) */
+  kind: 'weight' | 'reps';
   weightKg: number;
+  /** rep PR에서 달성한 횟수. */
+  reps?: number;
   /** 이 세션 이전까지의 최고 중량. 처음 한 운동이면 undefined. */
   previousBestWeightKg?: number;
+  /** rep PR에서, 같은 중량의 직전 최고 횟수. */
+  previousBestReps?: number;
 }
 
 export interface WorkoutSessionResult {

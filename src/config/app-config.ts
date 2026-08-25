@@ -29,6 +29,11 @@ export const AppConfig = {
   passXpPerSession: 10,
   /** PASS: PR(자기 최고 기록 갱신) 1건당 추가 XP */
   passXpPerPr: 15,
+  /**
+   * 같은 중량으로 전보다 더 많이 든 PR(rep PR)의 XP. 최고 중량 갱신보다 작게 둔다 —
+   * 둘 다 PR이지만 무게를 올린 쪽이 더 큰 사건이다.
+   */
+  passXpPerRepPr: 10,
   /** PASS: [이 루틴으로 시작]한 루틴의 모든 운동을 완료하면 추가 XP */
   passXpPerRoutineCompletion: 20,
   /** PASS: 한 레벨을 채우는 데 필요한 XP */
