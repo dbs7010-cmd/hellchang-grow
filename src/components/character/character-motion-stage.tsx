@@ -1,17 +1,9 @@
 import { useEffect } from 'react';
 import { StyleSheet, View, ViewStyle } from 'react-native';
-import Animated, {
-  cancelAnimation,
-  Easing,
-  useReducedMotion,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { cancelAnimation, Easing, useReducedMotion, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 import { PlayerCharacter } from '@/components/character/player-character';
+import type { DanbaekExpression } from '@/components/character/character-silhouette';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -22,42 +14,24 @@ import { getCharacterMotionProfile, type WorkoutCharacterState } from '@/utils/w
 
 export interface CharacterMotionStageProps {
   appearance: CharacterAppearance;
-  /** 현재 운동의 `animationFamily`. 없으면 캐릭터는 가만히 서 있는다. */
   family?: MotionFamily;
-  /** 세션 도메인 상태를 표현 계층으로만 매핑한 값. */
   state: WorkoutCharacterState;
-  /** 성장 상태. 홈과 같은 바디를 그대로 쓴다 — 모션만 이 컴포넌트가 얹는다. */
   bodyParameters?: DanbaekBodyParameters | null;
-  /**
-   * 방금 자극한 부위에 대한 단백이의 한 줄. 이 자리 안에 겹쳐 그리므로 레이아웃 높이를
-   * 늘리지 않고, 세트 입력/휴식 UI를 밀어내지도 않는다. 표현 전용 값이다.
-   */
   reactionCopy?: string | null;
   height: number;
   style?: ViewStyle;
 }
 
-/**
- * 세션 화면의 단백이 자리.
- *
- * 캐릭터 자체는 항상 공통 렌더러(`PlayerCharacter`)다 — 화면마다 캐릭터를 다시 그리지
- * 않는다는 규칙을 그대로 지킨다. 이 컴포넌트가 더하는 것은 **모션 레이어 하나**뿐이다:
- * 현재 운동의 `animationFamily`를 받아 `config/motion-families.ts`의 공통 파라미터로
- * 움직인다. 종목마다 애니메이션을 만들지 않으며, 이번 단계에서는 실제 스프라이트 없이
- * 축/진폭/속도만 다른 placeholder 모션이다.
- *
- * 실제 모션 에셋이 준비되면 바꿀 곳은 두 군데뿐이다 — motion family registry와
- * character asset registry. 세션 화면 코드는 그대로 둔다.
- */
-export function CharacterMotionStage({
-  appearance,
-  family,
-  state,
-  bodyParameters,
-  reactionCopy,
-  height,
-  style,
-}: CharacterMotionStageProps) {
+/** Expression is presentation only: no learning/growth value is inferred from a face. */
+function expressionForWorkoutState(state: WorkoutCharacterState): DanbaekExpression {
+  if (state === 'working' || state === 'ready') return 'focused';
+  if (state === 'resting' || state === 'fatigued' || state === 'paused') return 'tired';
+  if (state === 'set_complete') return 'surprised';
+  return 'happy';
+}
+
+/** Shared CANON character + motion layer. Session logic remains outside this component. */
+export function CharacterMotionStage({ appearance, family, state, bodyParameters, reactionCopy, height, style }: CharacterMotionStageProps) {
   const theme = useTheme();
   const progress = useSharedValue(0);
   const reducedMotion = useReducedMotion();
@@ -80,10 +54,7 @@ export function CharacterMotionStage({
       return () => cancelAnimation(progress);
     }
     progress.set(withRepeat(motion, -1, false));
-    return () => {
-      cancelAnimation(progress);
-      progress.set(0);
-    };
+    return () => { cancelAnimation(progress); progress.set(0); };
   }, [durationMs, profile.repeats, progress, reducedMotion, state, family]);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -107,13 +78,12 @@ export function CharacterMotionStage({
           height={height}
           bodyParameters={bodyParameters}
           idle={reducedMotion || state === 'idle' || state === 'ready' || state === 'resting'}
+          expression={expressionForWorkoutState(state)}
         />
       </Animated.View>
       {reactionCopy && (
         <View style={[styles.reaction, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-          <ThemedText type="caption" numberOfLines={1}>
-            {reactionCopy}
-          </ThemedText>
+          <ThemedText type="caption" numberOfLines={1}>{reactionCopy}</ThemedText>
         </View>
       )}
     </View>
@@ -121,20 +91,6 @@ export function CharacterMotionStage({
 }
 
 const styles = StyleSheet.create({
-  stage: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  /** 캐릭터 자리 위에 겹쳐 뜨는 한 줄 — 흐름에 없으므로 아래 UI를 밀지 않는다. */
-  reaction: {
-    position: 'absolute',
-    top: 0,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 2,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    maxWidth: '92%',
-  },
+  stage: { width: '100%', alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden' },
+  reaction: { position: 'absolute', top: 0, paddingHorizontal: Spacing.two, paddingVertical: 2, borderRadius: Radius.pill, borderWidth: 1, maxWidth: '92%' },
 });
