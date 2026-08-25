@@ -1,4 +1,5 @@
 import type { UserProfile } from '@/types/user';
+import { buildStoredPhotoName, photoFileExtension } from '@/utils/photo-file';
 import {
   asStoredArray,
   asStoredCount,
@@ -438,6 +439,34 @@ const profile = (input: Partial<UserProfile> = {}): UserProfile =>
   );
 }
 
+// 12. 사진 파일 이름 — 앱이 보관할 자리의 이름을 만든다
+{
+  expect('jpg 확장자를 읽는다', photoFileExtension('file:///tmp/IMG_0001.JPG') === 'jpg');
+  expect('png도 읽는다', photoFileExtension('file:///tmp/shot.png') === 'png');
+  expect('heic도 읽는다', photoFileExtension('file:///a/b/c.HEIC') === 'heic');
+  expect('쿼리 문자열은 무시한다', photoFileExtension('file:///tmp/a.jpg?width=100') === 'jpg');
+  expect('조각(#)도 무시한다', photoFileExtension('file:///tmp/a.png#preview') === 'png');
+  expect('확장자가 없으면 jpg', photoFileExtension('file:///tmp/IMG_0001') === 'jpg');
+  expect('점으로 시작하는 이름은 확장자가 아니다', photoFileExtension('file:///tmp/.hidden') === 'jpg');
+  expect('이상하게 긴 확장자는 jpg', photoFileExtension('file:///tmp/a.somethingweird') === 'jpg');
+  expect('경로 없이 와도 동작한다', photoFileExtension('photo.jpeg') === 'jpeg');
+
+  expect('파일 이름은 기록 id로 만든다', buildStoredPhotoName('file:///tmp/a.jpg', 'body-123') === 'body-123.jpg');
+  expect(
+    '파일 이름에 쓸 수 없는 문자는 빠진다',
+    buildStoredPhotoName('file:///tmp/a.png', 'body/../123') === 'body123.png'
+  );
+  expect('id가 전부 걸러져도 이름이 남는다', buildStoredPhotoName('file:///tmp/a.jpg', '../..') === 'photo.jpg');
+  expect(
+    '같은 기록이면 같은 이름이다 (사진 하나당 기록 하나)',
+    buildStoredPhotoName('file:///tmp/one.jpg', 'body-1') === buildStoredPhotoName('file:///tmp/two.jpg', 'body-1')
+  );
+  expect(
+    '다른 기록이면 다른 이름이다',
+    buildStoredPhotoName('file:///tmp/a.jpg', 'body-1') !== buildStoredPhotoName('file:///tmp/a.jpg', 'body-2')
+  );
+}
+
 /*
  * 여기서 자동으로 덮지 못하는 것 — 재현 가능한 수동 절차 (DEC-008의 우선순위 3).
  *
@@ -454,6 +483,10 @@ const profile = (input: Partial<UserProfile> = {}): UserProfile =>
  *   6. 다시 [재개]하고 종료하면 그 시간만 기록에 남는다.
  *
  * 짧은 전환(2번 뒤 30초 안에 복귀)은 [재개]를 누르지 않아도 자동으로 이어져야 한다.
+ *
+ * 사진 보관: 사진을 넣은 신체 기록을 만든 뒤, 앱을 지우지 않은 채 며칠 두었다가 [몸 변화]에서
+ * 다시 열어 사진이 그대로 있는지 본다. 복사가 실패하는 기기가 있다면 그때는 기록만 남고
+ * 사진 자리가 비어야 한다 — 기록 저장 자체가 실패해서는 안 된다.
  * 순수 규칙 쪽 근거는 verify:session의 recoverStaleSession / resumeIfRecentBackground에 있다.
  */
 
