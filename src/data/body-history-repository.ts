@@ -4,6 +4,7 @@ import { readArray, writeJSON } from '@/services/storage/local-storage';
 import { persistBodyPhoto } from '@/services/storage/photo-store';
 import { BodyHistoryEntry } from '@/types/body';
 import { todayDateString } from '@/utils/date';
+import { sortBodyHistoryNewestFirst } from '@/utils/history';
 import { createId } from '@/utils/id';
 
 export async function getBodyHistory(): Promise<BodyHistoryEntry[]> {
@@ -23,7 +24,9 @@ export async function addBodyHistoryEntry(
     : entry.photoReference;
 
   const newEntry: BodyHistoryEntry = { ...entry, id, photoReference };
-  const updated = [newEntry, ...entries].sort((a, b) => (a.date < b.date ? 1 : -1));
+  // 최신순 정렬. 같은 날짜면 방금 넣은 것이 앞에 온다 — 화면들이 배열 첫 항목을
+  // "지금 몸"으로 읽기 때문에 이 순서가 곧 사용자가 보는 값이다.
+  const updated = sortBodyHistoryNewestFirst([newEntry, ...entries]);
   await writeJSON(StorageKeys.bodyHistory, updated);
   return updated;
 }

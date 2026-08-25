@@ -1,4 +1,6 @@
 import type { UserProfile } from '@/types/user';
+import type { BodyHistoryEntry } from '@/types/body';
+import { buildHistoryDays, latestBodyEntry, sortBodyHistoryNewestFirst } from '@/utils/history';
 import { buildStoredPhotoName, photoFileExtension } from '@/utils/photo-file';
 import {
   asStoredArray,
@@ -465,6 +467,56 @@ const profile = (input: Partial<UserProfile> = {}): UserProfile =>
     '다른 기록이면 다른 이름이다',
     buildStoredPhotoName('file:///tmp/a.jpg', 'body-1') !== buildStoredPhotoName('file:///tmp/a.jpg', 'body-2')
   );
+}
+
+// 13. 신체 기록 순서 — 방금 넣은 값이 "지금 몸"이어야 한다
+{
+  const entry = (id: string, date: string, extra: Partial<BodyHistoryEntry> = {}): BodyHistoryEntry =>
+    ({ id, date, weightKg: 78, source: 'manual', ...extra }) as BodyHistoryEntry;
+
+  // 저장소는 새 기록을 맨 앞에 붙인 뒤 정렬한다 — 그 순서를 그대로 재현한다.
+  const older = entry('b1', '2026-08-25', { weightKg: 78 });
+  const newer = entry('b2', '2026-08-25', { weightKg: 77.4, bodyFatPercent: 17.2 });
+  const sorted = sortBodyHistoryNewestFirst([newer, older]);
+  expect('같은 날짜면 나중에 넣은 기록이 앞에 온다', sorted[0].id === 'b2');
+  expect('...그리고 옛 기록이 사라지지 않는다', sorted.length === 2 && sorted[1].id === 'b1');
+  expect('가장 최근 기록이 방금 넣은 값이다', latestBodyEntry([newer, older])?.weightKg === 77.4);
+  expect(
+    '처음 넣은 체지방률이 최신 값으로 잡힌다',
+    latestBodyEntry([newer, older])?.bodyFatPercent === 17.2
+  );
+
+  const yesterday = entry('b0', '2026-08-24', { weightKg: 79 });
+  const mixed = sortBodyHistoryNewestFirst([yesterday, newer, older]);
+  expect('날짜가 다르면 최신 날짜가 먼저다', mixed[0].date === '2026-08-25');
+  expect('...같은 날짜 안에서는 넣은 순서를 지킨다', [mixed[0].id, mixed[1].id].join() === 'b2,b1');
+  expect('...옛 날짜는 뒤로 간다', mixed[2].id === 'b0');
+
+  expect('기록이 없으면 null', latestBodyEntry([]) === null);
+  expect('입력 배열을 바꾸지 않는다', (() => {
+    const input = [older, newer];
+    sortBodyHistoryNewestFirst(input);
+    return input[0].id === 'b1';
+  })());
+
+  // 저장소가 실제로 하는 일: 새 기록을 맨 앞에 붙이고 정렬한다. 화면은 이 배열을 그대로 읽는다.
+  const saveEntry = (stored: BodyHistoryEntry[], added: BodyHistoryEntry) =>
+    sortBodyHistoryNewestFirst([added, ...stored]);
+
+  const afterOnboarding = saveEntry([], older);
+  const afterSecondToday = saveEntry(afterOnboarding, newer);
+  expect('저장 직후 방금 넣은 기록이 첫 항목이다', afterSecondToday[0].id === 'b2');
+  expect('화면이 읽는 "지금 몸"도 그 값이다', latestBodyEntry(afterSecondToday)?.weightKg === 77.4);
+
+  // 히스토리 화면의 날짜별 뷰도 같은 배열을 쓴다
+  const days = buildHistoryDays(saveEntry(afterSecondToday, entry('b0', '2026-08-24', {})), []);
+  expect('하루를 대표하는 기록은 그날 마지막에 넣은 것', days[0].bodyEntry?.id === 'b2');
+  expect('날짜는 최신순으로 나온다', days.map((d) => d.date).join() === '2026-08-25,2026-08-24');
+
+  const withPhoto = entry('b3', '2026-08-25', { photoReference: 'file:///p.jpg', source: 'photo' });
+  const dayWithPhoto = buildHistoryDays(saveEntry([older], withPhoto), [])[0];
+  expect('그날 사진이 하나라도 있으면 사진 있는 날이다', dayWithPhoto.hasPhoto);
+  expect('사진 없는 최신 기록이 그날을 대표해도 사진 표시는 남는다', dayWithPhoto.bodyEntry?.id === 'b3');
 }
 
 /*

@@ -12,6 +12,7 @@ import type { WorkoutRecord, WorkoutSetEntry } from '@/types/workout';
 import type { WorkoutSession } from '@/types/workout-session';
 import { todayDateString } from '@/utils/date';
 import { listPRs } from '@/utils/exercise-history';
+import { latestBodyEntry } from '@/utils/history';
 import { effectiveSetDetails, sumVolumeKg } from '@/utils/workout-stats';
 
 /**
@@ -149,7 +150,7 @@ export function buildPtContext(input: {
   const today = input.today ?? todayDateString();
   const records = input.workoutRecords;
   const weekRecords = getThisWeekRecords(records, today);
-  const latestBody = [...input.bodyHistory].sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  const latestBody = latestBodyEntry(input.bodyHistory);
 
   const lastWorkoutDate =
     records.length > 0
