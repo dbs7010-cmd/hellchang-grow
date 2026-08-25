@@ -53,7 +53,8 @@
     "verify:entitlement": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-entitlement.ts",
     "verify:storage": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-storage-recovery.ts",
     "verify:monetization": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-monetization.ts",
-    "verify:release": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-release-config.ts"
+    "verify:release": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-release-config.ts",
+    "verify:home-gym": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-home-gym.ts"
   },
   "private": true
 }
