@@ -12,13 +12,13 @@ const byMuscle: Record<MuscleGroup, WorkoutMonster> = {
   arms: { id: 'arm-curl', name: '팔뚝 악귀', muscleGroup: 'arms', visualKey: 'arm-curl' },
   legs: { id: 'leg-golem', name: '하체 골렘', muscleGroup: 'legs', visualKey: 'leg-golem' },
   core: { id: 'core-wall', name: '코어 장벽', muscleGroup: 'core', visualKey: 'core-wall' },
-  full_body: { id: 'full-body-beast', name: '전신 괴수', muscleGroup: 'full_body', visualKey: 'full-body-beast' },
+  fullBody: { id: 'full-body-beast', name: '전신 괴수', muscleGroup: 'fullBody', visualKey: 'full-body-beast' },
 };
 
 const byExercise: Record<string, WorkoutMonster> = {
   'bench-press': { id: 'bench-monster', name: '벤치 몬스터', muscleGroup: 'chest', visualKey: 'bench-monster' },
-  'squat': { id: 'squat-monster', name: '스쿼트 몬스터', muscleGroup: 'legs', visualKey: 'squat-monster' },
-  'deadlift': { id: 'deadlift-monster', name: '데드리프트 몬스터', muscleGroup: 'full_body', visualKey: 'deadlift-monster' },
+  squat: { id: 'squat-monster', name: '스쿼트 몬스터', muscleGroup: 'legs', visualKey: 'squat-monster' },
+  deadlift: { id: 'deadlift-monster', name: '데드리프트 몬스터', muscleGroup: 'fullBody', visualKey: 'deadlift-monster' },
   'pull-up': { id: 'pullup-monster', name: '풀업 몬스터', muscleGroup: 'back', visualKey: 'pullup-monster' },
 };
 
