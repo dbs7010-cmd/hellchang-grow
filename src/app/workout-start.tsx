@@ -23,22 +23,12 @@ import { buildQuickStartPlan, ContinueOption, QuickStartExercise } from '@/utils
 
 const CARDIO_CATEGORIES: WorkoutCategory[] = WorkoutCategories.filter((c) => c !== 'strength');
 
-/** 후보가 어디서 왔는지에 따른 화면 문구. 문구는 화면에, 판단은 utils/workout-start.ts에 둔다. */
 const CONTINUE_TITLES: Record<ContinueOption['source'], string> = {
   scheduledRoutine: '오늘 루틴 시작하기',
   lastRoutine: '지난 루틴 계속하기',
   lastRecord: '지난 운동 그대로',
 };
 
-/**
- * 02 WORKOUT START. START WORKOUT FIRST — 여기서 긴 입력 폼을 요구하지 않는다.
- *
- * 세 경로의 우선순위가 화면 순서 그대로다:
- *   1) 지난 루틴 계속하기 (한 번 터치로 세션 진입)
- *   2) 오늘 추천        (부위 + 운동까지 담아서 한 번 터치)
- *   3) 직접 선택        (부위 → 운동 고르기. 루틴이 없는 사용자의 기본 경로)
- * 유산소는 웨이트와 동급이 아니라 맨 아래 보조 경로로만 둔다 (WEIGHT FIRST).
- */
 export default function WorkoutStartScreen() {
   const router = useRouter();
   const theme = useTheme();
@@ -52,11 +42,8 @@ export default function WorkoutStartScreen() {
   const [showCustomExerciseField, setShowCustomExerciseField] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 이미 진행 중인 세션이 있는 상태로 이 화면에 들어오면 (뒤로가기 등) 바로 세션으로 보낸다.
   useEffect(() => {
-    if (activeSession) {
-      router.replace('/session');
-    }
+    if (activeSession) router.replace('/session');
   }, [activeSession, router]);
 
   const plan = useMemo(
@@ -99,7 +86,6 @@ export default function WorkoutStartScreen() {
     setCustomExerciseName('');
   };
 
-  /** 모든 경로가 여기로 수렴한다 — 시작 방식이 달라도 세션은 하나의 규칙으로 만들어진다. */
   const startSession = async (
     exercises: QuickStartExercise[],
     options?: { muscleGroup?: MuscleGroup; routineId?: string; routineName?: string }
@@ -138,10 +124,7 @@ export default function WorkoutStartScreen() {
           defaultRestSeconds: resolved.defaultRestSeconds,
         };
       }),
-      ...customExercises.map((exercise) => ({
-        exerciseId: exercise.id,
-        exerciseName: exercise.name,
-      })),
+      ...customExercises.map((exercise) => ({ exerciseId: exercise.id, exerciseName: exercise.name })),
     ];
     await startSession(exercises, { muscleGroup: selectedMuscleGroup });
   };
@@ -151,10 +134,6 @@ export default function WorkoutStartScreen() {
     router.replace('/session');
   };
 
-  /**
-   * 뒤로가기. 알림/딥링크로 이 화면에 바로 들어오면 되돌아갈 스택이 없어서 router.back()이
-   * 아무 일도 하지 않는다 — 그때는 홈으로 빠져나갈 안전 경로를 준다.
-   */
   const handleBack = () => {
     if (router.canGoBack()) router.back();
     else router.replace('/');
@@ -166,63 +145,46 @@ export default function WorkoutStartScreen() {
   return (
     <ScreenScroll>
       <View style={styles.headerRow}>
-        <Pressable
-          onPress={handleBack}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="뒤로가기">
-          <ThemedText type="smallBold" themeColor="textSecondary">
-            ‹ 뒤로
-          </ThemedText>
+        <Pressable onPress={handleBack} hitSlop={12} accessibilityRole="button" accessibilityLabel="뒤로가기">
+          <ThemedText type="smallBold" themeColor="textSecondary">‹ 뒤로</ThemedText>
         </Pressable>
         <ThemedText type="heading">오늘의 운동</ThemedText>
         <View style={styles.headerSpacer} />
       </View>
 
+      <QuickStartRow
+        accent
+        title="GYM BATTLE"
+        subtitle="벤치·스쿼트·데드리프트·풀업 기록으로 몬스터를 공격"
+        onPress={() => router.push('/gym-battle')}
+      />
+
       {continueOption && (
         <QuickStartRow
-          accent
+          accent={!continueOption ? true : undefined}
           title={CONTINUE_TITLES[continueOption.source]}
-          subtitle={
-            continueOption.name +
-            ' · 운동 ' +
-            continueOption.exercises.length +
-            '개' +
-            (continueOption.date ? ' · ' + continueOption.date : '')
-          }
+          subtitle={continueOption.name + ' · 운동 ' + continueOption.exercises.length + '개' + (continueOption.date ? ' · ' + continueOption.date : '')}
           onPress={handleContinue}
         />
       )}
 
       {plan.recommended.exercises.length > 0 && (
         <QuickStartRow
-          accent={!continueOption}
           title="오늘 추천"
-          subtitle={
-            MuscleGroupLabels[plan.recommended.muscleGroup] + ' · ' + recommendedNames.join(', ')
-          }
+          subtitle={MuscleGroupLabels[plan.recommended.muscleGroup] + ' · ' + recommendedNames.join(', ')}
           onPress={handleRecommended}
         />
       )}
 
       {!showPicker && (
-        <QuickStartRow
-          title="직접 선택"
-          subtitle="부위를 고르고 오늘 할 운동만 담아요"
-          onPress={() => setShowPicker(true)}
-        />
+        <QuickStartRow title="직접 선택" subtitle="부위를 고르고 오늘 할 운동만 담아요" onPress={() => setShowPicker(true)} />
       )}
 
       {showPicker && (
         <Section title="부위 고르기">
           <ChipRow bleed>
             {MuscleGroups.map((group) => (
-              <Chip
-                key={group}
-                label={MuscleGroupLabels[group]}
-                selected={selectedMuscleGroup === group}
-                onPress={() => setSelectedMuscleGroup(group)}
-              />
+              <Chip key={group} label={MuscleGroupLabels[group]} selected={selectedMuscleGroup === group} onPress={() => setSelectedMuscleGroup(group)} />
             ))}
           </ChipRow>
         </Section>
@@ -233,62 +195,33 @@ export default function WorkoutStartScreen() {
           <TextField placeholder="운동 검색" value={searchQuery} onChangeText={setSearchQuery} />
           <ChipRow wrap>
             {exerciseChoices.map((exercise) => (
-              <Chip
-                key={exercise.id}
-                label={exercise.name}
-                selected={selectedExerciseIds.has(exercise.id)}
-                onPress={() => toggleExercise(exercise.id)}
-              />
+              <Chip key={exercise.id} label={exercise.name} selected={selectedExerciseIds.has(exercise.id)} onPress={() => toggleExercise(exercise.id)} />
             ))}
             {customExercises.map((exercise) => (
-              <Chip
-                key={exercise.id}
-                label={exercise.name}
-                selected
-                onPress={() => setCustomExercises((prev) => prev.filter((e) => e.id !== exercise.id))}
-              />
+              <Chip key={exercise.id} label={exercise.name} selected onPress={() => setCustomExercises((prev) => prev.filter((e) => e.id !== exercise.id))} />
             ))}
           </ChipRow>
 
           {showCustomExerciseField ? (
             <View style={styles.inlineRow}>
-              <TextField
-                value={customExerciseName}
-                onChangeText={setCustomExerciseName}
-                placeholder="DB에 없는 운동 이름"
-                containerStyle={styles.flexItem}
-                onSubmitEditing={handleAddCustomExercise}
-              />
+              <TextField value={customExerciseName} onChangeText={setCustomExerciseName} placeholder="DB에 없는 운동 이름" containerStyle={styles.flexItem} onSubmitEditing={handleAddCustomExercise} />
               <PrimaryButton label="추가" variant="secondary" onPress={handleAddCustomExercise} />
             </View>
           ) : (
             <Pressable onPress={() => setShowCustomExerciseField(true)} hitSlop={8}>
-              <ThemedText type="captionBold" style={{ color: theme.gold }}>
-                + 목록에 없는 운동 직접 추가
-              </ThemedText>
+              <ThemedText type="captionBold" style={{ color: theme.gold }}>+ 목록에 없는 운동 직접 추가</ThemedText>
             </Pressable>
           )}
 
-          <PrimaryButton
-            label={selectedCount > 0 ? selectedCount + '개로 시작' : '고르지 않고 바로 시작'}
-            variant="gold"
-            size="large"
-            onPress={handleStartWithSelection}
-          />
+          <PrimaryButton label={selectedCount > 0 ? selectedCount + '개로 시작' : '고르지 않고 바로 시작'} variant="gold" size="large" onPress={handleStartWithSelection} />
         </Section>
       )}
 
       <Section title="+ 유산소 추가">
-        <ThemedText type="caption" themeColor="textSecondary">
-          웨이트가 아니어도 괜찮아요. 오늘 한 걸 바로 시작해서 기록해요.
-        </ThemedText>
+        <ThemedText type="caption" themeColor="textSecondary">웨이트가 아니어도 괜찮아요. 오늘 한 걸 바로 시작해서 기록해요.</ThemedText>
         <ChipRow bleed>
           {CARDIO_CATEGORIES.map((category) => (
-            <Chip
-              key={category}
-              label={WorkoutCategoryLabels[category]}
-              onPress={() => handleStartCardio(category)}
-            />
+            <Chip key={category} label={WorkoutCategoryLabels[category]} onPress={() => handleStartCardio(category)} />
           ))}
         </ChipRow>
       </Section>
@@ -296,75 +229,28 @@ export default function WorkoutStartScreen() {
   );
 }
 
-/**
- * "누르면 바로 운동이 시작되는" 한 줄. 세 경로가 같은 모양이라 무엇을 눌러야 하는지
- * 고민할 필요가 없고, 가장 우선인 경로만 Gold 테두리로 구분한다.
- */
-function QuickStartRow({
-  title,
-  subtitle,
-  accent,
-  onPress,
-}: {
-  title: string;
-  subtitle: string;
-  accent?: boolean;
-  onPress: () => void;
-}) {
+function QuickStartRow({ title, subtitle, accent, onPress }: { title: string; subtitle: string; accent?: boolean; onPress: () => void }) {
   const theme = useTheme();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={title + '. ' + subtitle}
-      style={[
-        styles.quickRow,
-        { backgroundColor: theme.backgroundElement, borderColor: accent ? theme.gold : theme.border },
-      ]}>
+      style={[styles.quickRow, { backgroundColor: theme.backgroundElement, borderColor: accent ? theme.gold : theme.border }]}>
       <View style={styles.quickRowText}>
-        <ThemedText type="smallBold" style={accent ? { color: theme.gold } : undefined}>
-          {title}
-        </ThemedText>
-        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={2}>
-          {subtitle}
-        </ThemedText>
+        <ThemedText type="smallBold" style={accent ? { color: theme.gold } : undefined}>{title}</ThemedText>
+        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={2}>{subtitle}</ThemedText>
       </View>
-      <ThemedText type="smallBold" style={{ color: accent ? theme.gold : theme.textSecondary }}>
-        ›
-      </ThemedText>
+      <ThemedText type="smallBold" style={{ color: accent ? theme.gold : theme.textSecondary }}>›</ThemedText>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerSpacer: {
-    width: 44,
-  },
-  quickRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
-    borderRadius: Radius.medium,
-    borderWidth: 1,
-    padding: Spacing.three,
-    minHeight: Layout.listRowHeight,
-  },
-  quickRowText: {
-    flex: 1,
-    gap: Spacing.half,
-  },
-  inlineRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-    alignItems: 'center',
-  },
-  flexItem: {
-    flex: 1,
-  },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerSpacer: { width: 44 },
+  quickRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.two, borderRadius: Radius.medium, borderWidth: 1, padding: Spacing.three, minHeight: Layout.listRowHeight },
+  quickRowText: { flex: 1, gap: Spacing.half },
+  inlineRow: { flexDirection: 'row', gap: Spacing.two, alignItems: 'center' },
+  flexItem: { flex: 1 },
 });
