@@ -11,6 +11,7 @@ import {
   getNextHomeGymItem,
   HOME_GYM_REWARD_PER_WORKOUT,
   HomeGymItemIds,
+  recentHomeGymRewardCoins,
   type HomeGymState,
 } from '@/data/home-gym-repository';
 
@@ -18,6 +19,7 @@ export function HomeGymRewardStrip() {
   const { workoutRecords } = useAppData();
   const [state, setState] = useState<HomeGymState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [rewardDismissed, setRewardDismissed] = useState(false);
   const completedWorkoutCount = workoutRecords.length;
 
   useEffect(() => {
@@ -32,6 +34,11 @@ export function HomeGymRewardStrip() {
     () => (state ? availableHomeGymCoins(state, completedWorkoutCount) : 0),
     [completedWorkoutCount, state]
   );
+  const latestRecord = workoutRecords.reduce<(typeof workoutRecords)[number] | null>((latest, record) => {
+    if (!latest) return record;
+    return Date.parse(record.createdAt) > Date.parse(latest.createdAt) ? record : latest;
+  }, null);
+  const recentReward = rewardDismissed ? 0 : recentHomeGymRewardCoins(latestRecord?.createdAt);
   const nextItem = state ? getNextHomeGymItem(state) : null;
   const rackPlaced = state?.placedItemIds.includes(HomeGymItemIds.starterRack) ?? false;
   const benchPlaced = state?.placedItemIds.includes(HomeGymItemIds.flatBench) ?? false;
@@ -51,6 +58,20 @@ export function HomeGymRewardStrip() {
 
   return (
     <View style={styles.container}>
+      {recentReward > 0 && (
+        <Pressable
+          onPress={() => setRewardDismissed(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`방금 운동 보상 홈짐 코인 ${recentReward}, 닫기`}
+          style={styles.rewardReceipt}>
+          <View style={styles.rewardReceiptCopy}>
+            <ThemedText type="captionBold" style={styles.title}>운동 보상 획득</ThemedText>
+            <ThemedText type="caption" style={styles.subtitle}>방금 운동이 홈짐 성장으로 이어졌어요.</ThemedText>
+          </View>
+          <ThemedText type="smallBold" style={styles.rewardAmount}>+{recentReward} 🪙</ThemedText>
+        </Pressable>
+      )}
+
       <View style={styles.headerRow}>
         <View style={styles.copy}>
           <ThemedText type="captionBold" style={styles.title}>🪙 홈짐 {coins}</ThemedText>
@@ -107,6 +128,9 @@ export function HomeGymRewardStrip() {
 
 const styles = StyleSheet.create({
   container: { gap: Spacing.two, marginTop: Spacing.one, paddingTop: Spacing.two, borderTopWidth: 1, borderTopColor: HomeColors.border },
+  rewardReceipt: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.two, borderRadius: Radius.medium, backgroundColor: HomeColors.surfaceGold, paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
+  rewardReceiptCopy: { flex: 1, gap: 1 },
+  rewardAmount: { color: HomeColors.goldStrong },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.two },
   copy: { flex: 1, gap: 2 },
   title: { color: HomeColors.goldStrong },
