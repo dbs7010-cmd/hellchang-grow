@@ -93,6 +93,7 @@ import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/cha
 import { buildPtContext, buildPtExerciseBrief, matchExerciseInText, PtContext } from '@/utils/pt-context';
 import { resolveRewardedAdGrant } from '@/utils/ad-reward';
 import { buildDanbaekLearningProfile, diffLearningProfiles, type LearningGain } from '@/utils/danbaek-learning';
+import type { DanbaekLearningProfile } from '@/types/danbaek-contract';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { resolveOnboardingState } from '@/utils/stored-state';
 import { buildWorkoutSessionResult } from '@/utils/workout-session-result';
@@ -299,6 +300,14 @@ interface AppDataContextValue extends AppDataState {
   removeRoutine: (routineId: string) => Promise<void>;
   /** PT에게 넘길 압축 컨텍스트. 화면과 서비스가 같은 값을 본다. */
   ptContext: PtContext;
+  /**
+   * 저장된 운동 기록에서 읽어낸 단백이의 학습 상태 (읽기 전용 스냅샷).
+   *
+   * 화면들이 각자 다시 계산하면 같은 순간에 서로 다른 학습을 말할 수 있다 — HOME과 PT가
+   * 같은 값을 보게 여기서 한 번만 만든다. **성장(Growth/HELL PASS)과 별개 축이고**,
+   * 이 값이 기록이나 성장 계산을 바꾸는 경로는 없다 (기록을 읽기만 한다).
+   */
+  danbaekLearning: DanbaekLearningProfile;
   /** 실제 AI 백엔드가 연결돼 있는지. false면 화면이 "AI 연결 전"임을 알린다. */
   aiConnected: boolean;
   /** 이 빌드에 광고 provider가 연결돼 있는가. 없으면 광고 버튼을 내보내지 않는다. */
@@ -1088,6 +1097,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [state.profile, state.bodyHistory, state.workoutRecords, state.streak, state.routines, state.activeSession]
   );
 
+  /**
+   * 단백이의 학습 스냅샷. 기록이 바뀔 때만 다시 만든다 — 저장된 기록이 유일한 근거이므로
+   * 다른 상태(성장/PASS/세션)가 바뀌었다고 학습이 달라지지 않는다.
+   */
+  const danbaekLearning = useMemo(
+    () =>
+      buildDanbaekLearningProfile({
+        records: state.workoutRecords,
+        generatedAt: new Date().toISOString(),
+      }),
+    [state.workoutRecords]
+  );
+
   const sendPtMessage = useCallback<AppDataContextValue['sendPtMessage']>(
     async ({ text, quickActionId, history }) => {
       const trimmed = text.trim();
@@ -1248,6 +1270,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     updateRoutine,
     removeRoutine,
     ptContext,
+    danbaekLearning,
     aiConnected: aiTrainerService.isAiConnected,
     adProviderAvailable: rewardedAdService.isProviderAvailable,
     sendPtMessage,
