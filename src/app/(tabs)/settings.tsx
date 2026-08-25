@@ -33,6 +33,7 @@ export default function SettingsScreen() {
   const {
     profile,
     hasSubscriptionAccess,
+    adProviderAvailable,
     referral,
     openEventPass,
     updateProfile,
@@ -150,8 +151,15 @@ export default function SettingsScreen() {
               </ThemedText>
             </>
           ) : (
+            /*
+              광고 provider가 없는 빌드에서 "광고를 보면 이용할 수 있어요"는 사실이 아니다 —
+              AI PT 화면에는 광고 버튼 자체가 없다. 두 화면이 같은 사실을 말하도록 여기서도
+              provider 유무를 보고 문구를 고른다.
+            */
             <ThemedText type="caption" themeColor="textSecondary">
-              결제 준비 중이에요. 지금은 광고를 보면 AI PT를 이용할 수 있어요.
+              {adProviderAvailable
+                ? '결제 준비 중이에요. 지금은 광고를 보면 AI PT를 이용할 수 있어요.'
+                : '광고와 결제를 준비하고 있어요. 준비되면 여기에서 AI PT를 이용할 수 있어요.'}
             </ThemedText>
           )}
         </SettingsRow>
