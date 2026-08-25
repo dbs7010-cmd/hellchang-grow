@@ -2,6 +2,7 @@ import { readJSON, writeJSON } from '@/services/storage/local-storage';
 import { StorageKeys } from '@/services/storage/keys';
 
 export const HOME_GYM_REWARD_PER_WORKOUT = 10;
+export const HOME_GYM_RECENT_REWARD_WINDOW_MS = 5 * 60 * 1000;
 
 export const HomeGymItemIds = {
   starterRack: 'starter-dumbbell-rack',
@@ -60,6 +61,22 @@ export function earnedHomeGymCoins(completedWorkoutCount: number): number {
 
 export function availableHomeGymCoins(state: HomeGymState, completedWorkoutCount: number): number {
   return Math.max(0, earnedHomeGymCoins(completedWorkoutCount) - state.spentCoins);
+}
+
+/**
+ * HOME 복귀 직후에만 보여 주는 표현용 영수증이다.
+ * 재화를 새로 지급하지 않는다. 재화의 단일 근거는 여전히 완료 WorkoutRecord 개수다.
+ */
+export function recentHomeGymRewardCoins(
+  createdAt: string | undefined,
+  nowMs = Date.now(),
+  windowMs = HOME_GYM_RECENT_REWARD_WINDOW_MS
+): number {
+  if (!createdAt) return 0;
+  const createdMs = Date.parse(createdAt);
+  if (!Number.isFinite(createdMs)) return 0;
+  const ageMs = nowMs - createdMs;
+  return ageMs >= 0 && ageMs <= windowMs ? HOME_GYM_REWARD_PER_WORKOUT : 0;
 }
 
 export function getHomeGymItem(id: HomeGymItemId): HomeGymItemDefinition {
