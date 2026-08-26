@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { CharacterMotionStage } from '@/components/character/character-motion-stage';
 import { PlayerCharacter } from '@/components/character/player-character';
 import { GoldsunReaction } from '@/components/goldsun/goldsun-reaction';
+import { SessionExerciseSelector } from '@/components/session/session-exercise-selector';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Chip } from '@/components/ui/chip';
@@ -56,6 +57,9 @@ import {
   willCountAsEffectiveSet,
 } from '@/utils/workout-character-motion';
 import {
+  buildSessionExerciseNavigation,
+} from '@/utils/session-navigation';
+import {
   computeCompletedSetsCount,
   computeElapsedSeconds,
   isEffectiveSet,
@@ -63,7 +67,6 @@ import {
   getAutoRestSeconds,
   getCurrentExercise,
   getLastSetValues,
-  getNextExercise,
   getRestProgress,
   getRestSecondsRemaining,
   getSetProgress,
@@ -410,11 +413,7 @@ export default function SessionScreen() {
     nowMs - activeSession.restUntilMs < REST_READY_WINDOW_MS;
 
   const currentExercise = getCurrentExercise(activeSession);
-  const currentIndex = currentExercise
-    ? activeSession.exercises.findIndex((e) => e.id === currentExercise.id)
-    : -1;
-  const nextExercise = getNextExercise(activeSession);
-  const previousExercise = currentIndex > 0 ? activeSession.exercises[currentIndex - 1] : undefined;
+  const exerciseNavigationItems = buildSessionExerciseNavigation(activeSession);
   const pendingSet = currentExercise?.sets.find((set) => !set.completed);
   const completedSets = currentExercise?.sets.filter(isEffectiveSet) ?? [];
   // 화면에 보이는 완료 세트 수도 기록과 같은 기준을 쓴다 — 체크만 하고 횟수가 없는
@@ -643,7 +642,7 @@ export default function SessionScreen() {
         secondsRemaining={restSecondsRemaining}
         elapsedSeconds={elapsedSeconds}
         currentExercise={currentExercise}
-        nextExercise={nextExercise}
+        exerciseNavigationItems={exerciseNavigationItems}
         appearance={characterAppearance}
         family={motionFamily}
         bodyParameters={bodyParameters}
@@ -653,6 +652,7 @@ export default function SessionScreen() {
         // 휴식 중 뒤로가기도 여기서 답할 수 있어야 한다 — 있으면 [다음 세트 시작] 자리를 대신한다.
         exitConfirm={sessionConfirm === 'exit' ? exitConfirmBar : null}
         onPauseToggle={handlePauseToggle}
+        onSelectExercise={setCurrentSessionExercise}
         onSkip={skipSessionRest}
       />
     );
@@ -663,11 +663,7 @@ export default function SessionScreen() {
       elapsedSeconds={elapsedSeconds}
       isPaused={isPaused}
       onPauseToggle={handlePauseToggle}
-      statusLabel={
-        currentExercise
-          ? `운동 ${currentIndex + 1}/${activeSession.exercises.length}`
-          : undefined
-      }
+      statusLabel={currentExercise ? '운동 중' : undefined}
       reaction={reaction}>
       {prCelebration && <PrCelebrationOverlay pr={prCelebration} />}
 
@@ -687,6 +683,12 @@ export default function SessionScreen() {
         </Section>
       )}
 
+      <SessionExerciseSelector
+        items={exerciseNavigationItems}
+        disabled={isPaused}
+        onSelect={setCurrentSessionExercise}
+      />
+
       {currentExercise && (
         <>
           {/* 현재 운동명은 화면에서 가장 먼저 읽혀야 한다 — 운동 이미지는 옆의 작은 참고용 슬롯. */}
@@ -701,18 +703,6 @@ export default function SessionScreen() {
                   ? `${setProgress.completed} / ${setProgress.target} 세트`
                   : `${setProgress.completed + 1}세트째`}
               </ThemedText>
-            </View>
-            <View style={styles.exerciseNav}>
-              <NavArrow
-                label="‹"
-                disabled={isPaused || !previousExercise}
-                onPress={() => previousExercise && setCurrentSessionExercise(previousExercise.id)}
-              />
-              <NavArrow
-                label="›"
-                disabled={isPaused || !nextExercise}
-                onPress={() => nextExercise && setCurrentSessionExercise(nextExercise.id)}
-              />
             </View>
           </View>
 
@@ -769,35 +759,6 @@ export default function SessionScreen() {
             ))}
           </ScrollView>
 
-          {nextExercise && (
-            <Pressable
-              onPress={() => setCurrentSessionExercise(nextExercise.id)}
-              disabled={isPaused}
-              accessibilityRole="button"
-              accessibilityLabel={`다음 운동 ${nextExercise.exerciseName}로 이동`}
-              style={[styles.nextExerciseRow, isPaused && styles.disabledControl]}>
-              <ThemedText type="caption" themeColor="textSecondary">
-                다음 · {nextExercise.exerciseName}
-              </ThemedText>
-              <ThemedText type="captionBold" themeColor="textSecondary">
-                넘어가기 ›
-              </ThemedText>
-            </Pressable>
-          )}
-
-          {activeSession.exercises.length > 1 && (
-            <ChipRow bleed>
-              {activeSession.exercises.map((exercise) => (
-                <Chip
-                  key={exercise.id}
-                  label={exercise.exerciseName}
-                  selected={exercise.id === currentExercise?.id}
-                  disabled={isPaused}
-                  onPress={() => setCurrentSessionExercise(exercise.id)}
-                />
-              ))}
-            </ChipRow>
-          )}
         </>
       )}
 
@@ -996,24 +957,6 @@ const REST_CHARACTER_HEIGHT = 70;
 
 /** 상태줄(약 40px) 바로 아래에 골드썬 반응이 겹치도록 하는 오프셋. */
 const REACTION_TOP_OFFSET = 52;
-
-function NavArrow({ label, disabled, onPress }: { label: string; disabled?: boolean; onPress: () => void }) {
-  const theme = useTheme();
-  return (
-    <Pressable onPress={onPress} disabled={disabled} hitSlop={8}>
-      <View
-        style={[
-          styles.navArrow,
-          { borderColor: theme.border, backgroundColor: theme.backgroundElement },
-          disabled && styles.navArrowDisabled,
-        ]}>
-        <ThemedText type="smallBold" themeColor={disabled ? 'textSecondary' : 'text'}>
-          {label}
-        </ThemedText>
-      </View>
-    </Pressable>
-  );
-}
 
 function formatDurationMinutes(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
@@ -1492,7 +1435,7 @@ function RestScreen({
   secondsRemaining,
   elapsedSeconds,
   currentExercise,
-  nextExercise,
+  exerciseNavigationItems,
   appearance,
   family,
   bodyParameters,
@@ -1501,13 +1444,14 @@ function RestScreen({
   reaction,
   exitConfirm,
   onPauseToggle,
+  onSelectExercise,
   onSkip,
 }: {
   session: WorkoutSession;
   secondsRemaining: number;
   elapsedSeconds: number;
   currentExercise?: SessionExerciseEntry;
-  nextExercise?: SessionExerciseEntry;
+  exerciseNavigationItems: ReturnType<typeof buildSessionExerciseNavigation>;
   appearance: ReturnType<typeof useAppData>['characterAppearance'];
   family?: Parameters<typeof CharacterMotionStage>[0]['family'];
   bodyParameters: Parameters<typeof CharacterMotionStage>[0]['bodyParameters'];
@@ -1521,6 +1465,7 @@ function RestScreen({
    */
   exitConfirm?: React.ReactNode;
   onPauseToggle: () => void;
+  onSelectExercise: (exerciseEntryId: string) => void;
   onSkip: () => void;
 }) {
   const theme = useTheme();
@@ -1576,14 +1521,16 @@ function RestScreen({
               {currentExercise.exerciseName} · {nextSetPreview.weightKg ?? '-'}KG ×{' '}
               {nextSetPreview.reps ?? '-'}회
             </ThemedText>
-            {nextExercise && (
-              <ThemedText type="caption" themeColor="textSecondary">
-                이 운동 다음 · {nextExercise.exerciseName}
-              </ThemedText>
-            )}
           </View>
         )}
       </View>
+
+      <SessionExerciseSelector
+        items={exerciseNavigationItems}
+        disabled={session.status === 'paused'}
+        compact
+        onSelect={onSelectExercise}
+      />
 
       {/* 뒤로가기 확인이 열리면 CTA 자리를 대신한다 — 겹치거나 함께 쌓이지 않는다. */}
       {exitConfirm ?? (
@@ -1691,29 +1638,6 @@ const styles = StyleSheet.create({
   },
   exerciseHeaderText: {
     flex: 1,
-  },
-  exerciseNav: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-  },
-  navArrow: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.medium,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navArrowDisabled: {
-    opacity: 0.35,
-  },
-  /** 다음 운동 안내는 카드가 아니라 한 줄이다 — 화면을 세로로 더 쓰지 않는다. */
-  nextExerciseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
-    paddingVertical: Spacing.one,
   },
   logScroll: {
     flex: 1,
