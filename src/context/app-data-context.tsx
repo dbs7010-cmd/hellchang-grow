@@ -52,7 +52,7 @@ import {
 } from '@/data/workout-session-repository';
 import { clearAllKeys } from '@/services/storage/local-storage';
 import { StorageKeys } from '@/services/storage/keys';
-import { rewardedAdService } from '@/services/ads/mock-rewarded-ad-service';
+import { rewardedAdService } from '@/services/ads';
 import { referralService } from '@/services/referral/mock-referral-service';
 import { subscriptionService } from '@/services/subscription/mock-subscription-service';
 import { growthEngine } from '@/services/growth';
@@ -88,6 +88,7 @@ import {
 import { todayDateString, tomorrowDateString } from '@/utils/date';
 import { PrEvent, detectPRs } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
+import { resolveRewardedAdGrant } from '@/utils/ad-reward';
 import { addXp, computePassLevelProgress, computeSessionXpAward } from '@/utils/pass';
 import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/character-appearance';
 import { buildPtContext, buildPtExerciseBrief, matchExerciseInText, PtContext } from '@/utils/pt-context';
@@ -238,7 +239,10 @@ interface AppDataContextValue extends AppDataState {
   deleteWorkoutRecord: (recordId: string) => Promise<void>;
   addBodyHistoryEntry: (input: Parameters<typeof addBodyHistoryEntryRepo>[0]) => Promise<void>;
   claimStreakReward: () => Promise<void>;
-  watchRewardedAd: () => Promise<void>;
+  /** 보상을 실제로 받았는지 돌려준다. false면 이용권은 늘지 않았다. */
+  watchRewardedAd: () => Promise<boolean>;
+  /** 이 빌드에 광고 provider가 연결돼 있는가. 없으면 광고 버튼을 내보내지 않는다. */
+  adProviderAvailable: boolean;
   startWorkoutSession: (
     category: WorkoutCategory,
     options?: {
@@ -1017,11 +1021,28 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, routines }));
   }, []);
 
-  const watchRewardedAd = useCallback(async () => {
-    const result = await rewardedAdService.showRewardedAd();
-    if (result.granted) {
-      const trainerUsage = await grantRewardedPtUses(result.rewardUnits);
+  /**
+   * 광고 보상. **보상 판정은 여기서 하지 않는다** — 순수 규칙 하나(resolveRewardedAdGrant)가
+   * 정하고, 이 함수는 그 결과대로 이용권을 늘릴 뿐이다. 광고 SDK가 실패하거나 보상을 주지
+   * 않았으면 이용권도 늘지 않는다(그래야 "광고를 본 것처럼" 공짜로 여는 경로가 없다).
+   */
+  const watchRewardedAd = useCallback(async (): Promise<boolean> => {
+    let result;
+    try {
+      result = await rewardedAdService.showRewardedAd();
+    } catch {
+      // 광고 SDK 실패가 앱을 멈추게 하지 않는다. 이용권도 주지 않는다.
+      return false;
+    }
+    // 보상 여부 판정은 순수 규칙 하나에서만 나온다 (scripts/verify-monetization.ts).
+    const grant = resolveRewardedAdGrant(result);
+    if (!grant.granted) return false;
+    try {
+      const trainerUsage = await grantRewardedPtUses(grant.rewardUnits);
       setState((prev) => ({ ...prev, trainerUsage }));
+      return true;
+    } catch {
+      return false;
     }
   }, []);
 
@@ -1216,6 +1237,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     deleteWorkoutRecord,
     addBodyHistoryEntry,
     claimStreakReward,
+    adProviderAvailable: rewardedAdService.isProviderAvailable,
     watchRewardedAd,
     startWorkoutSession,
     pauseWorkoutSession,
