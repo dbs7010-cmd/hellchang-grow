@@ -57,7 +57,8 @@
     "verify:learning": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-danbaek-learning.ts",
     "verify:learning-ux": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-danbaek-presentation.ts",
     "verify:block-flow": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-danbaek-block-flow.ts",
-    "verify:danbaek-ux": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-danbaek-ux.ts"
+    "verify:danbaek-ux": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-danbaek-ux.ts",
+    "verify:home": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-home-presentation.ts"
   },
   "private": true
 }

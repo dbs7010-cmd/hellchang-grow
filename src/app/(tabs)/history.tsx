@@ -141,7 +141,10 @@ export default function HistoryScreen() {
    * 단백이가 이 기록에서 무엇을 배웠는지. 계산은 어댑터가 이미 했고 여기서는 옮겨 적기만
    * 한다 — 없는 성장 수치를 만들지 않는다.
    */
-  const learningBoard = useMemo(() => buildLearningBoard(danbaekLearning), [danbaekLearning]);
+  const topLearnedLabel = useMemo(() => {
+    const [top] = buildLearningBoard(danbaekLearning, 1);
+    return top ? `${top.label} · ${top.stageLabel}` : null;
+  }, [danbaekLearning]);
   const learningEvidenceLine = useMemo(() => {
     const seen = seenFamilyCount(danbaekLearning);
     if (seen === 0) return '아직 단백이가 본 동작이 없어요. 운동을 기록하면 여기에 쌓여요.';
@@ -273,27 +276,6 @@ export default function HistoryScreen() {
             이 기간에는 볼륨으로 계산할 세트 기록이 없어요.
           </ThemedText>
         )}
-      </Section>
-
-      {/*
-        이 화면의 숫자는 통계로 끝나지 않는다 — **이 기록이 단백이가 배운 근거**다.
-        과장하지 않기 위해 여기서 새로 계산하는 값은 없다: 학습 스냅샷이 이미 아는 사실
-        (몇 가지를 봤고, 어디까지 배웠고, 무엇을 몇 번 봤는지)만 옮겨 적는다.
-      */}
-      <Section title="단백이가 배운 근거">
-        <ThemedText type="caption" themeColor="textSecondary">
-          {learningEvidenceLine}
-        </ThemedText>
-        {learningBoard.map((row) => (
-          <View key={row.movementFamily} style={styles.learningRow}>
-            <ThemedText type="small" numberOfLines={1} style={styles.learningLabel}>
-              {row.label}
-            </ThemedText>
-            <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-              {row.stageLabel} · {row.evidenceCount}번 봄
-            </ThemedText>
-          </View>
-        ))}
       </Section>
 
       {profile && (
@@ -459,6 +441,23 @@ export default function HistoryScreen() {
         </Section>
       )}
 
+      {/*
+        이 기록이 단백이 학습의 근거였다는 사실 한 줄. **보조 층이다** — History는 여전히
+        내 기록과 내 몸의 화면이고, 단백이 화면이 아니다. 그래서 통계/몸 변화 아래에 오고,
+        상세 목록(무엇을 몇 번 봤는지)은 운동 탭이 이미 보여주므로 여기서 반복하지 않는다.
+        새로 계산하는 값은 없다 — 학습 스냅샷이 아는 사실만 옮겨 적는다.
+      */}
+      <View style={styles.learningNote}>
+        <ThemedText type="captionBold" themeColor="textSecondary">
+          🐣 {learningEvidenceLine}
+        </ThemedText>
+        {topLearnedLabel && (
+          <ThemedText type="caption" themeColor="textSecondary">
+            가장 많이 본 동작 · {topLearnedLabel}
+          </ThemedText>
+        )}
+      </View>
+
       {/* 놓친 기록 채우기와 전체 기록 보기는 History의 보조 기능이다 —
           Primary 버튼처럼 보이지 않게 텍스트 액션으로 둔다. */}
       <View style={styles.secondaryActions}>
@@ -595,15 +594,10 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  /** 학습 근거는 카드가 아니라 한 줄 로그다 — 통계 카드와 무게를 겨루지 않는다. */
-  learningRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
-  },
-  learningLabel: {
-    flexShrink: 1,
+  /** 학습 근거는 카드도 섹션도 아니다 — 보조 한 줄이다. */
+  learningNote: {
+    gap: Spacing.half,
+    paddingVertical: Spacing.one,
   },
   bodyRow: {
     flexDirection: 'row',

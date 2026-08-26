@@ -1177,6 +1177,35 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
           </ThemedText>
         </View>
 
+        {/*
+          실제로 한 운동이 먼저다. 성장/학습은 그 결과에 얹히는 이야기라 아래에 온다 —
+          숫자 연출이 "내가 오늘 뭘 했는지"를 덮으면 운동 앱이 아니라 게임 화면이 된다.
+        */}
+        <Section title="오늘의 성과">
+          <MetricGrid>
+            <MetricTile index={0} label="총 세트" value={`${summary.completedSets}세트`} />
+            {summary.totalVolumeKg > 0 && (
+              <MetricTile index={1} label="총 볼륨" value={formatVolumeKg(summary.totalVolumeKg)} />
+            )}
+            <MetricTile index={2} label="운동 시간" value={formatDurationMinutes(summary.durationMinutes)} />
+            {summary.prs.length > 0 && (
+              <MetricTile index={3} label="PR" value={`${summary.prs.length}개 NEW`} accent />
+            )}
+          </MetricGrid>
+
+          {summary.prs.length > 0 && (
+            <ThemedView type="backgroundSelected" style={styles.prBox}>
+              <PRBadge />
+              {summary.prs.map((pr) => (
+                <ThemedText key={pr.exerciseId} type="small">
+                  {pr.exerciseName} {describePrAchievement(pr)}
+                  {describePrPrevious(pr) ? ` (이전 ${describePrPrevious(pr)})` : ' (첫 기록)'}
+                </ThemedText>
+              ))}
+            </ThemedView>
+          )}
+        </Section>
+
         {muscles.length > 0 && (
           <Section title="오늘 자극된 부위">
             <ThemedView type="backgroundElement" style={styles.stimulusCard}>
@@ -1239,31 +1268,6 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
             </ThemedText>
           </Section>
         )}
-
-        <Section title="오늘의 성과">
-          <MetricGrid>
-            <MetricTile index={0} label="총 세트" value={`${summary.completedSets}세트`} />
-            {summary.totalVolumeKg > 0 && (
-              <MetricTile index={1} label="총 볼륨" value={formatVolumeKg(summary.totalVolumeKg)} />
-            )}
-            <MetricTile index={2} label="운동 시간" value={formatDurationMinutes(summary.durationMinutes)} />
-            {summary.prs.length > 0 && (
-              <MetricTile index={3} label="PR" value={`${summary.prs.length}개 NEW`} accent />
-            )}
-          </MetricGrid>
-
-          {summary.prs.length > 0 && (
-            <ThemedView type="backgroundSelected" style={styles.prBox}>
-              <PRBadge />
-              {summary.prs.map((pr) => (
-                <ThemedText key={pr.exerciseId} type="small">
-                  {pr.exerciseName} {describePrAchievement(pr)}
-                  {describePrPrevious(pr) ? ` (이전 ${describePrPrevious(pr)})` : ' (첫 기록)'}
-                </ThemedText>
-              ))}
-            </ThemedView>
-          )}
-        </Section>
 
         {/*
           단백이는 플레이어의 아바타가 아니라 옆에서 지켜보고 따라 하는 존재다. 그래서 결과에

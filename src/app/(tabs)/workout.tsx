@@ -127,13 +127,20 @@ export default function WorkoutHubScreen() {
           </ThemedText>
         ) : (
           recentRecords.map((record) => (
-            <View key={record.id} style={styles.recentRow}>
-              <ThemedText type="small" numberOfLines={1} style={styles.rowText}>
-                {record.title}
-              </ThemedText>
+            <View
+              key={record.id}
+              style={[styles.recentCard, { backgroundColor: theme.backgroundElement }]}>
+              <View style={styles.rowText}>
+                <ThemedText type="smallBold" numberOfLines={1}>
+                  {record.title}
+                </ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                  {WorkoutCategoryLabels[record.category]}
+                  {record.durationMinutes ? ` · ${record.durationMinutes}분` : ''}
+                </ThemedText>
+              </View>
               <ThemedText type="caption" themeColor="textSecondary">
-                {WorkoutCategoryLabels[record.category]}
-                {record.durationMinutes ? ` · ${record.durationMinutes}분` : ''} · {record.date}
+                {record.date.slice(5).replace('-', '/')}
               </ThemedText>
             </View>
           ))
@@ -159,13 +166,18 @@ const styles = StyleSheet.create({
   rowText: {
     flex: 1,
   },
-  /** 최근 운동은 카드가 아니라 한 줄 로그다 — 화면을 길게 만들지 않는다. */
-  recentRow: {
+  /**
+   * 최근 운동은 루틴 행과 같은 카드 문법을 쓴다 — 예전에는 배경 위 맨 텍스트라 같은 화면에서
+   * 무엇이 누를 수 있는 것이고 무엇이 기록인지 구분되지 않았다. (여전히 누르는 것은 아니다.)
+   */
+  recentCard: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    borderRadius: Radius.medium,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
     gap: Spacing.two,
-    paddingVertical: 2,
   },
   boardRows: {
     gap: Spacing.one,

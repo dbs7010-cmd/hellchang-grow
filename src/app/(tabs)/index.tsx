@@ -1,6 +1,13 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { LayoutChangeEvent, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  LayoutChangeEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PlayerCharacter } from '@/components/character/player-character';
@@ -27,20 +34,23 @@ import { getThisWeekRecords } from '@/data/workout-repository';
 import { useTheme } from '@/hooks/use-theme';
 import { buildDanbaekVoice } from '@/utils/danbaek-learning-presence';
 import { findPreviousPerformance } from '@/utils/exercise-history';
+import { buildHomeBodyMetrics } from '@/utils/home-presentation';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import { recommendMuscleGroup } from '@/utils/workout-recommendation';
 import { formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
 
 /**
- * V1 HOME VISUAL CANON — LOCKED.
- * Warm White, Character Stage tonal field/ground, HELL PASS hierarchy, Gold CTA,
- * borderless body HUD, Gold-tinted recommendations, Stanley bubble, bottom navigation,
- * 그리고 412x915 / 390x844 / 360x800 responsive 배치를 함께 고정한다.
+ * 01 HOME — Warm White, Character Stage, Gold CTA, Stanley bubble, bottom navigation.
+ * 412x915 / 390x844 / 360x800 responsive 배치를 함께 고정한다.
  *
- * 01 HOME — 기존 기능/레이아웃 계약을 유지하면서 MASTER CANON의 HUD 밀도만 복원한다.
- * Header → HELL PASS/주간 기록 → 캐릭터(좌측 신체 HUD + 우측 스탠리) → CTA → 추천 운동.
- * 신체 HUD는 실제 입력값만 표시하며 없는 값은 '-'로 둔다.
+ * **순서가 곧 우선순위다** (rebuild 제품화):
+ *   Header → 스탠리 한마디 + 캐릭터 → 단백이 한마디 → [운동 시작] → (단백세상 입구)
+ *   → 내 몸 한 줄 → HELL PASS/주간 기록/오늘 성장 → 추천 운동
+ *
+ * 예전에는 진행도 카드가 맨 위, 신체 HUD가 캐릭터 옆 200px 컬럼이라 화면을 열면 숫자판이
+ * 먼저 보이고 주인공(캐릭터)이 그보다 작았다. 값과 기능은 하나도 지우지 않고 **층만** 내렸다.
+ * 신체 수치는 실제 입력값만 표시하며 없는 값은 '-'로 둔다 (utils/home-presentation.ts).
  */
 /**
  * 캐릭터가 stage 가장자리에 딱 붙지 않도록 남기는 여유(px, 위아래 합).
@@ -58,7 +68,18 @@ const TrainerRowHeight = 44;
  * 실측 전에 쓰는 캐릭터 영역 높이 추정 비율(화면 높이 대비).
  * 실제 영역(412x915에서 490 = 0.54)보다 넉넉히 작게 잡는다 — 추정이 실제보다 크면 잘리므로.
  */
-const CharacterAreaHeightRatio = 0.42;
+const CharacterAreaHeightRatio = 0.36;
+
+/**
+ * 무대(스탠리 한 줄 + 캐릭터)가 가져가는 높이. **화면 높이에서 비율로 정한다.**
+ *
+ * 예전에는 stage가 유일한 flex:1이라, 아래에 무엇을 하나 더할 때마다 그 손해를 전부
+ * 캐릭터가 뒤집어썼다 — 실측에서 캐릭터 168px, 신체 HUD 컬럼 200px로 주인공이 숫자판보다
+ * 작았다. 이제 무대 몫을 먼저 떼고 나머지가 스크롤된다.
+ */
+const HeroHeightRatio = 0.4;
+const HeroMinHeight = 220;
+const HeroMaxHeight = 380;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -124,13 +145,13 @@ export default function HomeScreen() {
   );
 
   const weeklyVolumeKg = useMemo(() => sumVolumeKg(weekRecords), [weekRecords]);
-  const latestBody = useMemo(
+  /** 실제 입력값만 나오는 몸 상태 한 줄. 규칙은 utils/home-presentation.ts 하나에서만 온다. */
+  const bodyMetrics = useMemo(
     () =>
-      bodyHistory.reduce<(typeof bodyHistory)[number] | undefined>(
-        (latest, entry) => (!latest || entry.date > latest.date ? entry : latest),
-        undefined
-      ),
-    [bodyHistory]
+      profile
+        ? buildHomeBodyMetrics({ profile, bodyHistory, workoutRecordCount: workoutRecords.length })
+        : [],
+    [profile, bodyHistory, workoutRecords.length]
   );
   const sessionInProgress = activeSession && activeSession.status !== 'completed';
   const scheduledRoutine = useMemo(
@@ -194,6 +215,10 @@ export default function HomeScreen() {
    * 화면 높이 기반 추정치를 쓴다. 추정치는 실제 영역보다 항상 작게 잡아서, 최악의 경우에도
    * 캐릭터가 조금 작게 보일 뿐 잘리거나 아예 안 그려지는 일이 없게 한다.
    */
+  const heroHeight = Math.min(
+    HeroMaxHeight,
+    Math.max(HeroMinHeight, Math.round(windowHeight * HeroHeightRatio))
+  );
   const estimatedAreaHeight = Math.round(windowHeight * CharacterAreaHeightRatio);
   const characterHeight = Math.max(
     0,
@@ -230,38 +255,11 @@ export default function HomeScreen() {
         (웹은 insets.bottom이 0이라 이 버그가 보이지 않아 실기기에서만 캐릭터가 작았다.)
         플랫폼별 탭바 여유는 BottomTabInset 하나로만 관리한다.
       */}
-      <View style={[styles.content, { paddingBottom: BottomTabInset + Spacing.two }]}>
-        <View style={styles.progressBlock}>
-          <GrowthHud
-            passLevel={passProgress.level}
-            passXpIntoLevel={passProgress.xpIntoLevel}
-            passXpForLevel={passProgress.xpForLevel}
-            passProgress={passProgress.progress}
-            onPress={() => router.push('/pass')}
-          />
-          <View style={styles.statsRow}>
-            <HomeStat label="이번 주" value={weekRecords.length + '회'} />
-            <HomeStat label="연속" value={'🔥 ' + streak.currentStreakDays + '일'} />
-            <HomeStat label="이번 주 볼륨" value={weeklyVolumeKg > 0 ? formatVolumeKg(weeklyVolumeKg) : '-'} />
-          </View>
-
-          {/*
-            오늘 운동한 날에만 나타난다 — 평소 홈은 그대로 두고, 운동한 날에만 그 결과가
-            홈까지 따라온다. 누르면 성장 리포트로 간다.
-          */}
-          {todayGrowth && (
-            <Pressable onPress={() => router.push('/pass')} hitSlop={6} style={styles.todayGrowthRow}>
-              <ThemedText type="captionBold" style={{ color: HomeColors.gold }}>
-                오늘 성장 +{Math.round(todayGrowth.totalSp * 10) / 10} SP
-              </ThemedText>
-              <ThemedText type="caption" themeColor="textSecondary">
-                {todayGrowth.topGroupLabel} 중심 ›
-              </ThemedText>
-            </Pressable>
-          )}
-        </View>
-
-        <View style={styles.stage}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={[styles.contentInner, { paddingBottom: BottomTabInset + Spacing.two }]}
+        showsVerticalScrollIndicator={false}>
+        <View style={[styles.stage, { height: heroHeight }]}>
           {/* 스탠리는 캐릭터 위에 겹치지 않고 흐름상 "윗줄"에 있다 —
               stage가 작아져도 말풍선이 얼굴/상체를 덮는 일이 구조적으로 없다. */}
           <View style={styles.trainerRow}>
@@ -303,22 +301,6 @@ export default function HomeScreen() {
                 idle
               />
             </Pressable>
-
-            {/* 보조 HUD. pointerEvents none이라 캐릭터 터치/360 진입을 막지 않는다. */}
-            <View
-              pointerEvents="none"
-              style={styles.bodyHud}>
-              <BodyHudMetric label="체중" value={`${latestBody?.weightKg ?? profile.weightKg}kg`} />
-              <BodyHudMetric
-                label="골격근량"
-                value={latestBody?.skeletalMuscleKg !== undefined ? `${latestBody.skeletalMuscleKg}kg` : '-'}
-              />
-              <BodyHudMetric
-                label="체지방률"
-                value={latestBody?.bodyFatPercent !== undefined ? `${latestBody.bodyFatPercent}%` : '-'}
-              />
-              <BodyHudMetric label="운동 기록" value={`${workoutRecords.length}회`} />
-            </View>
 
             {/* 실제 3D 모델이 등록되기 전에는 360을 아예 노출하지 않는다 — 눌러봐야 도형
                 placeholder가 도는 빈 기능이다. model3d가 채워지면 이 버튼과 CharacterViewer가
@@ -389,6 +371,52 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
+        {/*
+          내 몸 상태. 예전에는 캐릭터 옆 200px 컬럼이라 화면의 주인공(캐릭터)보다 커 보였다 —
+          같은 값을 지우지 않고 한 줄로 눕혀서, 캐릭터가 무대를 되찾고 숫자는 필요할 때
+          읽히는 자리로 내려왔다. 실제 입력값만 나오고 없는 값은 '-'다.
+        */}
+        <View style={styles.bodyStrip}>
+          {bodyMetrics.map((metric) => (
+            <HomeStat key={metric.label} label={metric.label} value={metric.value} />
+          ))}
+        </View>
+
+        {/*
+          진행도(HELL PASS / 주간 기록 / 오늘 성장)는 **마지막 층**이다. 화면을 열자마자
+          숫자판이 먼저 보이면 이 앱이 대시보드처럼 읽힌다 — 먼저 보여야 하는 것은
+          단백이와 오늘 할 운동이다. 값과 기능은 그대로 두고 순서만 내렸다.
+        */}
+        <View style={styles.progressBlock}>
+          <GrowthHud
+            passLevel={passProgress.level}
+            passXpIntoLevel={passProgress.xpIntoLevel}
+            passXpForLevel={passProgress.xpForLevel}
+            passProgress={passProgress.progress}
+            onPress={() => router.push('/pass')}
+          />
+          <View style={styles.statsRow}>
+            <HomeStat label="이번 주" value={weekRecords.length + '회'} />
+            <HomeStat label="연속" value={'🔥 ' + streak.currentStreakDays + '일'} />
+            <HomeStat label="이번 주 볼륨" value={weeklyVolumeKg > 0 ? formatVolumeKg(weeklyVolumeKg) : '-'} />
+          </View>
+
+          {/*
+            오늘 운동한 날에만 나타난다 — 평소 홈은 그대로 두고, 운동한 날에만 그 결과가
+            홈까지 따라온다. 누르면 성장 리포트로 간다.
+          */}
+          {todayGrowth && (
+            <Pressable onPress={() => router.push('/pass')} hitSlop={6} style={styles.todayGrowthRow}>
+              <ThemedText type="captionBold" style={{ color: HomeColors.gold }}>
+                오늘 성장 +{Math.round(todayGrowth.totalSp * 10) / 10} SP
+              </ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary">
+                {todayGrowth.topGroupLabel} 중심 ›
+              </ThemedText>
+            </Pressable>
+          )}
+        </View>
+
         {!sessionInProgress && (
           <RecommendedStrip
             items={recommendedItems}
@@ -396,7 +424,7 @@ export default function HomeScreen() {
             onPressMore={handleStartPress}
           />
         )}
-      </View>
+      </ScrollView>
 
       <CharacterViewer
         visible={viewerOpen}
@@ -429,25 +457,6 @@ function HomeStat({ label, value }: { label: string; value: string }) {
         {label}
       </ThemedText>
       <ThemedText type="smallBold" style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
-        {value}
-      </ThemedText>
-    </View>
-  );
-}
-
-function BodyHudMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.bodyHudMetric}>
-      <ThemedText type="caption" style={styles.bodyHudLabel} numberOfLines={1}>
-        {label}
-      </ThemedText>
-      <ThemedText type="smallBold" style={styles.bodyHudValue} numberOfLines={1}>
         {value}
       </ThemedText>
     </View>
@@ -489,12 +498,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentInner: {
     paddingHorizontal: Layout.screenPaddingX,
     gap: Spacing.two,
   },
   stage: {
-    flex: 1,
-    minHeight: 180,
     /**
      * 캐릭터 발밑과 [운동 시작] 사이의 틈을 좁힌다 — "캐릭터 → 운동 시작"이 두 개의 블록이
      * 아니라 한 동작으로 읽히게 하려는 것. content의 공통 gap(8)에서 4만 되돌린다.
@@ -552,23 +561,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bodyHud: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    width: 76,
-    borderWidth: 0,
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderRadius: Radius.medium,
-    overflow: 'hidden',
-    zIndex: 2,
-    boxShadow: HomeColors.hudShadow,
-  },
-  bodyHudMetric: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one + 2,
-    gap: Spacing.half,
-  },
   trainerRow: {
     width: '100%',
     minHeight: TrainerRowHeight,
@@ -612,6 +604,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  /**
+   * 몸 상태 한 줄. 카드가 아니라 배경 위에 그대로 얹는다 — 진행도 카드와 같은 무게로
+   * 보이면 홈에 숫자판이 두 개 생긴다.
+   */
+  bodyStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.one,
+  },
   stat: {
     flex: 1,
     alignItems: 'center',
@@ -625,6 +626,4 @@ const styles = StyleSheet.create({
   worldEntrySub: { color: HomeColors.textSecondary },
   statLabel: { color: HomeColors.textSecondary },
   statValue: { color: HomeColors.text, fontWeight: 800, fontVariant: ['tabular-nums'] },
-  bodyHudLabel: { color: HomeColors.textSecondary },
-  bodyHudValue: { color: HomeColors.text, fontWeight: 800, fontVariant: ['tabular-nums'] },
 });

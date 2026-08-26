@@ -14,7 +14,6 @@ import type {
   MovementFamily,
 } from '@/types/danbaek-contract';
 import type { LearningGain } from '@/utils/danbaek-learning';
-import { withObjectParticle } from '@/utils/korean';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
