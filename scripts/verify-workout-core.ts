@@ -19,9 +19,15 @@ import {
   getNextExercise,
   getRestSecondsRemaining,
   getSetProgress,
+  computeCompletedSetsCount,
+  computeTotalVolumeKg,
+  removeSetFromExercise,
+  sessionToWorkoutRecordInput,
   setCurrentExercise,
+  updateSet,
 } from '@/utils/workout-session';
 import { buildWorkoutSessionResult } from '@/utils/workout-session-result';
+import { buildWorkoutRecordDetail } from '@/utils/workout-record-detail';
 import { buildQuickStartPlan } from '@/utils/workout-start';
 import type { Routine } from '@/types/routine';
 import type { WorkoutRecord } from '@/types/workout';
@@ -391,6 +397,163 @@ const NOW_MS = NOW.getTime();
   check('an exercise added but never performed is skipped as a previous record', previous?.date, '2026-08-10');
   check('the real last performance is still found behind it', previous?.sets[0]?.reps, 10);
   check('an exercise never performed at all has no previous record', findPreviousPerformance('burpee', records), null);
+}
+
+// ── 잘못 기록한 세트를 고치고 지울 수 있다 ──────────────────────────────────
+//
+// 헬스장에서 숫자를 잘못 넣는 일은 드물지 않은데 되돌릴 방법이 없었다. 그래서 오타 하나가
+// 그대로 저장돼 볼륨·PR·성장까지 전부 타고 들어갔다.
+//
+// 여기서 지키는 것은 하나다: **세션에서 고치거나 지운 값은 저장되는 기록에 남지 않는다.**
+// 판정 규칙(effective-set)도 저장 변환(sessionToWorkoutRecordInput)도 새로 만들지 않고
+// 그대로 통과시킨다.
+{
+  const build = () => {
+    let session = createSession('strength', 'fix-1', NOW_ISO, {
+      initialExercises: [{ exerciseId: 'bench-press', exerciseName: '벤치프레스' }],
+    });
+    const entryId = session.exercises[0].id;
+    session = addSetToExercise(session, entryId, 'set-1', { weightKg: 600, reps: 10 });
+    session = completeSet(session, entryId, 'set-1');
+    session = addSetToExercise(session, entryId, 'set-2', { weightKg: 60, reps: 8 });
+    session = completeSet(session, entryId, 'set-2');
+    return { session, entryId };
+  };
+
+  // 1) 고치기 — 600kg 오타를 60kg로 바꾸면 저장되는 것도 60kg여야 한다.
+  {
+    const { session, entryId } = build();
+    const fixed = updateSet(session, entryId, 'set-1', { weightKg: 60 });
+    const record = sessionToWorkoutRecordInput(fixed, '가슴');
+    const sets = record.exercises?.[0]?.setDetails ?? [];
+
+    check('고친 세트 수가 그대로다', sets.length, 2);
+    check('고친 값이 저장된다', sets[0]?.weightKg, 60);
+    check('오타 값은 저장되지 않는다', sets.some((set) => set.weightKg === 600), false);
+    check('볼륨도 고친 값으로 계산된다', computeTotalVolumeKg(fixed), 60 * 10 + 60 * 8);
+    // 600kg PR이 남아 있으면 앱이 평생 그 무게를 사실로 취급한다.
+    const prs = detectPRs(fixed, []);
+    check('없던 600kg PR이 만들어지지 않는다', prs.some((pr) => pr.weightKg === 600), false);
+    check('실제로 든 무게가 PR이 된다', prs[0]?.weightKg, 60);
+  }
+
+  // 2) 지우기 — 지운 세트는 어디에도 남지 않는다.
+  {
+    const { session, entryId } = build();
+    const removed = removeSetFromExercise(session, entryId, 'set-1');
+    const record = sessionToWorkoutRecordInput(removed, '가슴');
+    const sets = record.exercises?.[0]?.setDetails ?? [];
+
+    check('지운 뒤에는 남은 세트만 저장된다', sets.length, 1);
+    check('남은 세트의 값은 그대로다', sets[0]?.weightKg, 60);
+    check('지운 세트는 볼륨에서도 빠진다', computeTotalVolumeKg(removed), 60 * 8);
+    check('지운 세트는 세트 수에서도 빠진다', computeCompletedSetsCount(removed), 1);
+    const prs = detectPRs(removed, []);
+    check('지운 세트로 PR이 만들어지지 않는다', prs.some((pr) => pr.weightKg === 600), false);
+  }
+
+  // 3) 다 지우면 그 종목은 한 세트도 하지 않은 것이다 — 빈 기록을 만들어 내지 않는다.
+  {
+    const { session, entryId } = build();
+    const empty = removeSetFromExercise(
+      removeSetFromExercise(session, entryId, 'set-1'),
+      entryId,
+      'set-2'
+    );
+    const record = sessionToWorkoutRecordInput(empty, '가슴');
+    check('세트가 없으면 setDetails도 없다', record.exercises?.[0]?.setDetails, undefined);
+    check('완료 세트 수는 0이다', computeCompletedSetsCount(empty), 0);
+    check('볼륨도 0이다', computeTotalVolumeKg(empty), 0);
+  }
+
+  // 4) 다른 종목의 세트는 건드리지 않는다.
+  {
+    let session = createSession('strength', 'fix-2', NOW_ISO, {
+      initialExercises: [
+        { exerciseId: 'bench-press', exerciseName: '벤치프레스' },
+        { exerciseId: 'squat', exerciseName: '스쿼트' },
+      ],
+    });
+    const [bench, squat] = session.exercises;
+    session = completeSet(addSetToExercise(session, bench.id, 'b-1', { weightKg: 60, reps: 10 }), bench.id, 'b-1');
+    session = completeSet(addSetToExercise(session, squat.id, 's-1', { weightKg: 100, reps: 5 }), squat.id, 's-1');
+
+    const removed = removeSetFromExercise(session, bench.id, 'b-1');
+    const record = sessionToWorkoutRecordInput(removed, '가슴');
+    const squatSets = record.exercises?.find((exercise) => exercise.exerciseId === 'squat')?.setDetails ?? [];
+    check('다른 종목의 세트는 남는다', squatSets.length, 1);
+    check('다른 종목의 값도 그대로다', squatSets[0]?.weightKg, 100);
+  }
+}
+
+// ── 저장된 기록을 다시 볼 수 있다 ───────────────────────────────────────────
+//
+// 결과 화면을 닫으면 내가 무엇을 얼마나 들었는지 볼 곳이 없었다. 상세 화면은 계산하지
+// 않는다 — 저장된 값을 옮겨 적을 뿐이고, 없는 값은 지어내지 않는다.
+{
+  const asRecord = (input: Partial<WorkoutRecord> & { id: string }): WorkoutRecord => ({
+    date: '2026-08-27',
+    category: 'strength',
+    title: '가슴 세션',
+    completed: true,
+    createdAt: '2026-08-27T10:00:00.000Z',
+    ...input,
+  });
+
+  // 방금 한 운동: 세트 순서/중량/횟수가 그대로 보인다.
+  {
+    const detail = buildWorkoutRecordDetail(
+      asRecord({
+        id: 'r1',
+        durationMinutes: 3,
+        exercises: [
+          {
+            id: 'e1',
+            exerciseId: 'bench-press',
+            name: '벤치프레스',
+            sets: 2,
+            reps: 8,
+            weightKg: 62.5,
+            setDetails: [
+              { id: 's1', weightKg: 60, reps: 10, completed: true },
+              { id: 's2', weightKg: 62.5, reps: 8, completed: true },
+            ],
+          },
+        ],
+      })
+    );
+
+    check('종목이 보인다', detail.exercises[0]?.name, '벤치프레스');
+    check('세트 순서가 저장된 순서 그대로다', detail.exercises[0]?.sets.map((set) => set.order), [1, 2]);
+    check('세트 중량이 그대로다', detail.exercises[0]?.sets.map((set) => set.weightKg), [60, 62.5]);
+    check('세트 횟수가 그대로다', detail.exercises[0]?.sets.map((set) => set.reps), [10, 8]);
+    check('합계는 기존 함수가 센 값과 같다', detail.totals.sets, 2);
+    check('볼륨도 기존 함수가 센 값과 같다', detail.totals.volumeKg, 60 * 10 + 62.5 * 8);
+    check('상세가 있으면 옛 요약을 덧붙이지 않는다', detail.exercises[0]?.legacySummary, null);
+    check('보여줄 것이 있으면 빈 안내가 없다', detail.emptyLine, null);
+  }
+
+  // 옛 기록: 세트 상세가 없다. 없는 세트를 만들어 내지 않는다.
+  {
+    const detail = buildWorkoutRecordDetail(
+      asRecord({
+        id: 'r2',
+        exercises: [{ id: 'e1', exerciseId: 'squat', name: '스쿼트', sets: 3, reps: 8, weightKg: 100 }],
+      })
+    );
+
+    check('없는 세트를 지어내지 않는다', detail.exercises[0]?.sets.length, 0);
+    check('남아 있는 요약만 말한다', detail.exercises[0]?.legacySummary, '3세트 · 100kg · 8회');
+  }
+
+  // 담기만 하고 하지 않은 운동은 보여줄 것이 없다.
+  {
+    const detail = buildWorkoutRecordDetail(
+      asRecord({ id: 'r3', exercises: [{ id: 'e1', exerciseId: 'squat', name: '스쿼트' }] })
+    );
+    check('한 세트도 안 한 종목은 나오지 않는다', detail.exercises.length, 0);
+    check('그때는 안내 한 줄이 있다', typeof detail.emptyLine, 'string');
+  }
 }
 
 console.log(

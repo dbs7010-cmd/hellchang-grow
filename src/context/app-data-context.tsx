@@ -124,6 +124,7 @@ import {
   resumeSession,
   sessionToWorkoutRecordInput,
   SessionExerciseInput,
+  removeSetFromExercise as removeSetPure,
   setCurrentExercise as setCurrentExercisePure,
   startRest as startRestPure,
   updateSet as updateSetPure,
@@ -272,6 +273,11 @@ interface AppDataContextValue extends AppDataState {
     setId: string,
     delta: { weightKg?: number; reps?: number }
   ) => Promise<void>;
+  /**
+   * 잘못 기록한 세트를 지운다. **세션 상태만** 바뀌고 저장된 기록/보상은 건드리지 않는다 —
+   * 세션이 끝날 때 기존 완료 파이프라인이 남아 있는 유효 세트만 그대로 옮긴다.
+   */
+  removeSessionSet: (exerciseEntryId: string, setId: string) => Promise<void>;
   /**
    * 세트 완료. restSeconds를 주면 같은 변경 안에서 휴식까지 바로 시작한다
    * (확인 팝업 없이 "완료 → 휴식 → 다음 세트"로 이어지는 흐름의 한 걸음).
@@ -767,6 +773,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [mutateRunningSession]
   );
 
+  const removeSessionSet = useCallback<AppDataContextValue['removeSessionSet']>(
+    async (exerciseEntryId, setId) => {
+      mutateRunningSession((session) => removeSetPure(session, exerciseEntryId, setId));
+    },
+    [mutateRunningSession]
+  );
+
   const ensureSessionPendingSet = useCallback<AppDataContextValue['ensureSessionPendingSet']>(
     async (exerciseEntryId, defaults) => {
       const setId = createId('set');
@@ -1249,6 +1262,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     updateSessionSet,
     adjustSessionSet,
     completeSessionSet,
+    removeSessionSet,
     ensureSessionPendingSet,
     startSessionRest,
     skipSessionRest,

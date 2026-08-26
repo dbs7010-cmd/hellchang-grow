@@ -26,7 +26,7 @@ import { MuscleGroupLabels, MuscleGroups } from '@/config/muscle-groups';
 import { StanleyTrainer } from '@/config/trainers';
 import { BottomTabInset, HomeColors, Layout, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
-import { getThisWeekRecords } from '@/data/workout-repository';
+import { getThisWeekRecords, getTodayRecords } from '@/data/workout-repository';
 import { buildDanbaekVoice } from '@/utils/danbaek-learning-presence';
 import { findPreviousPerformance } from '@/utils/exercise-history';
 import { buildHomeBodyMetrics, buildHomeView } from '@/utils/home-presentation';
@@ -123,6 +123,19 @@ export default function HomeScreen() {
   );
 
   /**
+   * 오늘 저장된 기록 중 가장 최근 것. [오늘 운동 기록]이 요약이 아니라 **그 기록**으로
+   * 가기 위해 필요한 값이고, 판정에는 쓰이지 않는다.
+   */
+  const todayRecordId = useMemo(() => {
+    const today = getTodayRecords(workoutRecords);
+    const latest = today.reduce<(typeof today)[number] | null>(
+      (best, record) => (!best || record.createdAt > best.createdAt ? record : best),
+      null
+    );
+    return latest?.id ?? null;
+  }, [workoutRecords]);
+
+  /**
    * 오늘 추천 부위. **이미 추천 strip이 쓰던 그 값 그대로**이고, 새 추천 로직이 아니다 —
    * 화면 아래에서만 쓰이던 것을 위에서도 읽을 수 있게 밖으로 꺼냈을 뿐이다.
    * 오늘 예약된 루틴이 있으면 루틴 이름이 이기므로 그때는 계산하지 않는다.
@@ -142,8 +155,9 @@ export default function HomeScreen() {
         ptContext,
         scheduledRoutineName: scheduledRoutine?.name ?? null,
         recommendedFocusLabel: recommendedGroup ? MuscleGroupLabels[recommendedGroup] : null,
+        todayRecordId,
       }),
-    [ptContext, scheduledRoutine, recommendedGroup]
+    [ptContext, scheduledRoutine, recommendedGroup, todayRecordId]
   );
 
   const greeting = useMemo(
@@ -291,7 +305,11 @@ export default function HomeScreen() {
           */}
           {home.secondary && (
             <Pressable
-              onPress={() => router.push(home.secondary!.route)}
+              onPress={() =>
+                home.secondary?.recordId
+                  ? router.push({ pathname: '/workout-record', params: { id: home.secondary.recordId } })
+                  : router.push('/(tabs)/history')
+              }
               hitSlop={10}
               accessibilityRole="button"
               accessibilityLabel={home.secondary.label}

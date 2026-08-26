@@ -132,6 +132,7 @@ export default function SessionScreen() {
     updateSessionSet,
     adjustSessionSet,
     completeSessionSet,
+    removeSessionSet,
     ensureSessionPendingSet,
     startSessionRest,
     skipSessionRest,
@@ -194,6 +195,8 @@ export default function SessionScreen() {
   const [customRestSeconds, setCustomRestSeconds] = useState('');
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
+  /** 지금 고치고 있는 완료 세트. 한 번에 하나만 연다 — 목록 전체가 입력칸이 되면 읽을 수 없다. */
+  const [editingSetId, setEditingSetId] = useState<string | null>(null);
   /** 뒤로가기를 가로챈 상태인지. 확인 바를 띄우는 동안 화면은 그대로 남는다. */
   /**
    * 방금 유효 세트를 끝냈다는 짧은 표시. **표현 전용 일시 상태다** — 성장/보상과 무관하고
@@ -540,6 +543,16 @@ export default function SessionScreen() {
     await adjustSessionSet(currentExercise.id, setId, delta);
   };
 
+  /**
+   * 잘못 기록한 세트를 지운다. 지우는 것은 세션 상태 하나뿐이고, 기록/보상/성장은 세션이
+   * 끝날 때 남아 있는 유효 세트만 보고 기존 파이프라인이 계산한다.
+   */
+  const handleRemoveSet = async (setId: string) => {
+    if (!currentExercise) return;
+    setEditingSetId(null);
+    await removeSessionSet(currentExercise.id, setId);
+  };
+
   const handleAddExerciseByName = async (exerciseId: string, exerciseName: string) => {
     const resolved = getResolvedExerciseById(exerciseId);
     await addExerciseToSession({
@@ -782,9 +795,17 @@ export default function SessionScreen() {
             contentContainerStyle={styles.logContent}
             showsVerticalScrollIndicator={false}>
             {completedSets.map((set, index) => (
-              <ThemedText key={set.id} type="caption" themeColor="textSecondary">
-                {index + 1}. {set.weightKg ?? '-'}kg × {set.reps ?? '-'}회 ✓
-              </ThemedText>
+              <CompletedSetRow
+                key={set.id}
+                index={index}
+                set={set}
+                editing={editingSetId === set.id}
+                disabled={isPaused}
+                onToggle={() => setEditingSetId(editingSetId === set.id ? null : set.id)}
+                onChange={(patch) => handleUpdateSet(set.id, patch)}
+                onAdjust={(delta) => handleAdjustSet(set.id, delta)}
+                onRemove={() => handleRemoveSet(set.id)}
+              />
             ))}
           </ScrollView>
 
@@ -1516,6 +1537,100 @@ function SetHero({
   );
 }
 
+/**
+ * 이미 기록한 세트 한 줄.
+ *
+ * 눌러야 열린다. 헬스장에서 대부분의 시간에 필요한 것은 "내가 뭘 했는지" 읽는 것이고,
+ * 고치는 일은 가끔이다 — 목록 전체를 입력칸으로 만들면 읽기가 먼저 망가진다.
+ * 고친 값은 세션 상태에 바로 반영되고, 기록/보상/성장은 세션이 끝날 때 남아 있는 유효
+ * 세트만 보고 기존 파이프라인이 계산한다.
+ */
+function CompletedSetRow({
+  index,
+  set,
+  editing,
+  disabled,
+  onToggle,
+  onChange,
+  onAdjust,
+  onRemove,
+}: {
+  index: number;
+  set: WorkoutSetEntry;
+  editing: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+  onChange: (patch: { weightKg?: number; reps?: number }) => void;
+  onAdjust: (delta: { weightKg?: number; reps?: number }) => void;
+  onRemove: () => void;
+}) {
+  const theme = useTheme();
+  const weight = set.weightKg ?? 0;
+  const reps = set.reps ?? 0;
+  // 입력칸에 숫자가 아닌 것이 들어와도 세트가 NaN이 되지 않게 한다.
+  const numeric = (text: string, min: number) => {
+    const value = Number(text);
+    return text && Number.isFinite(value) ? Math.max(min, value) : min;
+  };
+
+  if (!editing) {
+    return (
+      <Pressable
+        onPress={onToggle}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel={`${index + 1}번째 세트 ${weight}킬로그램 ${reps}회, 고치기`}
+        style={styles.completedSetRow}>
+        <ThemedText type="caption" themeColor="textSecondary">
+          {index + 1}. {set.weightKg ?? '-'}kg × {set.reps ?? '-'}회 ✓
+        </ThemedText>
+        <ThemedText type="caption" style={{ color: theme.gold }}>
+          고치기
+        </ThemedText>
+      </Pressable>
+    );
+  }
+
+  return (
+    <ThemedView type="backgroundElement" style={[styles.setEditor, { borderColor: theme.border }]}>
+      <ThemedText type="captionBold">{index + 1}번째 세트 고치기</ThemedText>
+      <View style={styles.setEditorRow}>
+        <StepperButton label="−" disabled={disabled} onPress={() => onAdjust({ weightKg: -AppConfig.setWeightStepKg })} />
+        <View style={styles.setEditorValue}>
+          <TextField
+            keyboardType="numeric"
+            value={String(weight)}
+            editable={!disabled}
+            onChangeText={(text) => onChange({ weightKg: numeric(text, 0) })}
+            style={[styles.setEditorInput, { color: theme.gold }]}
+          />
+          <ThemedText type="caption" themeColor="textSecondary">kg</ThemedText>
+        </View>
+        <StepperButton label="+" disabled={disabled} onPress={() => onAdjust({ weightKg: AppConfig.setWeightStepKg })} />
+      </View>
+      <View style={styles.setEditorRow}>
+        <StepperButton label="−" disabled={disabled} onPress={() => onAdjust({ reps: -AppConfig.setRepsStep })} />
+        <View style={styles.setEditorValue}>
+          <TextField
+            keyboardType="numeric"
+            value={String(reps)}
+            editable={!disabled}
+            /* 여기서 0회로 만들면 세트가 목록에서 사라져 버린다 — 지우려면 [세트 삭제]다. */
+            onChangeText={(text) => onChange({ reps: numeric(text, 1) })}
+            style={styles.setEditorInput}
+          />
+          <ThemedText type="caption" themeColor="textSecondary">회</ThemedText>
+        </View>
+        <StepperButton label="+" disabled={disabled} onPress={() => onAdjust({ reps: AppConfig.setRepsStep })} />
+      </View>
+      <View style={styles.setEditorActions}>
+        <PrimaryButton label="세트 삭제" variant="secondary" style={styles.flexItem} disabled={disabled} onPress={onRemove} />
+        <PrimaryButton label="완료" variant="gold" style={styles.flexItem} onPress={onToggle} />
+      </View>
+    </ThemedView>
+  );
+}
+
 function StepperButton({ label, disabled, onPress }: { label: string; disabled?: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} hitSlop={8} disabled={disabled} style={disabled && styles.disabledControl}>
@@ -1746,6 +1861,43 @@ const styles = StyleSheet.create({
   logContent: {
     gap: Spacing.half,
     paddingVertical: Spacing.one,
+  },
+  /** 완료 세트 한 줄 — 읽기가 먼저고, 오른쪽에 조용한 [고치기]가 붙는다. */
+  completedSetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    minHeight: Layout.compactRowHeight,
+  },
+  setEditor: {
+    borderWidth: 1,
+    borderRadius: Radius.medium,
+    padding: Spacing.two,
+    gap: Spacing.two,
+  },
+  setEditorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+  },
+  setEditorValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  setEditorInput: {
+    backgroundColor: 'transparent',
+    width: 72,
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    minHeight: 40,
+  },
+  setEditorActions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
   },
   previousBlock: {
     gap: Spacing.half,

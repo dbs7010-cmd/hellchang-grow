@@ -98,15 +98,22 @@ export default function WorkoutHubScreen() {
           </ThemedText>
         ) : (
           recentRecords.map((record) => (
-            <View key={record.id} style={styles.recentRow}>
+            // 눌러서 세트 상세로. 홈/히스토리와 같은 화면으로 간다 — 상세를 세 개 만들지 않는다.
+            <Pressable
+              key={record.id}
+              onPress={() => router.push({ pathname: '/workout-record', params: { id: record.id } })}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={`${record.title} 기록 자세히 보기`}
+              style={styles.recentRow}>
               <ThemedText type="small" numberOfLines={1} style={styles.rowText}>
                 {record.title}
               </ThemedText>
               <ThemedText type="caption" themeColor="textSecondary">
                 {WorkoutCategoryLabels[record.category]}
-                {record.durationMinutes ? ` · ${record.durationMinutes}분` : ''} · {record.date}
+                {record.durationMinutes ? ` · ${record.durationMinutes}분` : ''} · {record.date} ›
               </ThemedText>
-            </View>
+            </Pressable>
           ))
         )}
       </Section>
@@ -133,10 +140,10 @@ const styles = StyleSheet.create({
   /** 최근 운동은 카드가 아니라 한 줄 로그다 — 화면을 길게 만들지 않는다. */
   recentRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.two,
-    paddingVertical: 2,
+    minHeight: Layout.compactRowHeight,
   },
   emptyBlock: {
     gap: Spacing.one,

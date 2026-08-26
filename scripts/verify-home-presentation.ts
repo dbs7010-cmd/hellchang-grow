@@ -205,7 +205,13 @@ const ptContextOf = (overrides: {
 
   expect('완료했을 때만 보조 행동이 생긴다', post.secondary !== null && pre.secondary === null && inProgress.secondary === null);
   expect('보조 행동은 오늘 운동 기록이다', post.secondary?.label === '오늘 운동 기록');
-  expect('보조 행동은 기존 히스토리 탭으로 간다', post.secondary?.route === '/(tabs)/history');
+  // 요약이 아니라 **그 기록**으로 가야 한다 — 예전에는 히스토리 탭의 한 줄에서 끝났다.
+  const postWithRecord = buildHomeView({
+    ptContext: ptContextOf({ workoutCompleted: true, weeklyWorkoutCount: 1 }),
+    todayRecordId: 'r-today',
+  });
+  expect('오늘 기록을 알면 그 기록으로 간다', postWithRecord.secondary?.recordId === 'r-today');
+  expect('모르면 기록 id를 지어내지 않는다', post.secondary?.recordId === null);
 
   const views = [pre, preWithRoutine, inProgress, post];
   expect(

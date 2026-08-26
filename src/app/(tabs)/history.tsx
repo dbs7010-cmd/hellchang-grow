@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -22,7 +23,7 @@ import {
   WorkoutIntensities,
   WorkoutIntensityLabels,
 } from '@/config/workout-labels';
-import { Radius, Spacing } from '@/constants/theme';
+import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { getThisMonthRecords, getThisWeekRecords, getThisYearRecords } from '@/data/workout-repository';
 import { useTheme } from '@/hooks/use-theme';
@@ -71,6 +72,7 @@ function formatDelta(value: number, unit: string): string {
  */
 export default function HistoryScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const {
     profile,
     bodyHistory,
@@ -553,13 +555,27 @@ export default function HistoryScreen() {
                   const suspicious = (record.durationMinutes ?? 0) > AppConfig.suspiciousDurationMinutes;
                   return (
                     <View key={record.id}>
-                      <ThemedText type="caption" themeColor="textSecondary">
-                        · {record.title} ({WorkoutCategoryLabels[record.category]})
-                        {record.durationMinutes ? ` · ${record.durationMinutes}분` : ''}
-                        {exerciseCount > 0
-                          ? ` · 운동 ${exerciseCount}개 · ${setCount}세트`
-                          : ''}
-                      </ThemedText>
+                      {/*
+                        기록 줄은 눌러서 세트 상세로 들어간다 — 예전에는 여기가 끝이라,
+                        결과 화면을 닫고 나면 뭘 얼마나 들었는지 볼 곳이 없었다.
+                      */}
+                      <Pressable
+                        onPress={() =>
+                          router.push({ pathname: '/workout-record', params: { id: record.id } })
+                        }
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${record.title} 기록 자세히 보기`}
+                        style={styles.recordRow}>
+                        <ThemedText type="caption" themeColor="textSecondary" style={styles.recordText}>
+                          · {record.title} ({WorkoutCategoryLabels[record.category]})
+                          {record.durationMinutes ? ` · ${record.durationMinutes}분` : ''}
+                          {exerciseCount > 0
+                            ? ` · 운동 ${exerciseCount}개 · ${setCount}세트`
+                            : ''}
+                        </ThemedText>
+                        <ThemedText type="caption" style={{ color: theme.gold }}>›</ThemedText>
+                      </Pressable>
                       {suspicious && (
                         <Pressable onPress={() => deleteWorkoutRecord(record.id)} hitSlop={8}>
                           <ThemedText type="captionBold" style={{ color: theme.mutedRed }}>
@@ -632,6 +648,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Spacing.one,
+  },
+  recordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: Layout.compactRowHeight,
+  },
+  recordText: {
+    flex: 1,
   },
   dayRow: {
     gap: Spacing.half,

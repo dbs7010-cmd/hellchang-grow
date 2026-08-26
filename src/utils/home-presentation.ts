@@ -96,10 +96,17 @@ export interface HomePrimary {
   note: string | null;
 }
 
-/** 오늘 운동을 끝냈을 때만 생기는 보조 행동. 기존 히스토리 탭으로 간다. */
+/**
+ * 오늘 운동을 끝냈을 때만 생기는 보조 행동.
+ *
+ * 예전에는 히스토리 탭으로만 보냈는데, 거기에는 "가슴 세션 · 3분 · 운동 2개 · 3세트"
+ * 한 줄뿐이라 정작 내가 뭘 얼마나 들었는지가 없었다. 오늘 기록을 알고 있으면 그 기록
+ * 상세로 곧장 보낸다. 모르면(아직 못 읽었으면) 예전처럼 히스토리로 간다.
+ */
 export interface HomeSecondaryAction {
   label: string;
-  route: '/(tabs)/history';
+  /** 오늘의 기록 id. null이면 화면이 히스토리 탭으로 보낸다. */
+  recordId: string | null;
 }
 
 /**
@@ -236,6 +243,8 @@ export function buildHomeView(input: {
    * "오늘 뭘 하는가"를 지어내지 않는다.
    */
   recommendedFocusLabel?: string | null;
+  /** 오늘 저장된 기록 중 가장 최근 것의 id. 없으면 null. */
+  todayRecordId?: string | null;
 }): HomeView {
   const { ptContext } = input;
   const state = resolveHomeState(ptContext);
@@ -268,7 +277,7 @@ export function buildHomeView(input: {
           streakDays > 0 ? `연속 ${streakDays}일` : null,
         ]),
       },
-      secondary: { label: '오늘 운동 기록', route: '/(tabs)/history' },
+      secondary: { label: '오늘 운동 기록', recordId: input.todayRecordId ?? null },
       performance: buildHomePerformance(ptContext),
     };
   }
