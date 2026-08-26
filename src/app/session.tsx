@@ -33,6 +33,11 @@ import { SessionExerciseEntry, WorkoutSession } from '@/types/workout-session';
 import { detectPRs, findPreviousPerformance, PrEvent } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
 import {
+  buildDanbaekGainVoice,
+  buildDanbaekSetVoice,
+  describeLearningGain,
+} from '@/utils/danbaek-learning-presence';
+import {
   buildGrowthRevealMuscles,
   buildGrowthHighlight,
   buildGrowthRevealSequence,
@@ -478,7 +483,13 @@ export default function SessionScreen() {
     const completedSet = currentExercise.sets.find((set) => set.id === setId);
     if (willCountAsEffectiveSet(completedSet)) {
       if (setReactionTimerRef.current) clearTimeout(setReactionTimerRef.current);
-      setSetReaction(getExerciseReactionCopy(resolvedCurrent?.primaryMuscles[0] ?? activeSession.primaryMuscleGroup));
+      // 어떤 동작인지 알면 단백이가 그것을 따라 한다고 말하고, 모르는 운동(직접 추가 등)은
+      // 기존 부위 반응으로 떨어진다 — 아는 척하지 않는다. 문구 선택만 바뀌고 세트 기록/휴식
+      // 전환/연출 타이밍은 그대로다.
+      setSetReaction(
+        buildDanbaekSetVoice(currentExercise.exerciseId) ??
+          getExerciseReactionCopy(resolvedCurrent?.primaryMuscles[0] ?? activeSession.primaryMuscleGroup)
+      );
       setReactionTimerRef.current = setTimeout(() => {
         setSetReaction(null);
         setReactionTimerRef.current = null;
@@ -1101,6 +1112,35 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
           </ThemedText>
         </View>
 
+        {/*
+          실제로 한 운동이 먼저다. 성장/학습은 그 결과에 얹히는 이야기라 아래에 온다 —
+          숫자 연출이 오늘 무엇을 했는지를 덮으면 운동 앱이 아니라 게임 화면이 된다.
+        */}
+        <Section title="오늘의 성과">
+          <MetricGrid>
+            <MetricTile index={0} label="총 세트" value={`${summary.completedSets}세트`} />
+            {summary.totalVolumeKg > 0 && (
+              <MetricTile index={1} label="총 볼륨" value={formatVolumeKg(summary.totalVolumeKg)} />
+            )}
+            <MetricTile index={2} label="운동 시간" value={formatDurationMinutes(summary.durationMinutes)} />
+            {summary.prs.length > 0 && (
+              <MetricTile index={3} label="PR" value={`${summary.prs.length}개 NEW`} accent />
+            )}
+          </MetricGrid>
+
+          {summary.prs.length > 0 && (
+            <ThemedView type="backgroundSelected" style={styles.prBox}>
+              <PRBadge />
+              {summary.prs.map((pr) => (
+                <ThemedText key={pr.exerciseId} type="small">
+                  {pr.exerciseName} {pr.weightKg}kg
+                  {pr.previousBestWeightKg ? ` (이전 ${pr.previousBestWeightKg}kg)` : ' (첫 기록)'}
+                </ThemedText>
+              ))}
+            </ThemedView>
+          )}
+        </Section>
+
         {muscles.length > 0 && (
           <Section title="오늘 자극된 부위">
             <ThemedView type="backgroundElement" style={styles.stimulusCard}>
@@ -1164,30 +1204,36 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
           </Section>
         )}
 
-        <Section title="오늘의 성과">
-          <MetricGrid>
-            <MetricTile index={0} label="총 세트" value={`${summary.completedSets}세트`} />
-            {summary.totalVolumeKg > 0 && (
-              <MetricTile index={1} label="총 볼륨" value={formatVolumeKg(summary.totalVolumeKg)} />
-            )}
-            <MetricTile index={2} label="운동 시간" value={formatDurationMinutes(summary.durationMinutes)} />
-            {summary.prs.length > 0 && (
-              <MetricTile index={3} label="PR" value={`${summary.prs.length}개 NEW`} accent />
-            )}
-          </MetricGrid>
 
-          {summary.prs.length > 0 && (
-            <ThemedView type="backgroundSelected" style={styles.prBox}>
-              <PRBadge />
-              {summary.prs.map((pr) => (
-                <ThemedText key={pr.exerciseId} type="small">
-                  {pr.exerciseName} {pr.weightKg}kg
-                  {pr.previousBestWeightKg ? ` (이전 ${pr.previousBestWeightKg}kg)` : ' (첫 기록)'}
-                </ThemedText>
+        {/*
+          단백이는 플레이어의 아바타가 아니라 옆에서 지켜보고 따라 하는 존재다. 그래서 결과에
+          내가 얼마나 컸는가와 별개로 **얘가 오늘 무엇을 배웠는가**가 남는다.
+
+          이 섹션은 **소비자일 뿐이다** — 이미 계산돼 넘어온 summary.learning을 읽기만 한다.
+          여기서 evidence를 만들지 않고, GrowthState도 receipt도 완료 파이프라인도 건드리지 않는다.
+          배운 것이 없으면(계열을 알 수 없는 즉석 운동뿐이면) 섹션 자체가 없다.
+        */}
+        {summary.learning.length > 0 && (
+          <Section title="오늘 단백이가 배운 것">
+            <ThemedView type="backgroundElement" style={styles.learningBox}>
+              {/* 먼저 단백이가 자기 말로 한마디 하고, 정확한 단계는 그 아래에 둔다. */}
+              <ThemedText type="smallBold">🐣 {buildDanbaekGainVoice(summary.learning)}</ThemedText>
+              {summary.learning.map(describeLearningGain).map((copy) => (
+                <View key={copy.movementFamily} style={styles.learningRow}>
+                  <ThemedText type="smallBold" numberOfLines={1} style={styles.learningFamily}>
+                    {copy.familyLabel}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor={copy.stageChanged ? 'text' : 'textSecondary'}>
+                    {copy.line}
+                  </ThemedText>
+                </View>
               ))}
+              <ThemedText type="caption" themeColor="textSecondary">
+                단백이는 오늘 옆에서 본 동작만 따라 합니다.
+              </ThemedText>
             </ThemedView>
-          )}
-        </Section>
+          </Section>
+        )}
 
         <Section title="성장 보상">
           <ThemedView type="backgroundElement" style={[styles.rewardCard, { borderColor: theme.gold }]}>
@@ -1803,6 +1849,24 @@ const styles = StyleSheet.create({
     borderRadius: Radius.medium,
     padding: Spacing.three,
     gap: Spacing.one,
+  },
+  /**
+   * PR 카드와 같은 카드 모양이지만 스타일을 공유하지 않는다 — 학습은 성장/PR과 별개 축이라
+   * 한쪽 카드를 손볼 때 다른 쪽이 따라 움직이면 안 된다.
+   */
+  learningBox: {
+    borderRadius: Radius.medium,
+    padding: Spacing.three,
+    gap: Spacing.one,
+  },
+  learningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  learningFamily: {
+    flexShrink: 1,
   },
   /**
    * PR 축하는 1.8초 뒤 사라지는 연출이다. 흐름에 두면 나타났다 사라질 때마다 세트 조작 UI가
