@@ -229,13 +229,13 @@ const repeated = (exerciseId: string, times: number, startDay = 1): WorkoutRecor
   expect('빈 줄은 없다', withDanbaek.every((line) => line.trim().length > 0));
 }
 
-// ── 11. 단백세상 입구 — 갈 곳이 없으면 입구를 내지 않는다 ───────────────────
+// ── 11. 단백세상 입구 — runtime seam과 방어적 닫힘을 모두 지킨다 ────────────
 {
   const profile = profileOf(repeated('bench-press', 4));
 
-  expect('APP 브랜치의 seam은 닫혀 있다', DanbaekWorldEntry.available === false);
-  expect('APP이 WORLD 경로를 지어내지 않는다', DanbaekWorldEntry.route === null);
-  expect('닫힌 seam에서는 입구가 없다', resolveDanbaekWorldEntry({ profile }) === null);
+  expect('통합 브랜치의 WORLD seam은 열려 있다', DanbaekWorldEntry.available === true);
+  expect('기본 WORLD 경로는 실제 runtime route다', DanbaekWorldEntry.route === '/danbaek-world');
+  expect('열린 기본 seam에서는 입구가 있다', resolveDanbaekWorldEntry({ profile }) !== null);
   expect(
     'available만 켜도 경로가 없으면 입구가 없다',
     resolveDanbaekWorldEntry({ profile, seam: { available: true, route: null } }) === null
@@ -255,7 +255,7 @@ const repeated = (exerciseId: string, times: number, startDay = 1): WorkoutRecor
     profile: profileOf([]),
     seam: { available: true, route: './danbaek-world-placeholder' },
   });
-  expect('배운 게 없으면 없다고 말한다', nothingLearned?.subLabel === '아직 배운 동작이 없어요');
+  expect('배운 게 없으면 첫 길을 안내한다', nothingLearned?.subLabel === '첫 번째 길이 기다리고 있어요');
   expect(
     '입구가 WORLD 진행도를 지어내지 않는다',
     open !== null && !/스테이지|층|클리어|모험 \d/.test(open.subLabel)
