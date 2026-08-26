@@ -5,8 +5,12 @@ import type { WorkoutCategory, WorkoutRecord } from '@/types/workout';
 export interface SessionCompletionPrSnapshot {
   exerciseId: string;
   exerciseName: string;
+  /** 'weight'(최고 중량 갱신) / 'reps'(같은 중량 최고 횟수 갱신) */
+  kind: 'weight' | 'reps';
   weightKg: number;
+  reps?: number;
   previousBestWeightKg?: number;
+  previousBestReps?: number;
 }
 
 /** Result와 재시도에 실제로 필요한 세션 완료 데이터만 보존한다. */

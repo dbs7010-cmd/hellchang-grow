@@ -12,6 +12,7 @@ import type { WorkoutRecord, WorkoutSetEntry } from '@/types/workout';
 import type { WorkoutSession } from '@/types/workout-session';
 import { todayDateString } from '@/utils/date';
 import { listPRs } from '@/utils/exercise-history';
+import { latestBodyEntry } from '@/utils/history';
 import { effectiveSetDetails, sumVolumeKg } from '@/utils/workout-stats';
 
 /**
@@ -43,7 +44,11 @@ export interface PtContextExercise {
 export interface PtContextPr {
   exerciseId: string;
   name: string;
+  /** 'weight'(최고 중량 갱신) / 'reps'(같은 중량 최고 횟수 갱신) */
+  kind: 'weight' | 'reps';
   weightKg: number;
+  /** rep PR에서 달성한 횟수. */
+  reps: number | null;
   date: string;
   /** 이전 최고 중량. 이 운동을 처음 한 것이면 null. */
   previousBestWeightKg: number | null;
@@ -145,7 +150,7 @@ export function buildPtContext(input: {
   const today = input.today ?? todayDateString();
   const records = input.workoutRecords;
   const weekRecords = getThisWeekRecords(records, today);
-  const latestBody = [...input.bodyHistory].sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  const latestBody = latestBodyEntry(input.bodyHistory);
 
   const lastWorkoutDate =
     records.length > 0
@@ -164,7 +169,9 @@ export function buildPtContext(input: {
     .map<PtContextPr>((pr) => ({
       exerciseId: pr.exerciseId,
       name: pr.exerciseName,
+      kind: pr.kind,
       weightKg: pr.weightKg,
+      reps: pr.reps ?? null,
       date: pr.date,
       previousBestWeightKg: pr.previousBestWeightKg ?? null,
     }));
