@@ -8,30 +8,35 @@ import { formatExerciseNavigationProgress } from '@/utils/session-navigation';
 interface SessionExerciseSelectorProps {
   items: SessionExerciseNavigationItem[];
   disabled?: boolean;
+  compact?: boolean;
   onSelect: (exerciseEntryId: string) => void;
 }
 
 /**
- * Primary in-session exercise navigation.
+ * Shared ACTIVE/REST exercise navigation.
  *
  * Routine order is deliberately absent: every exercise is a peer and can be
  * selected at any time. Progress describes work actually completed for that
- * exercise, never a mandatory position such as "2/5".
+ * exercise, never a mandatory position such as "2/5". `compact` only changes
+ * density for REST; selection semantics stay identical in both states.
  */
 export function SessionExerciseSelector({
   items,
   disabled = false,
+  compact = false,
   onSelect,
 }: SessionExerciseSelectorProps) {
   if (items.length <= 1) return null;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, compact && styles.containerCompact]}>
       <View style={styles.headingRow}>
         <ThemedText type="captionBold">운동 선택</ThemedText>
-        <ThemedText type="caption" themeColor="textSecondary">
-          순서 상관없이 바로 바꿀 수 있어요
-        </ThemedText>
+        {!compact && (
+          <ThemedText type="caption" themeColor="textSecondary">
+            순서 상관없이 바로 바꿀 수 있어요
+          </ThemedText>
+        )}
       </View>
       <ScrollView
         horizontal
@@ -47,6 +52,7 @@ export function SessionExerciseSelector({
             onPress={() => onSelect(item.id)}
             style={({ pressed }) => [
               styles.item,
+              compact && styles.itemCompact,
               item.selected && styles.itemSelected,
               item.complete && styles.itemComplete,
               disabled && styles.itemDisabled,
@@ -69,6 +75,9 @@ const styles = StyleSheet.create({
   container: {
     gap: Spacing.one,
   },
+  containerCompact: {
+    gap: 4,
+  },
   headingRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -90,6 +99,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: 'rgba(127,127,127,0.28)',
+  },
+  itemCompact: {
+    minWidth: 116,
+    minHeight: 48,
+    paddingVertical: 4,
   },
   itemSelected: {
     borderWidth: 2,
