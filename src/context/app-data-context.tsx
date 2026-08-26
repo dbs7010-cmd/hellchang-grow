@@ -85,7 +85,7 @@ import {
 import { todayDateString, tomorrowDateString } from '@/utils/date';
 import { PrEvent, detectPRs } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
-import { addXp, computePassLevelProgress } from '@/utils/pass';
+import { addXp, computePassLevelProgress, computeSessionXpAward } from '@/utils/pass';
 import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/character-appearance';
 import { buildPtContext, buildPtExerciseBrief, matchExerciseInText, PtContext } from '@/utils/pt-context';
 import { buildDanbaekLearningProfile, diffLearningProfiles, type LearningGain } from '@/utils/danbaek-learning';
@@ -765,10 +765,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (routine) routineCompleted = isRoutineCompleted(completed, routine.exerciseIds);
     }
 
-    const xpAwarded =
-      AppConfig.passXpPerSession +
-      prs.length * AppConfig.passXpPerPr +
-      (routineCompleted ? AppConfig.passXpPerRoutineCompletion : 0);
+    /*
+     * PR XP는 **최고 중량 갱신(weight PR)에만** 나간다. rep PR은 기록에는 남지만 XP를
+     * 추가로 만들지 않는다 — 정책은 utils/pass.ts 한 곳에 있다. 예전에는 여기서 prs.length를
+     * 그대로 곱해 종류 구분 없이 지급했다. 세션/루틴 보너스 값과 계산 의미는 그대로다.
+     */
+    const { xpAwarded } = computeSessionXpAward({ prs, routineCompleted });
     const newXp = addXp(state.pass.xp, xpAwarded);
 
     const initialReceipt: SessionCompletionReceipt = {

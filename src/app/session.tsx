@@ -30,7 +30,13 @@ import { EndSessionSummary, useAppData } from '@/context/app-data-context';
 import { useTheme } from '@/hooks/use-theme';
 import { WorkoutRecord, WorkoutSetEntry } from '@/types/workout';
 import { SessionExerciseEntry, WorkoutSession } from '@/types/workout-session';
-import { detectPRs, findPreviousPerformance, PrEvent } from '@/utils/exercise-history';
+import {
+  describePrAchievement,
+  describePrPrevious,
+  detectPRs,
+  findPreviousPerformance,
+  PrEvent,
+} from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
 import {
   buildDanbaekGainVoice,
@@ -81,8 +87,15 @@ interface SessionSummaryWithLine extends EndSessionSummary {
   trainerLine: string;
 }
 
+/**
+ * 축하 연출을 한 번만 띄우기 위한 PR 식별자.
+ *
+ * 예전에는 `운동-중량`만 봤다. 그러면 같은 중량에서 일어난 **중량 PR과 횟수 PR이 한 개로**
+ * 접히고, 같은 중량에서 횟수를 더 올린 뒤에 오는 다음 rep PR도 이미 본 것으로 취급돼
+ * 축하가 사라졌다. 종류와 달성 횟수까지 넣어야 서로 다른 성취가 서로를 지우지 않는다.
+ */
 function prKey(pr: PrEvent) {
-  return `${pr.exerciseId}-${pr.weightKg}`;
+  return `${pr.exerciseId}-${pr.kind}-${pr.weightKg}-${pr.reps ?? ''}`;
 }
 
 /**
@@ -1132,9 +1145,9 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
             <ThemedView type="backgroundSelected" style={styles.prBox}>
               <PRBadge />
               {summary.prs.map((pr) => (
-                <ThemedText key={pr.exerciseId} type="small">
-                  {pr.exerciseName} {pr.weightKg}kg
-                  {pr.previousBestWeightKg ? ` (이전 ${pr.previousBestWeightKg}kg)` : ' (첫 기록)'}
+                <ThemedText key={prKey(pr)} type="small">
+                  {pr.exerciseName} {describePrAchievement(pr)}
+                  {describePrPrevious(pr) ? ` (이전 ${describePrPrevious(pr)})` : ' (첫 기록)'}
                 </ThemedText>
               ))}
             </ThemedView>
@@ -1624,7 +1637,7 @@ function PrCelebrationOverlay({ pr }: { pr: PrEvent }) {
         🏆 NEW PR
       </ThemedText>
       <ThemedText type="smallBold">
-        {pr.exerciseName} {pr.weightKg}kg
+        {pr.exerciseName} {describePrAchievement(pr)}
       </ThemedText>
     </Animated.View>
   );
