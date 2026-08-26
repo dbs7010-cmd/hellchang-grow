@@ -1107,19 +1107,27 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
     () => resolveGrowthComparisonCamera(summary.growth?.stageChanges ?? []),
     [summary.growth]
   );
+  /*
+    이 그림은 **단백이**다. 내 실제 몸이 아니다.
+
+    실제 신체 수치(체중/골격근량/체지방률)는 내가 직접 입력하거나 측정한 값에서만 오고,
+    히스토리의 [몸 변화]에 있다. 여기 보이는 변화는 오늘 실제로 한 운동이 만들어 낸
+    **게임 성장**(Muscle SP → Stage → 단백이 외형)이다. 둘을 같은 말로 부르면, 운동
+    한 번에 내 몸이 그만큼 커졌다고 앱이 거짓말을 하게 된다.
+  */
   const revealTitle =
     revealPhase === 'pump'
       ? '운동 직후 펌핑'
       : revealPhase === 'before'
-        ? '운동 전 내 몸'
-        : (growthHighlight ?? '지금 내 실제 몸');
+        ? '운동 전 단백이'
+        : (growthHighlight ?? '지금 단백이');
 
   /** 펌핑과 영구 성장의 관계를 한 줄로 짚어 준다 (보조 계층 문구). */
   const revealCaption =
     revealPhase === 'pump'
       ? '지금은 펌핑 상태예요. 잠시 뒤 가라앉아요.'
       : revealPhase === 'after'
-        ? '펌핑이 빠진 실제 몸이에요. 오늘 쌓은 SP는 그대로 남습니다.'
+        ? '펌핑이 빠진 단백이예요. 오늘 쌓은 SP는 그대로 남습니다.'
         : null;
 
   const skipReveal = () => setRevealPhase('after');
@@ -1228,13 +1236,14 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
             </ThemedView>
             {/* 진행도 숫자가 무엇을 향한 것인지 한 줄로 알려 준다. */}
             <ThemedText type="caption" themeColor="textSecondary">
-              100%가 되면 Stage가 올라 내 몸이 실제로 커져요.
+              100%가 되면 Stage가 올라 단백이 몸이 커져요. 내 실제 체중·체지방은 히스토리의
+              [몸 변화]에서 봐요.
             </ThemedText>
           </Section>
         )}
 
         {permanentChanged && revealPhase === 'after' && (
-          <Section title={stageChanges.length > 0 ? '실제 성장' : '영구 성장 변화'}>
+          <Section title={stageChanges.length > 0 ? '단백이 성장' : '단백이 몸 변화'}>
             <View style={styles.bodyComparisonRow}>
               <BodyComparison
                 label="BEFORE"

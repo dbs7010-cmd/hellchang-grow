@@ -150,7 +150,7 @@ const ptContextOf = (overrides: {
   const inProgress = buildHomeView({
     ptContext: ptContextOf({
       workoutCompleted: true,
-      activeSession: { status: 'active', currentExerciseName: '벤치프레스', completedSets: 2 },
+      activeSession: { status: 'active', currentExerciseName: '벤치프레스', completedSets: 2, currentExerciseCompletedSets: 2 },
     }),
   });
   const post = buildHomeView({
@@ -183,7 +183,7 @@ const ptContextOf = (overrides: {
   });
   const inProgress = buildHomeView({
     ptContext: ptContextOf({
-      activeSession: { status: 'active', currentExerciseName: '벤치프레스', completedSets: 2 },
+      activeSession: { status: 'active', currentExerciseName: '벤치프레스', completedSets: 2, currentExerciseCompletedSets: 2 },
     }),
   });
   const post = buildHomeView({
@@ -244,6 +244,7 @@ const ptContextOf = (overrides: {
     reps: null,
     date: TODAY,
     previousBestWeightKg: 75,
+    previousBestReps: null,
   };
   const repsPr = {
     exerciseId: 'pull-up',
@@ -253,12 +254,31 @@ const ptContextOf = (overrides: {
     reps: 12,
     date: TODAY,
     previousBestWeightKg: null,
+    previousBestReps: 10,
   };
 
+  /*
+    대표 성취는 **종류**가 아니라 **자기 기록 대비 얼마나 늘었는가**로 고른다.
+    여기서 중량 PR은 75→80kg(+6.7%), 횟수 PR은 10→12회(+20%)다. 예전에는 "중량 PR이면
+    무조건 먼저"라 더 크게 는 쪽이 가려졌다.
+  */
   const both = buildHomePerformance(ptContextOf({ recentPRs: [repsPr, weightPr] }));
-  expect('중량 PR이 횟수 PR을 이긴다', both?.source === 'weightPr');
-  expect('중량 PR 값은 기존 포맷터가 만든다', both?.value === '80kg');
-  expect('이전 최고를 지어내지 않고 그대로 말한다', both?.note === '이전 최고 75kg');
+  expect('자기 기록 대비 더 많이 오른 쪽이 대표다', both?.source === 'repsPr');
+  expect('값 표기는 기존 포맷터가 만든다', both?.value === '맨몸 12회');
+  expect(
+    '목록 순서를 바꿔도 같은 성취를 고른다',
+    JSON.stringify(buildHomePerformance(ptContextOf({ recentPRs: [weightPr, repsPr] }))) ===
+      JSON.stringify(both)
+  );
+
+  // 반대 방향도 성립해야 규칙이다: 횟수 +10%(10→11) vs 중량 +20%(75→90).
+  const smallerRepGain = { ...repsPr, reps: 11, previousBestReps: 10 };
+  const biggerWeightGain = { ...weightPr, weightKg: 90, previousBestWeightKg: 75 };
+  const weightWins = buildHomePerformance(
+    ptContextOf({ recentPRs: [smallerRepGain, biggerWeightGain] })
+  );
+  expect('중량 쪽이 더 많이 올랐으면 중량이 대표다', weightWins?.source === 'weightPr');
+  expect('이전 최고를 지어내지 않고 그대로 말한다', weightWins?.note === '이전 최고 75kg');
 
   const onlyReps = buildHomePerformance(ptContextOf({ recentPRs: [repsPr] }));
   expect('횟수 PR은 중량으로 말하지 않는다', onlyReps?.value === '맨몸 12회');
@@ -290,6 +310,58 @@ const ptContextOf = (overrides: {
 
   const volume = buildHomePerformance(ptContextOf({ weeklyVolumeKg: 3400 }));
   expect('마지막 근거는 볼륨이다', volume?.source === 'volume');
+
+  /*
+    첫 기록에는 비교할 과거가 없다. 그래서 실제로 늘어난 기록이 항상 먼저다 —
+    "처음 해봤다"가 "지난번보다 늘었다"를 가리면 안 된다.
+  */
+  const firstRecordHeavy = {
+    exerciseId: 'leg-press',
+    name: '레그프레스',
+    kind: 'weight' as const,
+    weightKg: 150,
+    reps: null,
+    date: TODAY,
+    previousBestWeightKg: null,
+    previousBestReps: null,
+  };
+  const realImprovement = {
+    exerciseId: 'bench-press',
+    name: '벤치프레스',
+    kind: 'weight' as const,
+    weightKg: 62.5,
+    reps: null,
+    date: TODAY,
+    previousBestWeightKg: 60,
+    previousBestReps: null,
+  };
+  const improvementFirst = buildHomePerformance(
+    ptContextOf({ recentPRs: [firstRecordHeavy, realImprovement] })
+  );
+  expect(
+    '무게가 커도 첫 기록이 실제 상승을 이기지 않는다',
+    improvementFirst?.title === '벤치프레스 최고 중량'
+  );
+  expect(
+    '순서를 바꿔도 결과가 같다',
+    JSON.stringify(
+      buildHomePerformance(ptContextOf({ recentPRs: [realImprovement, firstRecordHeavy] }))
+    ) === JSON.stringify(improvementFirst)
+  );
+
+  /*
+    첫 기록끼리는 무게로 줄 세우지 않는다 — 레그프레스 150kg가 벤치프레스 62.5kg보다
+    대단하다는 뜻이 아니고, 종목 간 강함을 비교할 근거가 앱에 없다. 대신 가장 최근 것을
+    쓰고, 문구가 "첫 기록"이라고 그대로 말해 과장하지 않는다.
+  */
+  const firstRecordLight = { ...firstRecordHeavy, exerciseId: 'dumbbell', name: '덤벨 벤치프레스', weightKg: 20 };
+  const firstOnly = buildHomePerformance(ptContextOf({ recentPRs: [firstRecordLight, firstRecordHeavy] }));
+  expect('첫 기록끼리는 가장 최근 것을 쓴다', firstOnly?.title === '덤벨 벤치프레스 최고 중량');
+  expect('첫 기록은 첫 기록이라고 말한다', firstOnly?.note === '첫 기록');
+  expect(
+    '첫 기록을 두고 더 무거운 종목을 대표로 올리지 않는다',
+    firstOnly?.title !== '레그프레스 최고 중량'
+  );
 
   expect('아무 기록도 없으면 성취를 지어내지 않는다', buildHomePerformance(ptContextOf({})) === null);
   expect(
@@ -400,6 +472,27 @@ const ptContextOf = (overrides: {
   const validSignal = buildHomePerformance(valid);
   expect('홈은 실제로 든 무게를 그대로 말한다', validSignal?.source === 'weightPr');
   expect('값 표기도 그대로다', validSignal?.value === '100kg');
+}
+
+// ── 홈과 스탠리가 같은 하루를 다르게 말하지 않는다 ─────────────────────────
+//
+// 예전에는 홈이 "중량 PR 우선", 스탠리가 "목록 첫 번째"라 같은 기록을 두고 서로 다른
+// 성취를 대표로 말할 수 있었다. 지금은 정책 함수 하나를 공유한다.
+{
+  const usesPolicy = (file: string) =>
+    readFileSync(file, 'utf8').includes('selectRepresentativePr');
+  expect(
+    '홈이 공용 대표 성취 정책을 쓴다',
+    usesPolicy('src/utils/home-presentation.ts')
+  );
+  expect(
+    '스탠리도 같은 정책을 쓴다',
+    usesPolicy('src/utils/trainer-brief.ts')
+  );
+  expect(
+    '홈이 목록 첫 번째를 그냥 집지 않는다',
+    !readFileSync('src/utils/home-presentation.ts', 'utf8').includes("pool.find((candidate) => candidate.kind === 'weight')")
+  );
 }
 
 if (failures > 0) {

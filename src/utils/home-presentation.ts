@@ -2,6 +2,7 @@ import type { BodyHistoryEntry } from '@/types/body';
 import type { UserProfile } from '@/types/user';
 import { daysBetween } from '@/utils/trainer-brief';
 import { describePrAchievement } from '@/utils/exercise-history';
+import { selectRepresentativePr } from '@/utils/pt-context';
 import type { PtContext, PtContextPr } from '@/utils/pt-context';
 import { formatVolumeKg } from '@/utils/workout-stats';
 
@@ -138,13 +139,28 @@ function resolveHomeState(ptContext: PtContext): HomeState {
   return 'PRE_WORKOUT';
 }
 
-/** 진행 중인 세션을 사람 말로. 세트를 아직 안 채웠으면 채웠다고 말하지 않는다. */
+/**
+ * 진행 중인 세션을 사람 말로.
+ *
+ * 운동 이름 옆의 숫자는 **그 운동의** 세트 수여야 한다. 예전에는 이름은 지금 하는 운동인데
+ * 숫자는 세션 전체 합계라, 벤치 1세트 + 덤벨 1세트를 한 날 "벤치프레스 · 2세트 완료"가
+ * 됐다 — 벤치를 두 세트 한 적이 없는데도.
+ *
+ * 지금 하는 운동을 알 수 없으면 이름을 지어내지 않고 세션 전체로 정직하게 말한다.
+ */
 function describeActiveSession(session: NonNullable<PtContext['today']['activeSession']>): string {
-  const { currentExerciseName, completedSets } = session;
-  if (!currentExerciseName) return '진행 중인 세션이 있어요';
-  return completedSets > 0
-    ? `${currentExerciseName} · ${completedSets}세트 완료`
-    : `${currentExerciseName} 하는 중`;
+  const { currentExerciseName, completedSets, currentExerciseCompletedSets } = session;
+
+  if (!currentExerciseName || currentExerciseCompletedSets === null) {
+    return completedSets > 0 ? `총 ${completedSets}세트 완료` : '진행 중인 세션이 있어요';
+  }
+
+  if (currentExerciseCompletedSets === 0) return `${currentExerciseName} 하는 중`;
+
+  // 다른 운동도 했다면 그 사실을 감추지 않는다 — 세션 전체 숫자를 뒤에 붙인다.
+  return completedSets > currentExerciseCompletedSets
+    ? `${currentExerciseName} · ${currentExerciseCompletedSets}세트 완료 · 총 ${completedSets}세트`
+    : `${currentExerciseName} · ${currentExerciseCompletedSets}세트 완료`;
 }
 
 /** 며칠 전 일인지. 오늘이면 null — "오늘"이라고 굳이 말하지 않는다. */
@@ -188,7 +204,7 @@ function prSignal(pr: PtContextPr, today: string): HomePerformanceSignal {
 /**
  * 지금 신뢰할 수 있는 성취 중 **가장 강한 것 하나**.
  *
- * 순서: 중량 PR → 횟수 PR → 최근 실제 세트 → 이번 주 운동 횟수 → 이번 주 볼륨.
+ * 순서: 대표 PR(selectRepresentativePr) → 최근 실제 세트 → 이번 주 운동 횟수 → 이번 주 볼륨.
  * 오늘 세운 PR이 있으면 그것을 먼저 본다 — 지난주 기록이 오늘의 성취를 가리면 안 된다.
  * 하나도 없으면 null이고, 화면은 아무것도 세우지 않는다.
  */
@@ -197,9 +213,10 @@ export function buildHomePerformance(ptContext: PtContext): HomePerformanceSigna
   const { recentPRs, recentExercises, weeklyWorkoutCount, weeklyVolumeKg, streakDays } =
     ptContext.recentTraining;
 
+  // 오늘 세운 것이 있으면 그 안에서 고른다 — 지난주 기록이 오늘의 성취를 가리면 안 된다.
   const todayPrs = recentPRs.filter((pr) => pr.date === today);
-  const pool = todayPrs.length > 0 ? todayPrs : recentPRs;
-  const pr = pool.find((candidate) => candidate.kind === 'weight') ?? pool[0];
+  // 무엇을 대표로 말할지는 스탠리와 **같은 정책 하나**가 정한다 (utils/pt-context.ts).
+  const pr = selectRepresentativePr(todayPrs.length > 0 ? todayPrs : recentPRs);
   if (pr) return prSignal(pr, today);
 
   const recent = recentExercises.find((exercise) => exercise.topSet !== null);

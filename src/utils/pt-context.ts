@@ -52,6 +52,8 @@ export interface PtContextPr {
   date: string;
   /** 이전 최고 중량. 이 운동을 처음 한 것이면 null. */
   previousBestWeightKg: number | null;
+  /** 같은 중량에서의 직전 최고 횟수. 중량 PR이면 null. */
+  previousBestReps: number | null;
 }
 
 export interface PtContext {
@@ -62,7 +64,16 @@ export interface PtContext {
     activeSession: {
       status: WorkoutSession['status'];
       currentExerciseName: string | null;
+      /** 세션 전체의 완료 세트 수. */
       completedSets: number;
+      /**
+       * **지금 하고 있는 그 운동의** 완료 세트 수.
+       *
+       * 이름과 숫자가 다른 것을 가리키면 화면이 거짓말을 한다 — 벤치 1세트, 덤벨 1세트를
+       * 한 세션에서 했을 때 "벤치프레스 · 2세트 완료"가 되던 문제. 현재 운동을 알 수
+       * 없으면 null이고, 그때는 화면이 세션 전체로 정직하게 말한다.
+       */
+      currentExerciseCompletedSets: number | null;
     } | null;
   };
   profile: {
@@ -143,6 +154,71 @@ function collectRecentExercises(records: WorkoutRecord[], limit: number): PtCont
   return out;
 }
 
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 오늘 무엇을 "대표 성취"로 말할 것인가.
+ *
+ * PR 판정은 여기서 하지 않는다 — 무엇이 PR인지는 이미 정해져 있고, 모든 PR은 기록에
+ * 그대로 남는다. 여기서 정하는 것은 **여러 개 중 화면이 무엇을 대표로 말할까**뿐이다.
+ *
+ * 예전에는 목록의 첫 번째를 골랐다. 그 순서는 그날 어떤 운동을 먼저 했는지에 따라
+ * 우연히 정해져서, 벤치프레스 62.5kg 첫 기록과 덤벨 20kg 첫 기록이 같이 나온 날
+ * 20kg가 대표가 될 수 있었다. 게다가 홈은 중량 PR을 먼저 찾고 스탠리는 그냥 첫 번째를
+ * 골라서, 같은 하루를 두 화면이 다르게 말할 수도 있었다.
+ *
+ * 규칙은 두 층뿐이다.
+ *
+ *  1. **실제로 늘어난 기록이 먼저다.** 직전 최고가 있어서 "얼마나 늘었는지" 말할 수 있는
+ *     PR이, 비교 대상이 없는 첫 기록보다 앞선다.
+ *  2. 늘어난 것끼리는 **자기 기록 대비 상승폭(비율)**으로 비교한다. 같은 운동의 과거와
+ *     자기 자신을 비교한 값이라 종목이 달라도 공평하다.
+ *
+ * 첫 기록끼리는 **무게로 줄 세우지 않는다.** 레그프레스 150kg가 벤치프레스 100kg보다
+ * 대단하다는 뜻이 아니기 때문이다 — 종목 간 강함을 비교할 신뢰할 만한 근거가 앱에 없다.
+ * 그래서 첫 기록끼리는 최근 것을 쓰고, 문구도 "첫 기록"이라고 그대로 말한다.
+ *
+ * 점수 엔진이 아니다. 정렬 기준 하나이고, 같은 입력이면 언제나 같은 결과가 나온다.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/** 자기 직전 기록 대비 상승폭. 비교할 직전 기록이 없으면(첫 기록) null. */
+export function prImprovementRatio(pr: PtContextPr): number | null {
+  if (pr.kind === 'weight') {
+    if (pr.previousBestWeightKg === null || pr.previousBestWeightKg <= 0) return null;
+    return (pr.weightKg - pr.previousBestWeightKg) / pr.previousBestWeightKg;
+  }
+  if (pr.previousBestReps === null || pr.previousBestReps <= 0 || pr.reps === null) return null;
+  return (pr.reps - pr.previousBestReps) / pr.previousBestReps;
+}
+
+/**
+ * 화면이 대표로 말할 PR 하나. 없으면 null.
+ * 홈과 스탠리가 **같은 함수**를 쓴다 — 그래야 같은 하루를 두 화면이 다르게 말하지 않는다.
+ */
+export function selectRepresentativePr(prs: PtContextPr[]): PtContextPr | null {
+  if (prs.length === 0) return null;
+
+  return prs.reduce((best, candidate) => {
+    const bestRatio = prImprovementRatio(best);
+    const candidateRatio = prImprovementRatio(candidate);
+
+    // 1) 실제로 늘어난 기록이 첫 기록을 이긴다.
+    if (bestRatio === null && candidateRatio !== null) return candidate;
+    if (bestRatio !== null && candidateRatio === null) return best;
+
+    // 2) 둘 다 늘어난 기록이면 자기 기록 대비 더 많이 오른 쪽.
+    if (bestRatio !== null && candidateRatio !== null && candidateRatio !== bestRatio) {
+      return candidateRatio > bestRatio ? candidate : best;
+    }
+
+    // 3) 남은 기준은 최근 날짜뿐이다. 무게로 종목을 줄 세우지 않는다.
+    if (candidate.date !== best.date) return candidate.date > best.date ? candidate : best;
+
+    // 4) 그래도 같으면 들어온 순서를 지킨다 — 같은 입력이면 같은 결과여야 한다.
+    return best;
+  });
+}
+
 export function buildPtContext(input: {
   profile: UserProfile | null;
   bodyHistory: BodyHistoryEntry[];
@@ -180,6 +256,7 @@ export function buildPtContext(input: {
       reps: pr.reps ?? null,
       date: pr.date,
       previousBestWeightKg: pr.previousBestWeightKg ?? null,
+      previousBestReps: pr.previousBestReps ?? null,
     }));
 
   return {
@@ -194,6 +271,9 @@ export function buildPtContext(input: {
               (sum, exercise) => sum + exercise.sets.filter(isEffectiveSet).length,
               0
             ),
+            currentExerciseCompletedSets: currentExercise
+              ? currentExercise.sets.filter(isEffectiveSet).length
+              : null,
           }
         : null,
     },

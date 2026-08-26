@@ -4,6 +4,7 @@ import type { DanbaekLearningProfile } from '@/types/danbaek-contract';
 import type { MuscleGroup } from '@/types/exercise';
 import { hasLearnedStage, mostRecentlyObserved } from '@/utils/danbaek-learning-presence';
 import { withObjectParticle, withSubjectParticle, withTopicParticle } from '@/utils/korean';
+import { selectRepresentativePr } from '@/utils/pt-context';
 import type { PtContext, PtContextExercise } from '@/utils/pt-context';
 
 /**
@@ -34,10 +35,18 @@ export function buildStatusLine(context: PtContext): string {
   const { today, recentTraining } = context;
 
   if (today.activeSession) {
-    const where = today.activeSession.currentExerciseName;
-    return where
-      ? `지금 ${where} 하는 중이시죠. ${today.activeSession.completedSets}세트 끝났습니다.`
-      : '운동 진행 중입니다. 계속하시죠.';
+    const { currentExerciseName, completedSets, currentExerciseCompletedSets } = today.activeSession;
+    // 운동 이름 옆의 숫자는 그 운동의 세트 수여야 한다 — 세션 합계를 붙이면 하지도 않은
+    // 세트를 했다고 말하게 된다. 지금 하는 운동을 모르면 세션 전체로만 말한다.
+    if (!currentExerciseName || currentExerciseCompletedSets === null) {
+      return completedSets > 0
+        ? `운동 진행 중입니다. 지금까지 ${completedSets}세트 끝났습니다.`
+        : '운동 진행 중입니다. 계속하시죠.';
+    }
+    if (currentExerciseCompletedSets === 0) return `지금 ${currentExerciseName} 하는 중이시죠. 가시죠.`;
+    return completedSets > currentExerciseCompletedSets
+      ? `지금 ${currentExerciseName} ${currentExerciseCompletedSets}세트 하셨습니다. 오늘 전체 ${completedSets}세트입니다.`
+      : `지금 ${currentExerciseName} 하는 중이시죠. ${currentExerciseCompletedSets}세트 끝났습니다.`;
   }
   if (today.workoutCompleted) {
     return '오늘 운동은 끝내셨네요. 수고하셨습니다.';
@@ -78,7 +87,9 @@ export function buildRecentTrainingLine(context: PtContext): string {
  * 이미 들어 본 무게를 "첫 기록"이라고 하거나, 늘어난 것이 횟수인데 무게를 넘겼다고 하게 된다.
  */
 export function buildPrLine(context: PtContext): string | null {
-  const [pr] = context.recentTraining.recentPRs;
+  // 목록의 첫 번째가 아니라 **홈과 같은 정책**이 고른 대표 PR을 말한다 — 예전에는 같은
+  // 하루를 두고 홈은 중량 PR을, 스탠리는 목록 순서상의 첫 PR을 말할 수 있었다.
+  const pr = selectRepresentativePr(context.recentTraining.recentPRs);
   if (!pr) return null;
 
   if (pr.kind === 'reps') {

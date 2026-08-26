@@ -166,22 +166,22 @@ const squatRecord = record({
     ({ ...base, recentTraining: { ...base.recentTraining, recentPRs: [pr] } }) as PtContext;
 
   const firstWeight = buildPrLine(
-    withPr({ exerciseId: 'squat', name: '스쿼트', kind: 'weight', weightKg: 65, reps: null, date: '2026-08-25', previousBestWeightKg: null })
+    withPr({ exerciseId: 'squat', name: '스쿼트', kind: 'weight', weightKg: 65, reps: null, date: '2026-08-25', previousBestWeightKg: null, previousBestReps: null })
   );
   check('a first-ever weight is reported as a first record', firstWeight, '스쿼트는 65kg가 첫 기록입니다.');
 
   const heavier = buildPrLine(
-    withPr({ exerciseId: 'squat', name: '스쿼트', kind: 'weight', weightKg: 70, reps: null, date: '2026-08-25', previousBestWeightKg: 65 })
+    withPr({ exerciseId: 'squat', name: '스쿼트', kind: 'weight', weightKg: 70, reps: null, date: '2026-08-25', previousBestWeightKg: 65, previousBestReps: null })
   );
   check('a heavier lift names the weight it beat', heavier, '스쿼트 70kg, 이전 최고 65kg 넘기셨습니다.');
 
   const moreReps = buildPrLine(
-    withPr({ exerciseId: 'squat', name: '스쿼트', kind: 'reps', weightKg: 65, reps: 12, date: '2026-08-25', previousBestWeightKg: null })
+    withPr({ exerciseId: 'squat', name: '스쿼트', kind: 'reps', weightKg: 65, reps: 12, date: '2026-08-25', previousBestWeightKg: null, previousBestReps: 8 })
   );
   check('a rep PR is never called a first weight record', moreReps, '스쿼트 65kg로 12회, 횟수 기록 넘기셨습니다.');
 
   const bodyweight = buildPrLine(
-    withPr({ exerciseId: 'pull-up', name: '풀업', kind: 'reps', weightKg: 0, reps: 10, date: '2026-08-25', previousBestWeightKg: null })
+    withPr({ exerciseId: 'pull-up', name: '풀업', kind: 'reps', weightKg: 0, reps: 10, date: '2026-08-25', previousBestWeightKg: null, previousBestReps: 8 })
   );
   check('bodyweight rep PRs do not mention 0kg', bodyweight, '풀업 맨몸로 10회, 횟수 기록 넘기셨습니다.');
 }
@@ -320,9 +320,49 @@ const squatRecord = record({
     status: 'active',
     currentExerciseName: '벤치프레스',
     completedSets: 1,
+    currentExerciseCompletedSets: 1,
   });
   check('the free PT talks about the set that is actually done',
     buildStatusLine(context), '지금 벤치프레스 하는 중이시죠. 1세트 끝났습니다.');
+
+  /*
+    한 세션에서 두 운동을 하면, 운동 이름 옆의 숫자는 **그 운동의** 세트 수여야 한다.
+    예전에는 세션 합계를 붙여서 "벤치프레스 · 2세트 완료"가 됐다 — 벤치를 두 세트 한
+    적이 없는 날에도.
+  */
+  const twoExercises = buildPtContext({
+    profile,
+    bodyHistory: [],
+    workoutRecords: [],
+    streak: emptyStreak,
+    routines: [],
+    activeSession: {
+      ...session,
+      exercises: [
+        session.exercises[0],
+        {
+          id: 'ex-2',
+          exerciseId: 'dumbbell-bench-press',
+          exerciseName: '덤벨 벤치프레스',
+          sets: [{ id: 'd1', weightKg: 20, reps: 10, completed: true }],
+        },
+      ],
+      currentExerciseId: 'ex-2',
+    },
+    today: TODAY,
+  });
+
+  check('the session total counts every exercise', twoExercises.today.activeSession?.completedSets, 2);
+  check(
+    'the number next to the exercise name is that exercise only',
+    twoExercises.today.activeSession?.currentExerciseCompletedSets,
+    1
+  );
+  check(
+    'the free PT never credits the current exercise with the session total',
+    buildStatusLine(twoExercises),
+    '지금 덤벨 벤치프레스 1세트 하셨습니다. 오늘 전체 2세트입니다.'
+  );
 
   const finished = buildPtContext({
     profile,
