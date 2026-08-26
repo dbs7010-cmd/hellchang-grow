@@ -57,6 +57,7 @@
     "verify:core-loop": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-core-loop.ts",
     "verify:pt": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-pt-context.ts",
     "verify:pr-policy": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-pr-policy.ts",
+    "verify:storage": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-storage-recovery.ts",
     "verify:learning": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-danbaek-learning.ts",
     "verify:learning-ux": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-danbaek-presentation.ts",
     "verify:danbaek-ux": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-danbaek-ux.ts",

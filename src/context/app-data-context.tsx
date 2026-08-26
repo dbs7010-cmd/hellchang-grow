@@ -91,6 +91,7 @@ import { buildPtContext, buildPtExerciseBrief, matchExerciseInText, PtContext } 
 import { buildDanbaekLearningProfile, diffLearningProfiles, type LearningGain } from '@/utils/danbaek-learning';
 import type { DanbaekLearningProfile } from '@/types/danbaek-contract';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
+import { resolveOnboardingState } from '@/utils/stored-state';
 import { buildWorkoutSessionResult } from '@/utils/workout-session-result';
 import { createDefaultGrowthState, updateBodyComposition } from '@/utils/growth-state';
 import { buildDanbaekBodyState } from '@/utils/body-state';
@@ -126,6 +127,12 @@ import {
 
 interface AppDataState {
   loading: boolean;
+  /**
+   * 저장된 데이터를 읽지 못한 채 부팅이 끝났는가. loading(아직 읽는 중)과 다르다 —
+   * 여기까지 오면 "모른다"는 뜻이고, 모르는 상태로 온보딩을 다시 시키면 멀쩡한
+   * 프로필을 덮어쓴다. 그래서 진행시키지 않고 다시 시도할 기회를 준다.
+   */
+  bootstrapFailed: boolean;
   onboardingComplete: boolean;
   profile: UserProfile | null;
   bodyHistory: BodyHistoryEntry[];
@@ -277,6 +284,8 @@ interface AppDataContextValue extends AppDataState {
   saveRoutine: (input: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateRoutine: (routineId: string, input: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   removeRoutine: (routineId: string) => Promise<void>;
+  /** 부팅 실패 화면의 [다시 시도]. 저장된 값을 처음부터 다시 읽는다. */
+  reloadAppData: () => void;
   /** PT에게 넘길 압축 컨텍스트. 화면과 서비스가 같은 값을 본다. */
   ptContext: PtContext;
   /**
@@ -316,6 +325,7 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 
 const initialState: AppDataState = {
   loading: true,
+  bootstrapFailed: false,
   onboardingComplete: false,
   profile: null,
   bodyHistory: [],
@@ -375,10 +385,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [mutateActiveSession]
   );
 
+  const [reloadToken, setReloadToken] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
+      try {
       const [
         onboardingComplete,
         profile,
@@ -411,13 +424,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       if (cancelled) return;
 
-      // 기존 사용자 보호: 온보딩이 새로 생기기 전에 이미 프로필을 만든 사용자가 첫 화면에
-      // 다시 갇히지 않도록, 핵심 데이터(체중)가 있으면 완료로 간주하고 플래그를 채워준다.
-      // 기존 데이터는 건드리지 않는다 — 플래그만 보강한다.
-      let resolvedOnboardingComplete = onboardingComplete;
-      if (!onboardingComplete && profile && profile.weightKg > 0) {
-        resolvedOnboardingComplete = true;
-        await setOnboardingCompleteRepo(true);
+      // 기존 사용자 보호와 그 반대 방향(플래그는 있는데 프로필이 없는 경우)을 모두
+      // resolveOnboardingState가 판정한다 — 순수 함수라 검증할 수 있다
+      // (scripts/verify-storage-recovery.ts). 다른 키(운동 기록/성장)는 건드리지 않는다.
+      const { onboardingComplete: resolvedOnboardingComplete, shouldPersistFlag } =
+        resolveOnboardingState(onboardingComplete, profile);
+      if (shouldPersistFlag) {
+        // 플래그 보강은 편의 기능이다. 저장에 실패해도 이번 실행은 그대로 진행하고,
+        // 다음 실행에서 같은 조건으로 다시 시도한다 — 부팅을 막을 이유가 없다.
+        try {
+          await setOnboardingCompleteRepo(true);
+        } catch {
+          // 무시한다.
+        }
       }
 
       // 세션이 'active'로 저장된 채 오래 방치됐다면(백그라운드/강제종료) 마지막으로 확인된
@@ -442,6 +461,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       setState({
         loading: false,
+        bootstrapFailed: false,
         onboardingComplete: resolvedOnboardingComplete,
         profile,
         bodyHistory,
@@ -456,11 +476,26 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         pass,
         growth,
       });
+      } catch {
+        // 여기까지 오면 안 되지만, 온다면 **빈 화면에 갇히는 것만은 막는다.**
+        // loading이 true로 남으면 RootNavigator가 계속 null을 그려서 사용자는 영원히
+        // 검은 화면을 본다 — 재설치 외에는 빠져나올 방법이 없다.
+        //
+        // 대신 온보딩으로 떨어뜨리지도 않는다. 읽지 못한 것과 없는 것은 다르고,
+        // 온보딩을 다시 완료시키면 멀쩡히 남아 있던 프로필을 덮어쓴다.
+        if (!cancelled) setState((prev) => ({ ...prev, loading: false, bootstrapFailed: true }));
+      }
     })();
 
     return () => {
       cancelled = true;
     };
+  }, [reloadToken]);
+
+  /** 부팅 실패 화면의 [다시 시도]. 저장된 값을 처음부터 다시 읽게 만든다. */
+  const reloadAppData = useCallback(() => {
+    setState((prev) => ({ ...prev, loading: true, bootstrapFailed: false }));
+    setReloadToken((token) => token + 1);
   }, []);
 
   // 앱이 백그라운드로 전환되는 순간 활성 세션을 즉시 일시정지해, 방치된 시간이 운동 시간에
@@ -798,7 +833,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     };
 
     const completion = await runSessionCompletion(initialReceipt, {
-      loadReceipt: getPendingSessionCompletion,
+      loadReceipt: () => getPendingSessionCompletion(initialReceipt.sessionId),
       saveReceipt: savePendingSessionCompletion,
       clearReceipt: clearPendingSessionCompletion,
       applyGrowth: async (snapshot) => {
@@ -1093,7 +1128,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const resetAllData = useCallback(async () => {
     await clearAllKeys(Object.values(StorageKeys));
-    setState({ ...initialState, loading: false });
+    setState({ ...initialState, loading: false, bootstrapFailed: false });
   }, []);
 
   const today = todayDateString();
@@ -1155,6 +1190,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     saveRoutine,
     updateRoutine,
     removeRoutine,
+    reloadAppData,
     ptContext,
     danbaekLearning,
     aiConnected: aiTrainerService.isAiConnected,

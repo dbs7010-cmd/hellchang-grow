@@ -185,8 +185,12 @@ const firstWeightPr: PrEvent = {
 
   const repository = readFileSync('src/data/session-completion-repository.ts', 'utf8');
   expect(
-    'G. 읽기 경계가 실제로 정규화를 거친다',
-    repository.includes('normalizeStoredCompletionReceipt(stored)')
+    'G. 읽기 경계가 실제로 정규화를 거친다 (믿을 수 있는 receipt에 적용)',
+    repository.includes('normalizeStoredCompletionReceipt(stored.receipt)')
+  );
+  expect(
+    'G. 정규화가 저장소 방어 판정(classify) 뒤에 온다 — 순서가 뒤바뀌면 깨진 값을 정규화하게 된다',
+    repository.indexOf('classifyStoredReceiptRaw') < repository.indexOf('normalizeStoredCompletionReceipt(stored.receipt)')
   );
 }
 
