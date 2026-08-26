@@ -1057,8 +1057,8 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
     revealPhase === 'pump'
       ? '운동 직후 펌핑'
       : revealPhase === 'before'
-        ? '운동 전 단백이'
-        : (growthHighlight ?? '지금 단백이 실제 몸');
+        ? '운동 전 내 몸'
+        : (growthHighlight ?? '지금 내 실제 몸');
 
   /** 펌핑과 영구 성장의 관계를 한 줄로 짚어 준다 (보조 계층 문구). */
   const revealCaption =
@@ -1174,7 +1174,7 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
             </ThemedView>
             {/* 진행도 숫자가 무엇을 향한 것인지 한 줄로 알려 준다. */}
             <ThemedText type="caption" themeColor="textSecondary">
-              100%가 되면 Stage가 올라 단백이 몸이 실제로 커져요.
+              100%가 되면 Stage가 올라 내 몸이 실제로 커져요.
             </ThemedText>
           </Section>
         )}
