@@ -88,6 +88,8 @@ import { createId } from '@/utils/id';
 import { addXp, computePassLevelProgress } from '@/utils/pass';
 import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/character-appearance';
 import { buildPtContext, buildPtExerciseBrief, matchExerciseInText, PtContext } from '@/utils/pt-context';
+import { buildDanbaekLearningProfile, diffLearningProfiles, type LearningGain } from '@/utils/danbaek-learning';
+import type { DanbaekLearningProfile } from '@/types/danbaek-contract';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { buildWorkoutSessionResult } from '@/utils/workout-session-result';
 import { createDefaultGrowthState, updateBodyComposition } from '@/utils/growth-state';
@@ -176,6 +178,13 @@ export interface EndSessionSummary {
    * 결과 화면/성장 연출이 이 값만 그대로 쓰면 된다.
    */
   bodyParametersWithPump: DanbaekBodyParameters;
+  /**
+   * 이번 운동으로 단백이가 무엇을 배웠는가 (rebuild 학습 계약).
+   *
+   * GrowthEngine 결과(`growth`)와 **별개의 축**이다 — 성장 계산은 그대로 두고, 같은 운동
+   * 기록을 학습의 눈으로 한 번 더 읽은 것뿐이다. 배운 것이 없으면 빈 배열이다.
+   */
+  learning: LearningGain[];
 }
 
 interface AppDataContextValue extends AppDataState {
@@ -270,6 +279,14 @@ interface AppDataContextValue extends AppDataState {
   removeRoutine: (routineId: string) => Promise<void>;
   /** PT에게 넘길 압축 컨텍스트. 화면과 서비스가 같은 값을 본다. */
   ptContext: PtContext;
+  /**
+   * 저장된 운동 기록에서 읽어낸 단백이의 학습 상태 (읽기 전용 스냅샷).
+   *
+   * 화면들이 각자 다시 계산하면 같은 순간에 서로 다른 학습을 말할 수 있다 — HOME과 PT가
+   * 같은 값을 보게 여기서 한 번만 만든다. **성장(Growth/HELL PASS)과 별개 축이고**,
+   * 이 값이 기록이나 성장 계산을 바꾸는 경로는 없다 (기록을 읽기만 한다).
+   */
+  danbaekLearning: DanbaekLearningProfile;
   /** 실제 AI 백엔드가 연결돼 있는지. false면 화면이 "AI 연결 전"임을 알린다. */
   aiConnected: boolean;
   /**
@@ -714,6 +731,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       })
     );
 
+    // 학습 비교용 스냅샷 — 이 세션이 저장되기 **전**의 기록이다.
+    const recordsBeforeSession = state.workoutRecords;
+
     const prs = detectPRs(completed, state.workoutRecords);
 
     /**
@@ -864,6 +884,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       throw new Error('Session completion receipt is missing its final result snapshot.');
     }
 
+    // 저장이 끝난 뒤의 기록으로 다시 읽는다. 학습은 기록에서만 나오므로, 기록이 남지
+    // 않았다면 배운 것도 없다.
+    const learning = diffLearningProfiles(
+      buildDanbaekLearningProfile({ records: recordsBeforeSession, generatedAt: nowIso }),
+      buildDanbaekLearningProfile({ records: await getWorkoutRecords(), generatedAt: nowIso })
+    );
+
     return {
       durationMinutes: snapshot.durationMinutes,
       category: snapshot.category,
@@ -881,6 +908,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       bodyParametersBefore: snapshot.bodyParametersBefore,
       bodyParametersAfter: snapshot.bodyParametersAfter,
       bodyParametersWithPump: snapshot.bodyParametersWithPump,
+      learning,
     };
   }, [state.workoutRecords, state.routines, state.pass, state.bodyHistory, state.profile, state.growth]);
 
@@ -951,6 +979,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
    * PT에게 넘기는 컨텍스트. 실제 저장된 기록만 들어가고, 없는 값은 null이다.
    * 화면(무료 브리핑)과 AI 요청이 같은 값을 보기 때문에 둘이 서로 다른 숫자를 말할 수 없다.
    */
+  /**
+   * 단백이의 학습 스냅샷. 기록이 바뀔 때만 다시 만든다 — 저장된 기록이 유일한 근거이므로
+   * 다른 상태(성장/PASS/세션)가 바뀌었다고 학습이 달라지지 않는다.
+   */
+  const danbaekLearning = useMemo(
+    () =>
+      buildDanbaekLearningProfile({
+        records: state.workoutRecords,
+        generatedAt: new Date().toISOString(),
+      }),
+    [state.workoutRecords]
+  );
+
   const ptContext = useMemo(
     () =>
       buildPtContext({
@@ -1113,6 +1154,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     updateRoutine,
     removeRoutine,
     ptContext,
+    danbaekLearning,
     aiConnected: aiTrainerService.isAiConnected,
     sendPtMessage,
     subscribeMock,
