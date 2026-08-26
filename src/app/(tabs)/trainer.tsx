@@ -125,7 +125,7 @@ export default function TrainerScreen() {
       </ChipRow>
 
       <PrimaryButton
-        label={sessionInProgress ? '운동으로 돌아가기' : '이대로 운동 시작'}
+        label={sessionInProgress ? '운동 계속하기' : '이대로 운동 시작'}
         subLabel={sessionInProgress ? '진행 중인 세션이 있어요' : '운동 선택 화면으로 이동'}
         variant="secondary"
         onPress={() => router.push(sessionInProgress ? '/session' : '/workout-start')}

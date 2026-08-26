@@ -221,7 +221,7 @@ export default function SessionScreen() {
    *
    * **뒤로가기는 운동 종료가 아니다.** 여기서는 어떤 저장도 하지 않는다 — 세션은 그대로
    * 남고, 확인 후 나가더라도 기록/XP/streak/Growth는 만들어지지 않는다. 사용자는 홈의
-   * [운동으로 돌아가기]로 같은 세션에 복귀한다. 완료는 오직 [운동 종료] 경로에서만 일어난다.
+   * [운동 계속하기]로 같은 세션에 복귀한다. 완료는 오직 [운동 종료] 경로에서만 일어난다.
    */
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove' as never, ((event: {
@@ -631,7 +631,7 @@ export default function SessionScreen() {
         운동이 아직 진행 중이에요. 세션을 그대로 두고 나갈까요?
       </ThemedText>
       <ThemedText type="caption" themeColor="textSecondary" style={styles.confirmText}>
-        나가도 기록되지 않아요. 홈의 [운동으로 돌아가기]로 이어서 할 수 있어요.
+        나가도 기록되지 않아요. 홈의 [운동 계속하기]로 이어서 할 수 있어요.
       </ThemedText>
       <View style={styles.inlineRow}>
         <PrimaryButton

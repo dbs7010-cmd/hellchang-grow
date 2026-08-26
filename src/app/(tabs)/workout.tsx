@@ -37,7 +37,7 @@ export default function WorkoutHubScreen() {
       <ThemedText type="heading">운동</ThemedText>
 
       <PrimaryButton
-        label={sessionInProgress ? '운동으로 돌아가기' : '운동 시작'}
+        label={sessionInProgress ? '운동 계속하기' : '운동 시작'}
         subLabel={
           sessionInProgress
             ? '진행 중인 세션이 있어요'

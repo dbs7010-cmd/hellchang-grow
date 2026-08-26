@@ -29,40 +29,45 @@ import { useAppData } from '@/context/app-data-context';
 import { getThisWeekRecords } from '@/data/workout-repository';
 import { buildDanbaekVoice } from '@/utils/danbaek-learning-presence';
 import { findPreviousPerformance } from '@/utils/exercise-history';
-import { buildHomeBodyMetrics } from '@/utils/home-presentation';
+import { buildHomeBodyMetrics, buildHomeView } from '@/utils/home-presentation';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import { recommendMuscleGroup } from '@/utils/workout-recommendation';
 import { formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
 
 /**
- * 01 HOME — Warm White, Character Stage, Gold CTA, Stanley bubble, bottom navigation.
- * 412x915 / 390x844 / 360x800 responsive 배치를 함께 고정한다.
+ * 01 HOME — 현실 사용자의 오늘 운동이 맨 위에 오는 화면.
  *
- * **순서가 곧 우선순위다**:
- *   Header → 스탠리 한마디 + 캐릭터 → 단백이 한마디 → [운동 시작] → (단백세상 입구)
- *   → 내 몸 한 줄 → HELL PASS/주간 기록 → 추천 운동
+ * **주인공은 앱을 쓰는 사람이다.** 단백이는 그 사람의 실제 운동에 반응하는 존재이지,
+ * 홈에서 관리해야 하는 대상이 아니다. 그래서 순서가 이렇게 고정된다:
  *
- * 예전에는 진행도 카드가 맨 위, 신체 HUD가 캐릭터 옆 200px 컬럼이라 화면을 열면 숫자판이
- * 먼저 보이고 주인공(캐릭터)이 그보다 작았다. 값과 기능은 하나도 지우지 않고 **층만** 내렸다.
- * 신체 수치는 실제 입력값만 표시하며 없는 값은 '-'로 둔다 (utils/home-presentation.ts).
+ *   오늘 내 운동 상태 → 지금 할 행동(또는 완료 상태) → 오늘 가장 강한 실제 성취
+ *   → 단백이 반응(무대 + 한마디) → 실제 진행도/주간 꾸준함 → 단백세상 → 보조 탐색
+ *
+ * 예전에는 캐릭터 무대가 화면의 40%를 먼저 가져가고 [운동 시작]이 그 아래에 있었다.
+ * 그러면 "오늘 뭘 해야 하는가"보다 아바타가 먼저 읽힌다. 지금은 행동이 먼저고,
+ * 세로가 모자라면 **줄어드는 쪽은 언제나 무대**다.
+ *
+ * 상태와 문구는 여기서 정하지 않는다 — `utils/home-presentation.ts`의 순수 함수 하나가
+ * 정하고(PRE/IN_PROGRESS/POST), 화면은 그 결과를 그리기만 한다. 값도 실제 입력값만
+ * 나오며 없는 값은 '-'다.
  *
  * 360 뷰어 경로는 복구 기준선(f466f00)의 삭제 결정을 그대로 유지한다 — 캐릭터는 언제나
  * 단일 PlayerCharacter로만 그려진다.
  */
 const CharacterSafeInset = 8;
 const TrainerRowHeight = 44;
-const CharacterAreaHeightRatio = 0.36;
+const CharacterAreaHeightRatio = 0.24;
 
 /**
- * 무대(스탠리 한 줄 + 캐릭터)가 가져가는 높이. **화면 높이에서 비율로 정한다.**
+ * 단백이 무대가 가져가는 높이.
  *
- * 예전에는 stage가 유일한 flex:1이라, 아래에 무엇을 하나 더할 때마다 그 손해를 전부
- * 캐릭터가 뒤집어썼다. 이제 무대 몫을 먼저 떼고 나머지가 스크롤된다.
+ * 이 값은 **양보하는 쪽**이다. 오늘의 운동 정보와 행동이 먼저 자리를 잡고, 남는 세로에서
+ * 무대가 존재감을 갖는다 — 반대로 하면 작은 화면에서 행동이 첫 화면 밖으로 밀린다.
  */
-const HeroHeightRatio = 0.4;
-const HeroMinHeight = 220;
-const HeroMaxHeight = 380;
+const HeroHeightRatio = 0.28;
+const HeroMinHeight = 168;
+const HeroMaxHeight = 280;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -79,6 +84,7 @@ export default function HomeScreen() {
     characterAppearance,
     bodyParameters,
     danbaekLearning,
+    ptContext,
   } = useAppData();
 
   const { height: windowHeight } = useWindowDimensions();
@@ -114,6 +120,16 @@ export default function HomeScreen() {
   const scheduledRoutine = useMemo(
     () => getTodaysScheduledRoutine(routines, new Date().getDay()),
     [routines]
+  );
+
+  /*
+   * 오늘 내 운동이 어디까지 왔는가 — 이 화면의 첫 질문이자, 아래 모든 순서를 정하는 값.
+   * 판단도 문구도 여기서 만들지 않는다: 이미 계산돼 있는 PtContext를 순수 함수 하나에
+   * 넘기고 결과를 그리기만 한다. 새로 저장하는 것도, 시계를 보는 것도 없다.
+   */
+  const home = useMemo(
+    () => buildHomeView({ ptContext, scheduledRoutineName: scheduledRoutine?.name ?? null }),
+    [ptContext, scheduledRoutine]
   );
 
   const greeting = useMemo(
@@ -195,6 +211,69 @@ export default function HomeScreen() {
         style={styles.content}
         contentContainerStyle={[styles.contentInner, { paddingBottom: BottomTabInset + Spacing.two }]}
         showsVerticalScrollIndicator={false}>
+        {/*
+          오늘 내 운동. 화면을 열면 이것이 먼저 읽혀야 한다 — 아바타가 아니라.
+          지금 할 행동이거나(운동 시작 / 운동 계속하기), 이미 끝냈다면 **행동이 아니라 상태**다.
+        */}
+        <View style={styles.todayBlock}>
+          <ThemedText type="captionBold" style={styles.todayLabel}>
+            {home.todayLabel}
+          </ThemedText>
+
+          {home.primary.kind === 'action' ? (
+            <PrimaryButton
+              label={home.primary.label}
+              subLabel={home.primary.note ?? undefined}
+              variant="homeGold"
+              size="large"
+              onPress={handleStartPress}
+            />
+          ) : (
+            /*
+              오늘 운동을 끝낸 사람에게 같은 자리에 골드 CTA를 다시 세우면 "한 번 더 해라"가
+              된다. 완료는 눌러야 하는 것이 아니라 이미 이룬 것이라 카드로 남긴다.
+            */
+            <View style={styles.completionCard}>
+              <ThemedText type="subtitle" style={styles.completionTitle}>
+                ✓ {home.primary.label}
+              </ThemedText>
+              {home.primary.note && (
+                <ThemedText type="caption" style={styles.completionNote}>
+                  {home.primary.note}
+                </ThemedText>
+              )}
+            </View>
+          )}
+
+          {home.secondary && (
+            <PrimaryButton
+              label={home.secondary.label}
+              variant="secondary"
+              onPress={() => router.push(home.secondary!.route)}
+            />
+          )}
+        </View>
+
+        {/*
+          오늘 기준으로 가장 강한 실제 성취 하나. 새 PR 정의도 새 보상도 만들지 않고,
+          이미 저장된 기록에서 고르기만 한다. 고를 것이 없으면 카드 자체가 없다.
+        */}
+        {home.performance && (
+          <View style={styles.performanceCard}>
+            <ThemedText type="caption" numberOfLines={1} style={styles.performanceTitle}>
+              {home.performance.title}
+            </ThemedText>
+            <ThemedText type="metric" numberOfLines={1} style={styles.performanceValue}>
+              {home.performance.value}
+            </ThemedText>
+            {home.performance.note && (
+              <ThemedText type="caption" numberOfLines={1} style={styles.performanceNote}>
+                {home.performance.note}
+              </ThemedText>
+            )}
+          </View>
+        )}
+
         <View style={[styles.stage, { height: heroHeight }]}>
           <View style={styles.trainerRow}>
             <GoldsunBubble
@@ -228,6 +307,9 @@ export default function HomeScreen() {
           단백이가 말하는 자리. 스탠리는 무대 **위**, 단백이는 무대 **아래**에서 말한다 —
           둘이 같은 띠에서 동시에 말하면 누가 말하는지가 화면에서 사라진다.
           한마디(단백이 목소리) + 상태 한 줄(정확한 학습 단계) 두 층으로만 말한다.
+
+          이 반응은 위의 실제 성취에 **딸린 것**이다. 얘가 먼저 말하고 내 운동이 그 아래
+          있으면, 홈이 캐릭터 관리 화면처럼 읽힌다.
         */}
         <DanbaekVoiceBubble
           line={danbaekVoice.line}
@@ -236,23 +318,33 @@ export default function HomeScreen() {
           onPress={() => router.push('/(tabs)/workout')}
         />
 
-        <PrimaryButton
-          label={sessionInProgress ? '운동으로 돌아가기' : '운동 시작'}
-          subLabel={
-            sessionInProgress
-              ? '진행 중인 세션이 있어요'
-              : scheduledRoutine
-                ? '오늘 · ' + scheduledRoutine.name
-                : '바로 시작할 수 있어요'
-          }
-          variant="homeGold"
-          size="large"
-          onPress={handleStartPress}
-        />
+        {/*
+          내 몸 상태 + 진행도. 실제 입력값만 나오고 없는 값은 '-'다.
+        */}
+        <View style={styles.bodyStrip}>
+          {bodyMetrics.map((metric) => (
+            <HomeStat key={metric.label} label={metric.label} value={metric.value} />
+          ))}
+        </View>
+
+        <View style={styles.progressBlock}>
+          <GrowthHud
+            passLevel={passProgress.level}
+            passXpIntoLevel={passProgress.xpIntoLevel}
+            passXpForLevel={passProgress.xpForLevel}
+            passProgress={passProgress.progress}
+            onPress={() => router.push('/pass')}
+          />
+          <View style={styles.statsRow}>
+            <HomeStat label="이번 주" value={weekRecords.length + '회'} />
+            <HomeStat label="연속" value={'🔥 ' + streak.currentStreakDays + '일'} />
+            <HomeStat label="이번 주 볼륨" value={weeklyVolumeKg > 0 ? formatVolumeKg(weeklyVolumeKg) : '-'} />
+          </View>
+        </View>
 
         {/*
-          단백세상 입구. **CTA가 아니라 CTA 아래 한 줄**이다 — [운동 시작]과 나란히 두면
-          지금 뭘 해야 하는가가 두 개가 된다. seam이 닫혀 있으면 아무것도 그리지 않는다.
+          단백세상 입구. **CTA가 아니라 한 줄**이다 — 오늘 할 운동과 무게를 겨루지 않는다.
+          seam이 닫혀 있으면 아무것도 그리지 않는다.
         */}
         {worldEntry && (
           <Pressable
@@ -271,37 +363,10 @@ export default function HomeScreen() {
         )}
 
         {/*
-          내 몸 상태. 예전에는 캐릭터 옆 200px 컬럼이라 화면의 주인공(캐릭터)보다 커 보였다 —
-          같은 값을 지우지 않고 한 줄로 눕혀서, 캐릭터가 무대를 되찾고 숫자는 필요할 때
-          읽히는 자리로 내려왔다. 실제 입력값만 나오고 없는 값은 '-'다.
+          보조 탐색. 오늘 이미 운동했더라도 그대로 둔다 — 여기가 홈에서 **한 번 더 하러 가는
+          기존 경로**이고, 그 길을 막지 않는다. 진행 중일 때만 숨긴다(지금 할 일은 하나다).
         */}
-        <View style={styles.bodyStrip}>
-          {bodyMetrics.map((metric) => (
-            <HomeStat key={metric.label} label={metric.label} value={metric.value} />
-          ))}
-        </View>
-
-        {/*
-          진행도(HELL PASS / 주간 기록)는 **마지막 층**이다. 화면을 열자마자 숫자판이 먼저
-          보이면 이 앱이 대시보드처럼 읽힌다 — 먼저 보여야 하는 것은 단백이와 오늘 할 운동이다.
-          값과 기능은 그대로 두고 순서만 내렸다.
-        */}
-        <View style={styles.progressBlock}>
-          <GrowthHud
-            passLevel={passProgress.level}
-            passXpIntoLevel={passProgress.xpIntoLevel}
-            passXpForLevel={passProgress.xpForLevel}
-            passProgress={passProgress.progress}
-            onPress={() => router.push('/pass')}
-          />
-          <View style={styles.statsRow}>
-            <HomeStat label="이번 주" value={weekRecords.length + '회'} />
-            <HomeStat label="연속" value={'🔥 ' + streak.currentStreakDays + '일'} />
-            <HomeStat label="이번 주 볼륨" value={weeklyVolumeKg > 0 ? formatVolumeKg(weeklyVolumeKg) : '-'} />
-          </View>
-        </View>
-
-        {!sessionInProgress && (
+        {home.state !== 'IN_PROGRESS' && (
           <RecommendedStrip
             items={recommendedItems}
             onPressItem={handleRecommendedPress}
@@ -373,6 +438,50 @@ const styles = StyleSheet.create({
   contentInner: {
     paddingHorizontal: Layout.screenPaddingX,
     gap: Spacing.two,
+  },
+  /** 오늘의 운동 블록 — 머리말 + 행동(또는 완료 상태) + 보조 행동이 한 덩어리로 읽힌다. */
+  todayBlock: {
+    gap: Spacing.two,
+  },
+  todayLabel: {
+    color: HomeColors.textSecondary,
+  },
+  /** 완료는 눌리는 것이 아니라 이룬 것이다 — 버튼 높이를 흉내 내지 않는다. */
+  completionCard: {
+    borderWidth: 1,
+    borderColor: HomeColors.questBorder,
+    borderRadius: Radius.large,
+    backgroundColor: HomeColors.surfaceGold,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two + Spacing.half,
+    gap: Spacing.half,
+  },
+  completionTitle: {
+    color: HomeColors.goldStrong,
+  },
+  completionNote: {
+    color: HomeColors.textSecondary,
+  },
+  /** 오늘 가장 강한 실제 성취 하나. 진행도 카드와 다른 무게로 둔다. */
+  performanceCard: {
+    borderWidth: 1,
+    borderColor: HomeColors.border,
+    borderRadius: Radius.large,
+    backgroundColor: HomeColors.surface,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    gap: Spacing.half,
+    boxShadow: HomeColors.hudShadow,
+  },
+  performanceTitle: {
+    color: HomeColors.textSecondary,
+  },
+  performanceValue: {
+    color: HomeColors.text,
+    fontVariant: ['tabular-nums'],
+  },
+  performanceNote: {
+    color: HomeColors.textSecondary,
   },
   stage: {
     marginBottom: -Spacing.one,
