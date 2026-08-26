@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "hellchang-grow",
+    "name": "헬창키우기",
     "slug": "hellchang-grow",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,9 +8,13 @@
     "scheme": "hellchanggrow",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.helchanggrow.app",
+      "buildNumber": "1",
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.helchanggrow.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -36,13 +40,22 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "몸 형태를 참고할 사진을 고를 때 사진 라이브러리에 접근해요."
+          "photosPermission": "몸 형태를 참고할 사진을 고를 때 사진 라이브러리에 접근해요.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "97f8c096-44c5-4cda-b389-958e26542e8f"
+      }
+    },
+    "owner": "usunge"
   }
 }
