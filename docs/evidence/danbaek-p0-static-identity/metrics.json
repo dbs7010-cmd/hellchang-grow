@@ -1,0 +1,1246 @@
+{
+  "generatedFor": "DANBAEK VALUE TRAIN 1 / P0 - PRODUCTION STATIC IDENTITY",
+  "base": "integration/rebuild-app-after-recovery @ 18f2ca1d88fa2767be7ff9b93e9fc40dc232dec4",
+  "canonFrame": {
+    "width": 200,
+    "height": 280,
+    "supersample": 4,
+    "unit": "CANON units (viewBox 0 0 200 280)"
+  },
+  "reference": {
+    "file": "assets/characters/danbaek/canon/reference_v3/levels/danbaek-lv01.png",
+    "naturalSize": {
+      "w": 320,
+      "h": 512
+    },
+    "alphaBBox": {
+      "x0": 93,
+      "y0": 71,
+      "x1": 225,
+      "y1": 452,
+      "width": 133,
+      "height": 382
+    },
+    "padding": {
+      "left": 93,
+      "right": 94,
+      "top": 71,
+      "bottom": 59
+    },
+    "head": {
+      "top": 71,
+      "widestY": 96,
+      "neckY": 132,
+      "headWidth": 60,
+      "headHeight": 62,
+      "neckWidth": 26,
+      "headCenterX": 159.5
+    },
+    "headToFigure": {
+      "headWidthOverFigureWidth": 0.451,
+      "headHeightOverFigureHeight": 0.162,
+      "headsTall": 6.16
+    }
+  },
+  "renderer": {
+    "source": "src/config/character-body-config.ts + src/utils/character-body-geometry.ts (all BodyParameters = 0)",
+    "alphaBBoxCanon": {
+      "x0": 67.25,
+      "y0": 36.5,
+      "x1": 132.5,
+      "y1": 221,
+      "width": 65.5,
+      "height": 184.75
+    },
+    "frameFill": {
+      "usedHeightRatio": 0.66,
+      "emptyBottomCanon": 58.75,
+      "emptyTopCanon": 36.5
+    },
+    "head": {
+      "top": 36.5,
+      "widestY": 54,
+      "neckY": 75,
+      "headWidth": 43,
+      "headHeight": 38.75,
+      "neckWidth": 25.5,
+      "headCenterX": 99.88
+    },
+    "headToFigure": {
+      "headWidthOverFigureWidth": 0.656,
+      "headHeightOverFigureHeight": 0.21,
+      "headsTall": 4.77
+    }
+  },
+  "layeredStage0Master": {
+    "file": "assets/characters/danbaek/canon/layered/danbaek_stage0_layered_master.svg",
+    "alphaBBoxCanon": {
+      "x0": 67.25,
+      "y0": 36.5,
+      "x1": 132.5,
+      "y1": 220.5,
+      "width": 65.5,
+      "height": 184.25
+    },
+    "vsRenderer": {
+      "iou": 0.994,
+      "aOnlyPx": 476,
+      "bOnlyPx": 308
+    }
+  },
+  "normalization": {
+    "rule": "uniform scale + translation only (no stretch, no per-axis scale)",
+    "headAnchored": {
+      "scale": 2.8666666666666667,
+      "translateX": -14.433333333333337,
+      "translateY": -14.383333333333333
+    },
+    "figureAnchored": {
+      "scale": 1.9345549738219896,
+      "translateX": 22.97643979057591,
+      "translateY": 2.1616492146596826
+    },
+    "referenceAfterHeadAnchor": {
+      "alphaBBoxCanon": {
+        "x0": 52.5,
+        "y0": 36.25,
+        "x1": 147,
+        "y1": 279.75,
+        "width": 94.75,
+        "height": 243.75
+      },
+      "head": {
+        "top": 36.25,
+        "widestY": 54.25,
+        "neckY": 80.75,
+        "headWidth": 43.5,
+        "headHeight": 44.75,
+        "headCenterX": 100.13
+      }
+    },
+    "referenceAfterFigureAnchor": {
+      "head": {
+        "headWidth": 29.25,
+        "headHeight": 30.25,
+        "neckY": 66.25
+      }
+    }
+  },
+  "agreement": {
+    "wholeFigure_headAnchored": {
+      "iou": 0.5701,
+      "aOnlyPx": 11610,
+      "bOnlyPx": 77810
+    },
+    "head_headAnchored": {
+      "iou": 0.9495,
+      "aOnlyPx": 26,
+      "bOnlyPx": 1159
+    },
+    "body_headAnchored": {
+      "iou": 0.5219,
+      "aOnlyPx": 11584,
+      "bOnlyPx": 76651
+    },
+    "wholeFigure_figureAnchored": {
+      "iou": 0.6036,
+      "aOnlyPx": 44206,
+      "bOnlyPx": 12273
+    }
+  },
+  "rendererWithoutStage0Squash": {
+    "what": "identical production paths with stage0BodyProportion.scaleY forced to 1 - read-only what-if, nothing was changed",
+    "alphaBBoxCanon": {
+      "x0": 67.25,
+      "y0": 36.5,
+      "x1": 132.5,
+      "y1": 256.75,
+      "width": 65.5,
+      "height": 220.5
+    },
+    "headsTall": 5.76,
+    "vsReferenceHeadAnchored": {
+      "iou": 0.5984,
+      "aOnlyPx": 24589,
+      "bOnlyPx": 64153
+    }
+  },
+  "rowRuns": {
+    "head-widest": {
+      "y": 57,
+      "renderer": [
+        [
+          78.5,
+          121.25
+        ]
+      ],
+      "referenceHeadAnchored": [
+        [
+          78.5,
+          121.75
+        ]
+      ]
+    },
+    "neck-seam": {
+      "y": 78,
+      "renderer": [
+        [
+          80.75,
+          119
+        ]
+      ],
+      "referenceHeadAnchored": [
+        [
+          86.5,
+          113.75
+        ]
+      ]
+    },
+    "arm-root": {
+      "y": 86,
+      "renderer": [
+        [
+          75.75,
+          124.25
+        ]
+      ],
+      "referenceHeadAnchored": [
+        [
+          90.5,
+          109.5
+        ]
+      ]
+    },
+    "chest": {
+      "y": 100,
+      "renderer": [
+        [
+          69.5,
+          130.25
+        ]
+      ],
+      "referenceHeadAnchored": [
+        [
+          72.75,
+          127.5
+        ]
+      ]
+    },
+    "mid-torso": {
+      "y": 116,
+      "renderer": [
+        [
+          68.25,
+          131.5
+        ]
+      ],
+      "referenceHeadAnchored": [
+        [
+          69.25,
+          131
+        ]
+      ]
+    },
+    "back-low": {
+      "y": 140,
+      "renderer": [
+        [
+          67.25,
+          132.5
+        ]
+      ],
+      "referenceHeadAnchored": [
+        [
+          63.25,
+          78
+        ],
+        [
+          80.5,
+          119
+        ],
+        [
+          122,
+          136.25
+        ]
+      ]
+    },
+    "waist": {
+      "y": 155,
+      "renderer": [
+        [
+          84,
+          115.75
+        ]
+      ],
+      "referenceHeadAnchored": [
+        [
+          59.75,
+          75.25
+        ],
+        [
+          79.75,
+          119.75
+        ],
+        [
+          124.25,
+          140.5
+        ]
+      ]
+    },
+    "pelvis-seam": {
+      "y": 168,
+      "renderer": [
+        [
+          82.5,
+          117.25
+        ]
+      ],
+      "referenceHeadAnchored": [
+        [
+          57.75,
+          70.25
+        ],
+        [
+          78.25,
+          121.75
+        ],
+        [
+          130,
+          142.5
+        ]
+      ]
+    },
+    "upper-thigh": {
+      "y": 180,
+      "renderer": [
+        [
+          82.75,
+          117
+        ]
+      ],
+      "referenceHeadAnchored": [
+        [
+          54,
+          69.5
+        ],
+        [
+          75.5,
+          124
+        ],
+        [
+          130,
+          146.25
+        ]
+      ]
+    },
+    "mid-thigh": {
+      "y": 195,
+      "renderer": [
+        [
+          83.5,
+          99.25
+        ],
+        [
+          100.5,
+          116.25
+        ]
+      ],
+      "referenceHeadAnchored": [
+        [
+          74,
+          98.75
+        ],
+        [
+          101,
+          125.5
+        ]
+      ]
+    },
+    "knee": {
+      "y": 214,
+      "renderer": [
+        [
+          83.25,
+          99.5
+        ],
+        [
+          100.25,
+          116.5
+        ]
+      ],
+      "referenceHeadAnchored": [
+        [
+          72.75,
+          95.25
+        ],
+        [
+          104.25,
+          126.75
+        ]
+      ]
+    },
+    "calf": {
+      "y": 235,
+      "renderer": [],
+      "referenceHeadAnchored": [
+        [
+          70.5,
+          89.25
+        ],
+        [
+          110,
+          129
+        ]
+      ]
+    },
+    "ankle": {
+      "y": 252,
+      "renderer": [],
+      "referenceHeadAnchored": [
+        [
+          68.5,
+          89.5
+        ],
+        [
+          110,
+          131.75
+        ]
+      ]
+    }
+  },
+  "landmarkRows": {
+    "head-widest": {
+      "y": 57,
+      "renderer": {
+        "left": 78.5,
+        "right": 121.25,
+        "width": 43,
+        "center": 99.88
+      },
+      "referenceHeadAnchored": {
+        "left": 78.5,
+        "right": 121.75,
+        "width": 43.5,
+        "center": 100.13
+      },
+      "referenceFigureAnchored": {
+        "left": 86,
+        "right": 114.25,
+        "width": 28.5,
+        "center": 100.13
+      },
+      "widthDeltaHeadAnchored": 0.5
+    },
+    "neck-seam": {
+      "y": 78,
+      "renderer": {
+        "left": 80.75,
+        "right": 119,
+        "width": 38.5,
+        "center": 99.88
+      },
+      "referenceHeadAnchored": {
+        "left": 86.5,
+        "right": 113.75,
+        "width": 27.5,
+        "center": 100.13
+      },
+      "referenceFigureAnchored": {
+        "left": 82.25,
+        "right": 118.75,
+        "width": 36.75,
+        "center": 100.5
+      },
+      "widthDeltaHeadAnchored": -11
+    },
+    "arm-root": {
+      "y": 86,
+      "renderer": {
+        "left": 75.75,
+        "right": 124.25,
+        "width": 48.75,
+        "center": 100
+      },
+      "referenceHeadAnchored": {
+        "left": 90.5,
+        "right": 109.5,
+        "width": 19.25,
+        "center": 100
+      },
+      "referenceFigureAnchored": {
+        "left": 80.25,
+        "right": 120.25,
+        "width": 40.25,
+        "center": 100.25
+      },
+      "widthDeltaHeadAnchored": -29.5
+    },
+    "chest": {
+      "y": 100,
+      "renderer": {
+        "left": 69.5,
+        "right": 130.25,
+        "width": 61,
+        "center": 99.88
+      },
+      "referenceHeadAnchored": {
+        "left": 72.75,
+        "right": 127.5,
+        "width": 55,
+        "center": 100.13
+      },
+      "referenceFigureAnchored": {
+        "left": 77.5,
+        "right": 122.75,
+        "width": 45.5,
+        "center": 100.13
+      },
+      "widthDeltaHeadAnchored": -6
+    },
+    "mid-torso": {
+      "y": 116,
+      "renderer": {
+        "left": 68.25,
+        "right": 131.5,
+        "width": 63.5,
+        "center": 99.88
+      },
+      "referenceHeadAnchored": {
+        "left": 69.25,
+        "right": 131,
+        "width": 62,
+        "center": 100.13
+      },
+      "referenceFigureAnchored": {
+        "left": 73,
+        "right": 127.5,
+        "width": 54.75,
+        "center": 100.25
+      },
+      "widthDeltaHeadAnchored": -1.5
+    },
+    "back-low": {
+      "y": 140,
+      "renderer": {
+        "left": 67.25,
+        "right": 132.5,
+        "width": 65.5,
+        "center": 99.88
+      },
+      "referenceHeadAnchored": {
+        "left": 63.25,
+        "right": 136.25,
+        "width": 73.25,
+        "center": 99.75
+      },
+      "referenceFigureAnchored": {
+        "left": 69.5,
+        "right": 130.5,
+        "width": 61.25,
+        "center": 100
+      },
+      "widthDeltaHeadAnchored": 7.75
+    },
+    "waist": {
+      "y": 155,
+      "renderer": {
+        "left": 84,
+        "right": 115.75,
+        "width": 32,
+        "center": 99.88
+      },
+      "referenceHeadAnchored": {
+        "left": 59.75,
+        "right": 140.5,
+        "width": 81,
+        "center": 100.13
+      },
+      "referenceFigureAnchored": {
+        "left": 81.75,
+        "right": 118.25,
+        "width": 36.75,
+        "center": 100
+      },
+      "widthDeltaHeadAnchored": 49
+    },
+    "pelvis-seam": {
+      "y": 168,
+      "renderer": {
+        "left": 82.5,
+        "right": 117.25,
+        "width": 35,
+        "center": 99.88
+      },
+      "referenceHeadAnchored": {
+        "left": 57.75,
+        "right": 142.5,
+        "width": 85,
+        "center": 100.13
+      },
+      "referenceFigureAnchored": {
+        "left": 81.25,
+        "right": 118.75,
+        "width": 37.75,
+        "center": 100
+      },
+      "widthDeltaHeadAnchored": 50
+    },
+    "upper-thigh": {
+      "y": 180,
+      "renderer": {
+        "left": 82.75,
+        "right": 117,
+        "width": 34.5,
+        "center": 99.88
+      },
+      "referenceHeadAnchored": {
+        "left": 54,
+        "right": 146.25,
+        "width": 92.5,
+        "center": 100.13
+      },
+      "referenceFigureAnchored": {
+        "left": 78.75,
+        "right": 121.5,
+        "width": 43,
+        "center": 100.13
+      },
+      "widthDeltaHeadAnchored": 58
+    },
+    "mid-thigh": {
+      "y": 195,
+      "renderer": {
+        "left": 83.5,
+        "right": 116.25,
+        "width": 33,
+        "center": 99.88
+      },
+      "referenceHeadAnchored": {
+        "left": 74,
+        "right": 125.5,
+        "width": 51.75,
+        "center": 99.75
+      },
+      "referenceFigureAnchored": {
+        "left": 78.75,
+        "right": 121,
+        "width": 42.5,
+        "center": 99.88
+      },
+      "widthDeltaHeadAnchored": 18.75
+    },
+    "knee": {
+      "y": 214,
+      "renderer": {
+        "left": 83.25,
+        "right": 116.5,
+        "width": 33.5,
+        "center": 99.88
+      },
+      "referenceHeadAnchored": {
+        "left": 72.75,
+        "right": 126.75,
+        "width": 54.25,
+        "center": 99.75
+      },
+      "referenceFigureAnchored": {
+        "left": 69.25,
+        "right": 130.75,
+        "width": 61.75,
+        "center": 100
+      },
+      "widthDeltaHeadAnchored": 20.75
+    },
+    "calf": {
+      "y": 235,
+      "renderer": null,
+      "referenceHeadAnchored": {
+        "left": 70.5,
+        "right": 129,
+        "width": 58.75,
+        "center": 99.75
+      },
+      "referenceFigureAnchored": null,
+      "widthDeltaHeadAnchored": null
+    },
+    "ankle": {
+      "y": 252,
+      "renderer": null,
+      "referenceHeadAnchored": {
+        "left": 68.5,
+        "right": 131.75,
+        "width": 63.5,
+        "center": 100.13
+      },
+      "referenceFigureAnchored": null,
+      "widthDeltaHeadAnchored": null
+    }
+  },
+  "widthProfileCanon": {
+    "note": "silhouette width in CANON units, indexed by CANON y (0..279)",
+    "renderer": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      12,
+      18,
+      22,
+      25,
+      28,
+      30,
+      32,
+      34,
+      35.5,
+      37,
+      38,
+      39.25,
+      40.25,
+      41,
+      41.5,
+      42,
+      42.5,
+      43,
+      43,
+      43,
+      43,
+      43,
+      43,
+      43,
+      42.5,
+      42,
+      41.75,
+      41,
+      40.5,
+      39.5,
+      38.75,
+      37.5,
+      36.5,
+      35.5,
+      33.5,
+      32,
+      30.25,
+      28,
+      25.5,
+      31,
+      35.5,
+      38.5,
+      41,
+      43,
+      44.5,
+      45.5,
+      46,
+      46.5,
+      47,
+      48.75,
+      50.5,
+      52,
+      53,
+      54.5,
+      55.25,
+      56,
+      57,
+      57.5,
+      58.5,
+      59,
+      59.5,
+      60,
+      60.5,
+      61,
+      61.5,
+      61.75,
+      62,
+      62.25,
+      62.5,
+      62.75,
+      63,
+      63.25,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.75,
+      64,
+      64,
+      64.5,
+      65,
+      65,
+      65.5,
+      65.5,
+      65.5,
+      65.5,
+      65.5,
+      65,
+      64.5,
+      64,
+      63,
+      62,
+      61,
+      59.5,
+      58,
+      56,
+      53.5,
+      30.5,
+      31,
+      31.5,
+      32,
+      32,
+      32.5,
+      33,
+      33,
+      33.5,
+      34,
+      34,
+      34.5,
+      34.5,
+      34.5,
+      35,
+      35,
+      35,
+      35,
+      35,
+      35.5,
+      35.5,
+      35.5,
+      35,
+      35,
+      35,
+      35,
+      35,
+      34.5,
+      34.5,
+      34,
+      34,
+      33.5,
+      33.5,
+      33,
+      33,
+      33,
+      32.5,
+      32.5,
+      32.5,
+      32.5,
+      33,
+      33,
+      33,
+      33,
+      33,
+      33.5,
+      33.5,
+      33.5,
+      33.5,
+      33.5,
+      33.5,
+      33.5,
+      33.5,
+      33.5,
+      33.5,
+      33.5,
+      33.5,
+      33.5,
+      33.5,
+      33,
+      33,
+      33.5,
+      33.5,
+      33.5,
+      33.5,
+      33.5,
+      33,
+      32,
+      30,
+      22.5,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "referenceHeadAnchored": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      15.25,
+      19,
+      23.5,
+      26,
+      28,
+      31,
+      32,
+      34,
+      35.5,
+      37.25,
+      38.5,
+      39.25,
+      40.25,
+      40.5,
+      41.5,
+      42,
+      42.75,
+      43,
+      43.5,
+      43.5,
+      43.5,
+      43.5,
+      43.5,
+      43.5,
+      43.5,
+      43.5,
+      43.5,
+      43.5,
+      42.75,
+      42.25,
+      42,
+      41.25,
+      40.75,
+      39.75,
+      39,
+      38,
+      37,
+      35,
+      33.5,
+      31.5,
+      29.25,
+      27.5,
+      24.25,
+      22,
+      19.25,
+      19.25,
+      19.25,
+      19.25,
+      19.25,
+      19.25,
+      19.25,
+      20.5,
+      23.5,
+      29.75,
+      33.5,
+      41.25,
+      45.75,
+      48,
+      50.25,
+      52,
+      53.5,
+      54.25,
+      55,
+      55,
+      55,
+      56.5,
+      56.5,
+      56.5,
+      57.5,
+      58,
+      58,
+      58,
+      59.5,
+      59.5,
+      59.5,
+      59.5,
+      60.75,
+      61,
+      61,
+      62,
+      62.25,
+      62,
+      62.75,
+      63.5,
+      63.5,
+      64.5,
+      65,
+      65,
+      65,
+      66.5,
+      66.5,
+      66.5,
+      66.5,
+      67.25,
+      68,
+      68,
+      68.5,
+      68.75,
+      69.5,
+      69.5,
+      70.25,
+      71.5,
+      72.25,
+      73.25,
+      73.5,
+      75,
+      75.5,
+      76.5,
+      76.5,
+      77.25,
+      78,
+      78,
+      78.75,
+      79.5,
+      79.5,
+      79.5,
+      80.25,
+      81,
+      81,
+      81,
+      81,
+      82.5,
+      82.5,
+      82.5,
+      82.25,
+      83.5,
+      83.75,
+      83.75,
+      83.75,
+      85,
+      85,
+      85,
+      85,
+      85.75,
+      86.25,
+      86.5,
+      88,
+      88.75,
+      89.5,
+      90,
+      91,
+      91.25,
+      92.25,
+      92.5,
+      93.75,
+      94,
+      94,
+      94.75,
+      94.75,
+      94.5,
+      93.75,
+      93.25,
+      92.25,
+      90.75,
+      88.75,
+      86.75,
+      81.75,
+      51.75,
+      51.75,
+      51.5,
+      52,
+      52.75,
+      52.75,
+      52.75,
+      52.75,
+      52.75,
+      52.75,
+      52.75,
+      52.75,
+      52.75,
+      53.5,
+      53.75,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      54.25,
+      55,
+      55.5,
+      55.75,
+      55.75,
+      55.75,
+      56.5,
+      57.25,
+      58.75,
+      58.75,
+      59.75,
+      60.25,
+      60.5,
+      61.5,
+      61.75,
+      62.25,
+      62.25,
+      62.75,
+      62.75,
+      62.75,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      63.5,
+      64.25,
+      64.25,
+      64.25,
+      64.25,
+      64.25,
+      64.25,
+      64.25,
+      64.25,
+      64.25,
+      64.25,
+      64.25,
+      64.25,
+      64.25,
+      63.5,
+      63.5,
+      62.75,
+      62.75,
+      62.75,
+      62.75,
+      62.75,
+      62.75,
+      62.75,
+      62.75,
+      62.75,
+      63.5,
+      63.5,
+      63.5
+    ]
+  }
+}
