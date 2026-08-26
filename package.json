@@ -55,7 +55,9 @@
     "verify:growth-reveal": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-growth-reveal.ts",
     "verify:workout-character-motion": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-workout-character-motion.ts",
     "verify:core-loop": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-core-loop.ts",
-    "verify:pt": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-pt-context.ts"
+    "verify:pt": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-pt-context.ts",
+    "verify:learning": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-danbaek-learning.ts",
+    "verify:home": "node --experimental-loader ./scripts/alias-loader.mjs scripts/verify-home-presentation.ts"
   },
   "private": true
 }
