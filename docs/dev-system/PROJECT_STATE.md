@@ -13,13 +13,13 @@ This file is the compact restart point. Update it only when state materially cha
 - Foundation reliability work protecting major storage/recovery and completion semantics.
 - PR semantics separation: rep PR remains presentation/history evidence; current reward eligibility is explicit rather than prs.length-driven; legacy receipt normalization addressed in the integrated development line.
 - Danbaek World First Playable core runtime loop has been reported working end-to-end on the latest local integration candidate: HOME → blocked World gate → real workout → persisted learning/result → World return → gate cleared → next goal.
+- First Danbaek World segment now reads as a game situation rather than a status board: a visible gate the player watches Danbaek fail against, a situation-derived CTA, a one-time blocked→cleared reveal on return, and a locked next-path teaser. Return path from Result closes the loop in one tap. Verified in a real 412/375/360 web playtest; `verify:world` covers the seam.
 
 ## CURRENT
-- Synchronize latest First Playable candidate to remote integration branch.
-- Close only remaining First Playable QA gaps (real 360/375/412 viewport evidence and World verifier presence/coverage as applicable).
+- None. Pick up the NEXT train.
 
 ## NEXT
-- Value Train: improve first Danbaek World segment as a game experience — situation clarity, Danbaek reaction, blocked→cleared payoff, next-goal anticipation — while keeping real workout/growth/accounting as the source of progress.
+- Value Train: give the loop a second turn — promote "당기는 길" from a teaser line to a real second segment so clearing the first gate leads into another blocked situation the player wants to solve. Reuse the existing stage/evaluation/handoff path; do not add World persistence, economy, or a quest framework for it.
 - Production Danbaek visual work proceeds only under approved CANON evidence decisions; do not invent geometry to resolve authority conflicts.
 
 ## BLOCKED

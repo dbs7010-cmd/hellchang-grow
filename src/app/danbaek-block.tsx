@@ -20,6 +20,7 @@ import {
   getPendingDanbaekBlock,
   subscribeToDanbaekBlock,
 } from '@/services/world/block-handoff';
+import { markWorldWorkoutHandoff } from '@/services/world/world-visit';
 import { buildBlockPresentation, describeBlockCandidate } from '@/utils/danbaek-block-presentation';
 import type { QuickStartExercise } from '@/utils/workout-start';
 
@@ -77,6 +78,17 @@ export default function DanbaekBlockScreen() {
       primaryMuscleGroup: presentation?.muscleGroup,
       initialExercises: [exercise],
     });
+    /*
+      막힌 곳에서 운동하러 나왔다는 사실만 메모리에 남긴다 — 결과 화면이 이걸 보고 곧장
+      그 자리로 돌려보낸다. 운동 기록에는 아무것도 덧붙이지 않는다: WorkoutRecord는
+      단백세상에서 왔든 아니든 같은 의미여야 한다.
+    */
+    if (presentation) {
+      markWorldWorkoutHandoff({
+        stageId: presentation.stageId,
+        movementFamily: presentation.movementFamily,
+      });
+    }
     // 안내는 여기서 끝난다. 다시 막혀 있는지는 WORLD가 다음에 판정한다.
     clearPendingDanbaekBlock();
     router.replace('/session');

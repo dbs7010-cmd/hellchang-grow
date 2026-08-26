@@ -1,5 +1,5 @@
 import { useNavigation, useRootNavigationState, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
@@ -37,6 +37,11 @@ import {
   findPreviousPerformance,
   PrEvent,
 } from '@/utils/exercise-history';
+import {
+  clearWorldReturn,
+  getWorldReturn,
+  subscribeToWorldReturn,
+} from '@/services/world/world-visit';
 import { createId } from '@/utils/id';
 import {
   buildDanbaekGainVoice,
@@ -1006,8 +1011,23 @@ function getTodayRecordCount(records: WorkoutRecord[]): number {
  */
 function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine; onConfirm: () => void }) {
   const theme = useTheme();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { characterAppearance, growth: growthAfter } = useAppData();
+  /** 단백세상에서 막혀서 나온 운동인가. 메모리 표시일 뿐이라 앱을 껐다 켜면 사라진다. */
+  const worldReturn = useSyncExternalStore(
+    subscribeToWorldReturn,
+    getWorldReturn,
+    getWorldReturn
+  );
+  const handleReturnToWorld = () => {
+    clearWorldReturn();
+    // 세션/막힘 화면을 스택에 남기지 않는다 — 그러지 않으면 단백세상에서 [닫기]를 눌렀을 때
+    // 뒤에 남아 있던 예전 단백세상 화면으로 돌아가서, 아무 일도 안 일어난 것처럼 보인다.
+    if (router.canDismiss()) router.dismissAll();
+    // 새로 열어야 '막혀 있던 곳이 열렸다'를 그 화면이 알아볼 수 있다.
+    router.push('/danbaek-world');
+  };
   const reducedMotion = useReducedMotion();
   const permanentChanged = hasPermanentBodyChange(
     summary.bodyParametersBefore,
@@ -1270,8 +1290,30 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
         </Section>
       </ScrollView>
 
+      {/*
+        단백세상에서 막혀서 나온 운동이었다면, 여기서 곧장 그 자리로 돌아갈 수 있어야
+        루프가 끊기지 않는다 — 예전에는 [확인] → 홈 → 스크롤 → 단백세상을 직접 찾아
+        들어가야 방금 한 운동의 결과를 볼 수 있었다.
+
+        돌아갈 곳은 메모리에만 있는 표시일 뿐이다. 완료 파이프라인/기록/보상은 이 버튼과
+        아무 관계가 없고, 이 버튼을 누르지 않아도 결과는 이미 저장돼 있다.
+      */}
       <View style={styles.resultFooter}>
-        <PrimaryButton label="확인" variant="gold" size="large" onPress={onConfirm} />
+        {worldReturn && (
+          <PrimaryButton
+            label="단백세상으로 돌아가기"
+            subLabel="단백이가 방금 본 걸 해볼 차례예요"
+            variant="gold"
+            size="large"
+            onPress={handleReturnToWorld}
+          />
+        )}
+        <PrimaryButton
+          label="확인"
+          variant={worldReturn ? 'secondary' : 'gold'}
+          size={worldReturn ? 'default' : 'large'}
+          onPress={onConfirm}
+        />
       </View>
     </ThemedView>
   );
@@ -1798,6 +1840,7 @@ const styles = StyleSheet.create({
   },
   resultFooter: {
     paddingTop: Spacing.two,
+    gap: Spacing.two,
   },
   stimulusCard: {
     borderRadius: Radius.large,

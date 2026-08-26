@@ -58,6 +58,17 @@ export const DanbaekGainVoiceLines = {
   moreEvidence: '한 번 더 봤어. 다음엔 될 것 같아.',
 } as const;
 
+/**
+ * 단백세상에서 길이 열렸을 때.
+ *
+ * **학습 단계를 말하지 않는다.** 벤치프레스를 한 번 봤을 뿐인데 "이제 밀기는 다 알아"가
+ * 나오면 그 순간 앱이 거짓말을 한다. 여기서는 방금 실제로 일어난 일(문이 열렸다)만 말하고,
+ * 얼마나 배웠는지는 그 아래 상태 줄이 정확하게 말한다.
+ */
+export const DanbaekWorldVoiceLines = {
+  gateCleared: '열렸다! 아까는 꿈쩍도 안 했는데.',
+} as const;
+
 /** 단백세상에서 막혔을 때. 도움을 요청하되 플레이어를 탓하지 않는다. */
 export const DanbaekBlockVoiceLines = {
   /** 아직 그 동작을 배울 길이 앱에 있는 경우 */

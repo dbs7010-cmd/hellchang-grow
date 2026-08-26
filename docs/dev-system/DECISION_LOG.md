@@ -91,3 +91,8 @@ Status: LOCKED narrative tone.
 ## D-022 — Phase 2 social/character expansion is deferred
 Decision: non-workout-day exploration, broader character roster, teaching others, and larger social/world systems are valid future directions but are not current implementation scope. When Phase 2 begins, reassess whether cosmetics, collectible characters, or a 'player PTs multiple characters' model fits the established player↔Danbaek relationship before implementing monetization around it.
 Status: DEFERRED product decision; not permission to implement now.
+
+## D-023 — World progress is derived, never stored
+Decision: what is blocked or cleared in Danbaek World is always recomputed from persisted workout learning. World may hold in-memory presentation state — which segment the player last saw, whether they left for a workout from a gate — purely to time a reveal or offer a return link, and that state must never become progression.
+Reason: a stored World progress record is a second source of truth for "did the player earn this", and the first thing that would drift away from real training. Keeping it derived means the only way to open a path stays doing the actual workout.
+Status: LOCKED for World work until a separately approved progression design exists.

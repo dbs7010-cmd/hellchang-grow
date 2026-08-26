@@ -1,41 +1,38 @@
+import { MovementFamilyLabels } from '@/config/danbaek-movement-labels';
+import { DanbaekBlockVoiceLines, MovementFamilyShortLabels } from '@/config/danbaek-voice-lines';
 import type { MovementFamily, StageBlock } from '@/types/danbaek-contract';
+import { withObjectParticle, withTopicParticle } from '@/utils/korean';
 
 export type DanbaekWorldBlockPresentation = {
-  title: string;
-  body: string;
+  /** 왜 못 지나가는지 한 줄. 스테이지가 직접 쓴 문장을 그대로 쓴다. */
+  whyLine: string;
+  /** 단백이 자신의 한마디 (PRIMARY). */
+  danbaekLine: string;
+  /** 정확한 상태 한 줄 (SECONDARY). 단계보다 앞서 말하지 않는다. */
+  statusLine: string;
+  /** 지금 누를 행동. "운동 메뉴"가 아니라 이 상황을 푸는 행동으로 읽혀야 한다. */
   actionLabel: string;
   recommendedMovementFamily: MovementFamily;
   specificExerciseId: string | null;
 };
 
-const MovementFamilyLabels: Record<MovementFamily, string> = {
-  push_horizontal: '앞으로 미는 운동',
-  pull_vertical: '위에서 당기는 운동',
-  pull_horizontal: '앞에서 당기는 운동',
-  squat: '앉았다 일어나는 하체 운동',
-  hinge: '엉덩이를 접어 힘을 쓰는 운동',
-  push_vertical: '머리 위로 미는 운동',
-  carry: '들고 이동하는 운동',
-  locomotion: '걷고 달리는 움직임',
-};
-
+/**
+ * WORLD 판정(StageBlock)을 사람이 읽는 말로 옮긴다.
+ *
+ * 계열 이름은 `config/danbaek-movement-labels.ts` 하나에서만 온다 — 예전에는 이 파일이 같은
+ * 계열을 "앞으로 미는 운동"으로, 앱의 나머지는 "미는 동작"으로 불러서 같은 배움이 화면마다
+ * 다른 이름을 갖고 있었다.
+ */
 export function presentDanbaekWorldBlock(block: StageBlock): DanbaekWorldBlockPresentation {
-  const specificExerciseId = block.requirement.specificExerciseId ?? null;
-  if (specificExerciseId) {
-    return {
-      title: '단백이가 여기서 막혔어요',
-      body: '이 문을 열려면 단백이가 아직 모르는 운동 동작을 실제로 봐야 해요.',
-      actionLabel: '이 동작을 가르치러 가기',
-      recommendedMovementFamily: block.recommendedMovementFamily,
-      specificExerciseId,
-    };
-  }
+  const family = block.recommendedMovementFamily;
 
   return {
-    title: '단백이가 여기서 막혔어요',
-    body: `단백이는 ${MovementFamilyLabels[block.recommendedMovementFamily]}을 아직 배우지 못했어요.`,
-    actionLabel: '이 동작을 가르치러 가기',
-    recommendedMovementFamily: block.recommendedMovementFamily,
-    specificExerciseId: null,
+    whyLine: block.requirement.reason,
+    danbaekLine: DanbaekBlockVoiceLines.needsPractice,
+    statusLine: `${withTopicParticle(MovementFamilyLabels[family])} 아직 배우지 못했어요`,
+    // 실제로 벌어지는 일 그대로 — 내가 하고, 단백이가 옆에서 본다.
+    actionLabel: `${withObjectParticle(MovementFamilyShortLabels[family])} 보여주러 가기`,
+    recommendedMovementFamily: family,
+    specificExerciseId: block.requirement.specificExerciseId ?? null,
   };
 }
