@@ -268,3 +268,50 @@ export function classifyStoredReceipt(
 
   return { kind: 'usable', receipt: stored as unknown as SessionCompletionReceipt };
 }
+
+/**
+ * 저장된 성장 상태를 **migrate에 넘기기 전에** 모양만 다듬는다.
+ *
+ * `migrateGrowthState()`는 빠진 필드는 잘 채우지만, **있는데 타입이 다른 값**은 그대로
+ * 통과시킨다. 실제로 세 가지가 새어 나갔다(직접 실행해 확인했다):
+ *  - `totalWorkoutSp: "abc"` → `Math.max(0, "abc")` = **NaN**. 그 NaN이 다음 운동에서
+ *    그대로 다시 저장돼 사용자의 누적 SP가 영구히 망가진다.
+ *  - `daily.spByMuscle: "..."` → 문자열이 그대로 남아 홈의 `Object.entries`가 엉뚱한
+ *    부위 키를 만들고, 합계가 NaN이 된다.
+ *  - `daily.date: 20260826` → 숫자가 날짜 자리에 남아 "오늘인가" 비교가 영원히 어긋난다.
+ *
+ * 그래서 **읽는 경계에서** 걸러낸다. 성장 계산 자체는 건드리지 않는다 — 여기서 하는 일은
+ * "읽을 수 없는 필드는 없는 값으로 만든다"뿐이고, 그러면 migrate의 기존 기본값 규칙이
+ * 그대로 적용된다(예: totalWorkoutSp가 없으면 부위 합계로 다시 만든다).
+ *
+ * 검증 가능한 순수 함수다 (scripts/verify-storage-recovery.ts).
+ */
+export function asStoredGrowthState(value: unknown): Record<string, unknown> | null {
+  const stored = asStoredRecord(value);
+  if (!stored) return null;
+
+  const normalized: Record<string, unknown> = { ...stored };
+
+  // 있는데 셀 수 없는 값이면 지운다 — 0으로 덮지 않는다. 지워야 migrate가 부위 합계로
+  // 되살린다(0으로 덮으면 멀쩡한 부위 SP가 있는데 총합만 0인 상태가 저장된다).
+  if (asStoredCount(stored.totalWorkoutSp, -1) < 0) delete normalized.totalWorkoutSp;
+
+  const daily = asStoredRecord(stored.daily);
+  const dailyDate = daily ? asStoredDateString(daily.date) : undefined;
+  const dailySpByMuscle = daily ? asStoredRecord(daily.spByMuscle) : null;
+
+  if (dailyDate === undefined || dailySpByMuscle === null) {
+    // 오늘 집계를 읽을 수 없으면 통째로 버린다. migrate가 오늘 날짜의 빈 집계를 만든다 —
+    // 하루치 표시가 비는 것이 손상된 값을 계속 들고 다니는 것보다 낫다.
+    delete normalized.daily;
+  } else {
+    const spByMuscle: Record<string, number> = {};
+    for (const [muscle, sp] of Object.entries(dailySpByMuscle)) {
+      const count = asStoredCount(sp, -1);
+      if (count >= 0) spByMuscle[muscle] = count;
+    }
+    normalized.daily = { date: dailyDate, spByMuscle };
+  }
+
+  return normalized;
+}

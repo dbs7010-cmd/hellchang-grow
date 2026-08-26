@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs';
+
 import type { UserProfile } from '@/types/user';
 import type { BodyHistoryEntry } from '@/types/body';
 import { buildHistoryDays, latestBodyEntry, sortBodyHistoryNewestFirst } from '@/utils/history';
 import { buildStoredPhotoName, photoFileExtension } from '@/utils/photo-file';
 import {
   asStoredArray,
+  asStoredGrowthState,
   asStoredCount,
   asStoredDateString,
   asStoredFlag,
@@ -18,6 +21,7 @@ import {
   resolveBootstrapScreen,
   resolveOnboardingState,
 } from '@/utils/stored-state';
+import { migrateGrowthState } from '@/utils/growth-state';
 
 /**
  * STORAGE RECOVERY 검증 (FAILURE_LOG의 FAIL-008).
@@ -541,6 +545,63 @@ const profile = (input: Partial<UserProfile> = {}): UserProfile =>
  * 사진 자리가 비어야 한다 — 기록 저장 자체가 실패해서는 안 된다.
  * 순수 규칙 쪽 근거는 verify:session의 recoverStaleSession / resumeIfRecentBackground에 있다.
  */
+
+// ── 저장된 성장 상태: 읽을 수 없는 필드가 다음 저장으로 굳지 않는다 ─────────
+//
+// migrate는 빠진 필드는 채우지만 **있는데 타입이 다른 값**은 통과시킨다. 그 값이 화면을
+// 거쳐 다시 저장되면 사용자의 누적 SP가 영구히 망가진다. 그래서 읽는 경계에서 거른다.
+{
+  const NOW = '2026-08-26T09:00:00.000Z';
+  const migrated = (raw: unknown) =>
+    migrateGrowthState(asStoredGrowthState(raw) as never, NOW);
+
+  // 1) 셀 수 없는 총합은 NaN이 되어 저장되면 안 된다.
+  const brokenTotal = migrated({ muscles: { chest: { totalSp: 40 } }, totalWorkoutSp: 'abc' });
+  expect('망가진 총합이 NaN으로 살아남지 않는다', Number.isFinite(brokenTotal.totalWorkoutSp));
+  expect('총합은 부위 합계로 되살아난다 (0으로 덮지 않는다)', brokenTotal.totalWorkoutSp === 40);
+  expect('부위 SP는 그대로 보존된다', brokenTotal.muscles.chest.totalSp === 40);
+
+  // 2) 오늘 집계가 객체가 아니면 통째로 버린다 — 손상된 값을 들고 다니지 않는다.
+  const brokenDaily = migrated({ daily: { date: '2026-08-26', spByMuscle: 'oops' } });
+  expect(
+    '읽을 수 없는 오늘 집계는 객체로 대체된다',
+    typeof brokenDaily.daily.spByMuscle === 'object' && !Array.isArray(brokenDaily.daily.spByMuscle)
+  );
+
+  // 3) 날짜 자리에 날짜가 아닌 값이 있으면 오늘 판정이 영원히 어긋난다.
+  const brokenDate = migrated({ daily: { date: 20260826, spByMuscle: {} } });
+  expect('날짜 자리에는 날짜 문자열만 남는다', typeof brokenDate.daily.date === 'string');
+
+  // 4) 개별 부위 값이 숫자가 아니면 합계가 NaN이 된다.
+  const brokenEntry = migrated({ daily: { date: '2026-08-26', spByMuscle: { chest: 'x', triceps: 3 } } });
+  const dailyValues = Object.values(brokenEntry.daily.spByMuscle as Record<string, number>);
+  expect('숫자가 아닌 부위 값은 버린다', dailyValues.every((sp) => Number.isFinite(sp)));
+  expect('멀쩡한 부위 값은 남는다', (brokenEntry.daily.spByMuscle as Record<string, number>).triceps === 3);
+
+  // 5) 정상/옛 저장값의 의미는 그대로다 (하위 호환).
+  const legacy = migrated({ muscles: { chest: { totalSp: 1500 } } });
+  expect('옛 저장값의 SP는 그대로다', legacy.muscles.chest.totalSp === 1500);
+  expect('총합이 없던 옛 값도 합계로 되살아난다', legacy.totalWorkoutSp === 1500);
+
+  const healthy = { muscles: { chest: { totalSp: 120 } }, totalWorkoutSp: 120, daily: { date: '2026-08-26', spByMuscle: { chest: 12 } } };
+  const kept = migrated(healthy);
+  expect('멀쩡한 값은 손대지 않는다 (총합)', kept.totalWorkoutSp === 120);
+  expect('멀쩡한 값은 손대지 않는다 (오늘 집계)', (kept.daily.spByMuscle as Record<string, number>).chest === 12);
+  expect('멀쩡한 값은 손대지 않는다 (날짜)', kept.daily.date === '2026-08-26');
+
+  // 6) 객체가 아닌 저장값은 첫 실행과 똑같이 다룬다.
+  expect('문자열로 저장된 성장 상태는 없는 값이다', asStoredGrowthState('corrupted') === null);
+  expect('배열로 저장된 성장 상태도 없는 값이다', asStoredGrowthState([1, 2, 3]) === null);
+  expect('없는 값은 그대로 없는 값이다', asStoredGrowthState(null) === null);
+
+  // 이 걸러내기가 실제 읽기 경계에 붙어 있어야 의미가 있다. 예전에 receipt 쪽에서 배선이
+  // 조용히 빠진 적이 있어서, 배선 자체를 검증에 고정한다.
+  const growthRepository = readFileSync('src/data/growth-repository.ts', 'utf8');
+  expect(
+    '성장 상태 읽기 경계가 실제로 이 걸러내기를 거친다',
+    growthRepository.includes('asStoredGrowthState(await readJSON')
+  );
+}
 
 if (failures > 0) {
   console.log(`${failures} FAILED`);
