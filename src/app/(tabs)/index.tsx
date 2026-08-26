@@ -22,9 +22,9 @@ import { AppConfig } from '@/config/app-config';
 import { StanleyPortraitImage } from '@/config/character-assets';
 import { resolveDanbaekWorldEntry } from '@/config/danbaek-world-entry';
 import { Exercises, getExerciseById, getExercisesByMuscleGroup } from '@/config/exercises';
-import { MuscleGroups } from '@/config/muscle-groups';
+import { MuscleGroupLabels, MuscleGroups } from '@/config/muscle-groups';
 import { StanleyTrainer } from '@/config/trainers';
-import { BottomTabInset, HomeColors, Layout, Radius, Spacing } from '@/constants/theme';
+import { BottomTabInset, HomeColors, Layout, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { getThisWeekRecords } from '@/data/workout-repository';
 import { buildDanbaekVoice } from '@/utils/danbaek-learning-presence';
@@ -122,14 +122,28 @@ export default function HomeScreen() {
     [routines]
   );
 
+  /**
+   * 오늘 추천 부위. **이미 추천 strip이 쓰던 그 값 그대로**이고, 새 추천 로직이 아니다 —
+   * 화면 아래에서만 쓰이던 것을 위에서도 읽을 수 있게 밖으로 꺼냈을 뿐이다.
+   * 오늘 예약된 루틴이 있으면 루틴 이름이 이기므로 그때는 계산하지 않는다.
+   */
+  const recommendedGroup = useMemo(
+    () => (scheduledRoutine ? null : recommendMuscleGroup(workoutRecords, Exercises, MuscleGroups)),
+    [scheduledRoutine, workoutRecords]
+  );
   /*
    * 오늘 내 운동이 어디까지 왔는가 — 이 화면의 첫 질문이자, 아래 모든 순서를 정하는 값.
    * 판단도 문구도 여기서 만들지 않는다: 이미 계산돼 있는 PtContext를 순수 함수 하나에
    * 넘기고 결과를 그리기만 한다. 새로 저장하는 것도, 시계를 보는 것도 없다.
    */
   const home = useMemo(
-    () => buildHomeView({ ptContext, scheduledRoutineName: scheduledRoutine?.name ?? null }),
-    [ptContext, scheduledRoutine]
+    () =>
+      buildHomeView({
+        ptContext,
+        scheduledRoutineName: scheduledRoutine?.name ?? null,
+        recommendedFocusLabel: recommendedGroup ? MuscleGroupLabels[recommendedGroup] : null,
+      }),
+    [ptContext, scheduledRoutine, recommendedGroup]
   );
 
   const greeting = useMemo(
@@ -141,6 +155,7 @@ export default function HomeScreen() {
   const canClaimReward =
     streak.currentStreakDays >= AppConfig.streakRewardDays && !streak.rewardClaimed;
   const noticeAvailable = !openEventPass.active || canClaimReward;
+
 
   const recommendedItems = useMemo(() => {
     const exercises = scheduledRoutine
@@ -231,10 +246,11 @@ export default function HomeScreen() {
           ) : (
             /*
               오늘 운동을 끝낸 사람에게 같은 자리에 골드 CTA를 다시 세우면 "한 번 더 해라"가
-              된다. 완료는 눌러야 하는 것이 아니라 이미 이룬 것이라 카드로 남긴다.
+              된다. 완료는 눌러야 하는 것이 아니라 이미 이룬 것이다 — 그래서 카드가 아니라
+              글자로 선다. 카드로 감싸면 아래 성취와 서로 다른 위젯 두 개로 읽힌다.
             */
-            <View style={styles.completionCard}>
-              <ThemedText type="subtitle" style={styles.completionTitle}>
+            <View style={styles.completion}>
+              <ThemedText type="heading" style={styles.completionTitle}>
                 ✓ {home.primary.label}
               </ThemedText>
               {home.primary.note && (
@@ -245,34 +261,47 @@ export default function HomeScreen() {
             </View>
           )}
 
+          {/*
+            오늘 기준으로 가장 강한 실제 성취 하나. 새 PR 정의도 새 보상도 만들지 않고,
+            이미 저장된 기록에서 고르기만 한다. 고를 것이 없으면 아무것도 그리지 않는다.
+
+            완료 표시와 **같은 블록 안에** 둔다. 예전에는 흰 카드 하나로 따로 떠 있어서
+            "오늘 끝냈다"와 "무엇을 해냈다"가 서로 다른 위젯처럼 읽혔다. 지금은 운동명 →
+            값 → 근거가 위에서 아래로 이어지는 한 문장이다.
+          */}
+          {home.performance && (
+            <View style={styles.performance}>
+              <ThemedText type="caption" numberOfLines={1} style={styles.performanceTitle}>
+                {home.performance.title}
+              </ThemedText>
+              <ThemedText type="metric" numberOfLines={1} style={styles.performanceValue}>
+                {home.performance.value}
+              </ThemedText>
+              {home.performance.note && (
+                <ThemedText type="caption" numberOfLines={1} style={styles.performanceNote}>
+                  {home.performance.note}
+                </ThemedText>
+              )}
+            </View>
+          )}
+
+          {/*
+            보조 행동은 채워진 버튼이 아니라 한 줄이다 — 골드 CTA 자리 아래에 또 하나의
+            큰 면을 두면 "지금 눌러야 할 것"이 둘로 보인다. 가는 곳은 그대로다.
+          */}
           {home.secondary && (
-            <PrimaryButton
-              label={home.secondary.label}
-              variant="secondary"
+            <Pressable
               onPress={() => router.push(home.secondary!.route)}
-            />
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={home.secondary.label}
+              style={styles.secondaryRow}>
+              <ThemedText type="captionBold" style={styles.secondaryLabel}>
+                {home.secondary.label} ›
+              </ThemedText>
+            </Pressable>
           )}
         </View>
-
-        {/*
-          오늘 기준으로 가장 강한 실제 성취 하나. 새 PR 정의도 새 보상도 만들지 않고,
-          이미 저장된 기록에서 고르기만 한다. 고를 것이 없으면 카드 자체가 없다.
-        */}
-        {home.performance && (
-          <View style={styles.performanceCard}>
-            <ThemedText type="caption" numberOfLines={1} style={styles.performanceTitle}>
-              {home.performance.title}
-            </ThemedText>
-            <ThemedText type="metric" numberOfLines={1} style={styles.performanceValue}>
-              {home.performance.value}
-            </ThemedText>
-            {home.performance.note && (
-              <ThemedText type="caption" numberOfLines={1} style={styles.performanceNote}>
-                {home.performance.note}
-              </ThemedText>
-            )}
-          </View>
-        )}
 
         <View style={[styles.stage, { height: heroHeight }]}>
           <View style={styles.trainerRow}>
@@ -285,10 +314,11 @@ export default function HomeScreen() {
             />
           </View>
 
+          {/*
+            받침대도 후광도 없다. 무대 장식을 두르면 단백이가 "전시된 아바타 슬롯"처럼
+            보이고, 그 순간 홈의 주인공이 사람에서 캐릭터로 넘어간다.
+          */}
           <View style={styles.characterArea}>
-            <View pointerEvents="none" style={styles.characterAtmosphere} />
-            <View pointerEvents="none" style={styles.characterBackdrop} />
-            <View pointerEvents="none" style={styles.characterGround} />
             <View onLayout={handleStageLayout} style={styles.characterFill}>
               <PlayerCharacter
                 appearance={characterAppearance}
@@ -299,7 +329,6 @@ export default function HomeScreen() {
                 idle
               />
             </View>
-
           </View>
         </View>
 
@@ -309,7 +338,8 @@ export default function HomeScreen() {
           한마디(단백이 목소리) + 상태 한 줄(정확한 학습 단계) 두 층으로만 말한다.
 
           이 반응은 위의 실제 성취에 **딸린 것**이다. 얘가 먼저 말하고 내 운동이 그 아래
-          있으면, 홈이 캐릭터 관리 화면처럼 읽힌다.
+          있으면, 홈이 캐릭터 관리 화면처럼 읽힌다. 그래서 말풍선을 카드로 띄우지 않고
+          캐릭터 바로 밑에 붙여, 성취 → 반응이 한 덩어리로 읽히게 한다.
         */}
         <DanbaekVoiceBubble
           line={danbaekVoice.line}
@@ -439,22 +469,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: Layout.screenPaddingX,
     gap: Spacing.two,
   },
-  /** 오늘의 운동 블록 — 머리말 + 행동(또는 완료 상태) + 보조 행동이 한 덩어리로 읽힌다. */
+  /**
+   * 오늘의 운동 블록 — 머리말 → 행동(또는 완료) → 오늘의 성취 → 보조 한 줄이 **하나로**
+   * 읽힌다. 예전에는 이 넷이 각자 둥근 면을 갖고 따로 떠 있어서 위젯 네 개처럼 보였다.
+   */
   todayBlock: {
     gap: Spacing.two,
   },
   todayLabel: {
     color: HomeColors.textSecondary,
   },
-  /** 완료는 눌리는 것이 아니라 이룬 것이다 — 버튼 높이를 흉내 내지 않는다. */
-  completionCard: {
-    borderWidth: 1,
-    borderColor: HomeColors.questBorder,
-    borderRadius: Radius.large,
-    backgroundColor: HomeColors.surfaceGold,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two + Spacing.half,
+  /** 완료는 면이 아니라 글자로 선다. 버튼 모양을 흉내 내지 않는다. */
+  completion: {
     gap: Spacing.half,
+    paddingTop: Spacing.one,
   },
   completionTitle: {
     color: HomeColors.goldStrong,
@@ -462,16 +490,12 @@ const styles = StyleSheet.create({
   completionNote: {
     color: HomeColors.textSecondary,
   },
-  /** 오늘 가장 강한 실제 성취 하나. 진행도 카드와 다른 무게로 둔다. */
-  performanceCard: {
-    borderWidth: 1,
-    borderColor: HomeColors.border,
-    borderRadius: Radius.large,
-    backgroundColor: HomeColors.surface,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    gap: Spacing.half,
-    boxShadow: HomeColors.hudShadow,
+  /**
+   * 오늘 가장 강한 실제 성취. 카드가 아니라 타이포그래피가 위계를 만든다 —
+   * 운동명(작게) → 값(크게) → 근거(작게).
+   */
+  performance: {
+    paddingTop: Spacing.one,
   },
   performanceTitle: {
     color: HomeColors.textSecondary,
@@ -483,6 +507,14 @@ const styles = StyleSheet.create({
   performanceNote: {
     color: HomeColors.textSecondary,
   },
+  /** 보조 행동 한 줄. 단백세상 입구와 같은 문법을 쓴다 — 홈에 큰 면을 늘리지 않는다. */
+  secondaryRow: {
+    justifyContent: 'center',
+    minHeight: Layout.compactRowHeight,
+  },
+  secondaryLabel: {
+    color: HomeColors.goldStrong,
+  },
   stage: {
     marginBottom: -Spacing.one,
   },
@@ -490,35 +522,10 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   },
-  characterBackdrop: {
-    position: 'absolute',
-    left: '28%',
-    right: '28%',
-    bottom: '9%',
-    height: '48%',
-    borderRadius: Radius.pill,
-    backgroundColor: HomeColors.surfaceMuted,
-    opacity: 0.52,
-  },
-  characterAtmosphere: {
-    position: 'absolute',
-    left: '8%',
-    right: '8%',
-    top: '2%',
-    bottom: '2%',
-    borderRadius: Radius.pill,
-    backgroundColor: 'rgba(182, 121, 30, 0.018)',
-  },
-  characterGround: {
-    position: 'absolute',
-    left: '34%',
-    right: '34%',
-    bottom: '10%',
-    height: 10,
-    borderRadius: Radius.pill,
-    backgroundColor: 'rgba(182, 121, 30, 0.09)',
-    boxShadow: HomeColors.groundShadow,
-  },
+  /**
+   * 캐릭터는 무대 가운데가 아니라 **아래쪽**에 선다. 가운데에 띄우면 발밑에 빈 칸이 생기고,
+   * 바로 아래 붙어야 할 단백이 한마디가 멀어져서 "내 성취에 얘가 반응한다"가 끊긴다.
+   */
   characterFill: {
     position: 'absolute',
     top: 0,
@@ -526,7 +533,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
   },
   trainerRow: {
     width: '100%',
@@ -534,15 +541,15 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     paddingBottom: Spacing.one,
   },
+  /**
+   * 진행도(HELL PASS + 주간 기록). 흰 카드로 띄우면 홈에 대시보드 블록이 하나 더 생긴다 —
+   * 값과 기능은 그대로 두고 면 대신 가는 선 하나로 구분한다.
+   */
   progressBlock: {
-    borderWidth: 1,
-    borderColor: HomeColors.border,
-    borderRadius: Radius.large,
-    backgroundColor: HomeColors.surface,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    borderTopWidth: 1,
+    borderTopColor: HomeColors.border,
+    paddingTop: Spacing.three,
     gap: Spacing.two,
-    boxShadow: HomeColors.shadow,
   },
   statsRow: {
     flexDirection: 'row',
@@ -563,7 +570,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.two,
-    paddingVertical: Spacing.half,
+    borderTopWidth: 1,
+    borderTopColor: HomeColors.border,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.one,
   },
   stat: {
     flex: 1,

@@ -230,6 +230,12 @@ export function buildHomeView(input: {
   ptContext: PtContext;
   /** 오늘 예약된 루틴 이름. 없으면 null. */
   scheduledRoutineName?: string | null;
+  /**
+   * 오늘 추천 부위의 사람 말 이름. **화면이 이미 추천 strip에 쓰고 있는 그 값**이고,
+   * 여기서 새로 추천을 계산하지 않는다. 없으면 null이고, 그러면 일반 문구로 남는다 —
+   * "오늘 뭘 하는가"를 지어내지 않는다.
+   */
+  recommendedFocusLabel?: string | null;
 }): HomeView {
   const { ptContext } = input;
   const state = resolveHomeState(ptContext);
@@ -273,9 +279,16 @@ export function buildHomeView(input: {
     primary: {
       kind: 'action',
       label: '운동 시작',
+      /*
+        "지금 누를 수 있다"만 말하면 오늘 무엇을 하는 날인지가 늦게 읽힌다. 그래서 이미
+        알고 있는 것부터 말한다: 예약된 루틴 → 오늘 추천 부위 → (둘 다 없으면) 일반 문구.
+        없는 계획을 만들어 내지는 않는다.
+      */
       note: input.scheduledRoutineName
         ? `오늘 · ${input.scheduledRoutineName}`
-        : '바로 시작할 수 있어요',
+        : input.recommendedFocusLabel
+          ? `오늘 추천 · ${input.recommendedFocusLabel}`
+          : '바로 시작할 수 있어요',
     },
     secondary: null,
     performance: buildHomePerformance(ptContext),
