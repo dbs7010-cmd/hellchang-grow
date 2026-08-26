@@ -30,6 +30,11 @@ import { WorkoutCategory, WorkoutIntensity } from '@/types/workout';
 import { todayDateString } from '@/utils/date';
 import { countPeriodPRs } from '@/utils/exercise-history';
 import { buildHistoryDays } from '@/utils/history';
+import {
+  buildLearningBoard,
+  learnedFamilyCount,
+  seenFamilyCount,
+} from '@/utils/danbaek-learning-presence';
 import { buildRecommendationContext } from '@/utils/recommendation-context';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import {
@@ -76,6 +81,7 @@ export default function HistoryScreen() {
     canAddPhotoToday,
     nextPhotoAvailableDate,
     characterAppearance,
+    danbaekLearning,
   } = useAppData();
 
   const [period, setPeriod] = useState<Period>('week');
@@ -128,6 +134,22 @@ export default function HistoryScreen() {
     () => historyDays.filter((day) => day.hasPhoto).map((day) => day.date),
     [historyDays]
   );
+
+  /*
+   * 단백이가 이 기록에서 무엇을 배웠는지. 계산은 어댑터가 이미 했고 여기서는 옮겨 적기만
+   * 한다 — 없는 성장 수치를 만들지 않는다.
+   */
+  const topLearnedLabel = useMemo(() => {
+    const [top] = buildLearningBoard(danbaekLearning, 1);
+    return top ? `${top.label} · ${top.stageLabel}` : null;
+  }, [danbaekLearning]);
+  const learningEvidenceLine = useMemo(() => {
+    const seen = seenFamilyCount(danbaekLearning);
+    if (seen === 0) return '아직 단백이가 본 동작이 없어요. 운동을 기록하면 여기에 쌓여요.';
+    const learned = learnedFamilyCount(danbaekLearning);
+    const learnedPart = learned > 0 ? ` 그중 ${learned}가지는 배웠어요.` : '';
+    return `이 기록으로 단백이가 ${seen}가지 동작을 지켜봤어요.${learnedPart}`;
+  }, [danbaekLearning]);
 
   const recommendationContext = useMemo(
     () => buildRecommendationContext(profile, bodyHistory, workoutRecords),
@@ -416,6 +438,22 @@ export default function HistoryScreen() {
         </Section>
       )}
 
+      {/*
+        이 기록이 단백이 학습의 근거였다는 사실 한 줄. **보조 층이다** — History는 여전히
+        내 기록과 내 몸의 화면이고, 단백이 화면이 아니다. 그래서 통계/몸 변화 아래에 오고,
+        상세 목록(무엇을 몇 번 봤는지)은 운동 탭이 보여주므로 여기서 반복하지 않는다.
+      */}
+      <View style={styles.learningNote}>
+        <ThemedText type="captionBold" themeColor="textSecondary">
+          🐣 {learningEvidenceLine}
+        </ThemedText>
+        {topLearnedLabel && (
+          <ThemedText type="caption" themeColor="textSecondary">
+            가장 많이 본 동작 · {topLearnedLabel}
+          </ThemedText>
+        )}
+      </View>
+
       {/* 놓친 기록 채우기와 전체 기록 보기는 History의 보조 기능이다 —
           Primary 버튼처럼 보이지 않게 텍스트 액션으로 둔다. */}
       <View style={styles.secondaryActions}>
@@ -542,6 +580,11 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
+  /** 학습 근거는 카드도 섹션도 아니다 — 보조 한 줄이다. */
+  learningNote: {
+    gap: Spacing.half,
+    paddingVertical: Spacing.one,
+  },
   bodyRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -41,6 +41,11 @@ function RootNavigator() {
         <Stack.Screen name="exercise-detail" />
         <Stack.Screen name="routine-edit" />
         <Stack.Screen name="ai-chat" />
+        {/*
+          단백세상에서 막혔을 때 스탠리가 설명하는 APP 화면. WORLD 화면이 아니다 —
+          WORLD가 넘긴 block을 받아 실제 운동으로 되돌리는 자리다.
+        */}
+        <Stack.Screen name="danbaek-block" />
       </Stack.Protected>
     </Stack>
   );
