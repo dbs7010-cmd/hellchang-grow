@@ -123,10 +123,16 @@ function collectRecentExercises(records: WorkoutRecord[], limit: number): PtCont
       // setDetails가 없는 옛 기록은 요약값(sets/weightKg/reps)으로 근사한다.
       const setCount = completed ? completed.length : (exercise.sets ?? 0);
       if (setCount === 0) continue;
+      /*
+        옛 요약값으로 만드는 top set도 `topCompletedSet`과 같은 기준을 지나야 한다 —
+        0회는 수행이 아니다. 그러지 않으면 "100kg × 0회"가 최고 세트로 올라와 홈의
+        실제 성취 자리를 차지한다.
+      */
+      const legacyReps = exercise.reps ?? 0;
       const topSet =
         topCompletedSet(completed) ??
-        (exercise.weightKg !== undefined && exercise.reps !== undefined
-          ? { weightKg: exercise.weightKg, reps: exercise.reps }
+        (exercise.weightKg !== undefined && legacyReps > 0
+          ? { weightKg: exercise.weightKg, reps: legacyReps }
           : null);
 
       seen.add(exercise.exerciseId);

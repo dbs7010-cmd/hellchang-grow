@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 
 import type { BodyHistoryEntry } from '@/types/body';
 import type { UserProfile } from '@/types/user';
-import type { PtContext } from '@/utils/pt-context';
+import type { WorkoutRecord } from '@/types/workout';
+import { buildPtContext, type PtContext } from '@/utils/pt-context';
 import {
   buildHomeBodyMetrics,
   buildHomePerformance,
@@ -313,6 +314,86 @@ const ptContextOf = (overrides: {
     '오늘 이미 운동했어도 추가 운동 경로가 남는다',
     home.includes("home.state !== 'IN_PROGRESS'") && home.includes('<RecommendedStrip')
   );
+}
+
+// ── 9. 옛 기록이 없는 성취로 승격되지 않는다 ────────────────────────────────
+//
+// WEIGHT CORE 이전 기록에는 세트별 completed 플래그가 없다. 그래서 읽는 쪽이 요약값
+// (sets/weightKg/reps)으로 근사하는데, 그 근사가 0회를 통과시키면 **한 번도 들지 않은
+// 무게**가 listPRs → PtContext → 홈의 "실제 성취"까지 그대로 올라간다.
+//
+// 여기서 검증하는 것은 판정 규칙이 아니라 읽는 경계다 — 실제 저장된 기록은 건드리지 않는다.
+{
+  const legacyRecord = (input: { id: string; date: string; reps?: number }): WorkoutRecord => ({
+    id: input.id,
+    date: input.date,
+    category: 'strength',
+    title: '레거시 세션',
+    completed: true,
+    createdAt: `${input.date}T10:00:00.000Z`,
+    // setDetails 없음 = 옛 기록
+    exercises: [
+      {
+        id: 'e1',
+        exerciseId: 'deadlift',
+        name: '데드리프트',
+        sets: 3,
+        weightKg: 100,
+        ...(input.reps === undefined ? {} : { reps: input.reps }),
+      },
+    ],
+  });
+
+  const contextFor = (records: WorkoutRecord[]) =>
+    buildPtContext({
+      profile,
+      bodyHistory: [],
+      workoutRecords: records,
+      streak: { currentStreakDays: 0, longestStreakDays: 0, rewardClaimed: false },
+      routines: [],
+      activeSession: null,
+      today: '2026-08-26',
+    });
+
+  // 무효: 3세트 100kg인데 0회 — 실제로 든 적이 없다.
+  const invalid = contextFor([legacyRecord({ id: 'legacy-0', date: '2026-08-24', reps: 0 })]);
+  expect('0회짜리 옛 기록은 PR이 되지 않는다', invalid.recentTraining.recentPRs.length === 0);
+  expect(
+    '0회짜리 옛 기록은 최고 세트도 되지 않는다',
+    invalid.recentTraining.recentExercises.every((exercise) => exercise.topSet === null)
+  );
+
+  const invalidSignal = buildHomePerformance(invalid);
+  expect(
+    '홈이 들지 않은 무게를 성취로 말하지 않는다',
+    invalidSignal === null || !invalidSignal.value.includes('100kg')
+  );
+  expect(
+    '홈이 없는 최고 중량을 만들지 않는다',
+    invalidSignal?.source !== 'weightPr' && invalidSignal?.source !== 'recentSet'
+  );
+
+  // 횟수 자체가 없는 옛 기록도 같은 취급이다 — 단서가 없으면 성취도 없다.
+  const missingReps = contextFor([legacyRecord({ id: 'legacy-none', date: '2026-08-24' })]);
+  expect('횟수가 아예 없는 옛 기록도 PR이 아니다', missingReps.recentTraining.recentPRs.length === 0);
+  expect(
+    '횟수가 없으면 홈도 그 무게를 말하지 않는다',
+    !(buildHomePerformance(missingReps)?.value ?? '').includes('100kg')
+  );
+
+  // 유효: 실제로 수행한 옛 기록은 전부 그대로 살아 있어야 한다.
+  const valid = contextFor([legacyRecord({ id: 'legacy-ok', date: '2026-08-24', reps: 5 })]);
+  expect('실제로 수행한 옛 기록은 여전히 PR이다', valid.recentTraining.recentPRs.length === 1);
+  expect('그 PR의 중량은 그대로다', valid.recentTraining.recentPRs[0]?.weightKg === 100);
+  expect(
+    '그 기록의 최고 세트도 그대로다',
+    valid.recentTraining.recentExercises[0]?.topSet?.weightKg === 100 &&
+      valid.recentTraining.recentExercises[0]?.topSet?.reps === 5
+  );
+
+  const validSignal = buildHomePerformance(valid);
+  expect('홈은 실제로 든 무게를 그대로 말한다', validSignal?.source === 'weightPr');
+  expect('값 표기도 그대로다', validSignal?.value === '100kg');
 }
 
 if (failures > 0) {

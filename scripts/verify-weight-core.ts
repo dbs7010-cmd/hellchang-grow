@@ -251,6 +251,42 @@ function record(overrides: Partial<WorkoutRecord>): WorkoutRecord {
     listPRs([...past, noReps]).length,
     listPRs(past).length
   );
+
+  /*
+    같은 규칙이 setDetails가 없는 옛 기록에도 적용돼야 한다. 옛 요약값에는 세트별 completed
+    플래그가 없어서 유일한 단서가 횟수인데, 0회를 통과시키면 "들지 않은 100kg"이 최고 중량
+    PR로 올라가고 그대로 홈의 실제 성취 자리를 차지한다.
+  */
+  const legacyZeroReps = record({
+    id: 'r4',
+    date: '2026-08-17',
+    exercises: [
+      { id: 'e1', exerciseId: 'deadlift', name: '데드리프트', sets: 3, weightKg: 100, reps: 0 },
+    ],
+  });
+  check(
+    'a legacy summary with 0 reps produces no PR event',
+    listPRs([legacyZeroReps]).length,
+    0
+  );
+  check(
+    'a legacy summary with 0 reps never claims a top weight',
+    listPRs([legacyZeroReps]).map((pr) => pr.weightKg),
+    []
+  );
+
+  // 반대로, 실제로 수행한 옛 기록은 그대로 살아 있어야 한다.
+  const legacyValid = record({
+    id: 'r5',
+    date: '2026-08-18',
+    exercises: [
+      { id: 'e1', exerciseId: 'deadlift', name: '데드리프트', sets: 3, weightKg: 100, reps: 5 },
+    ],
+  });
+  const legacyEvents = listPRs([legacyValid]);
+  check('a valid legacy summary still produces its weight PR', legacyEvents.length, 1);
+  check('the valid legacy PR keeps its weight', legacyEvents[0]?.weightKg, 100);
+  check('the valid legacy PR is still a first record', legacyEvents[0]?.previousBestWeightKg, undefined);
 }
 
 // 5. recommendMuscleGroup prioritizes muscle groups that were never trained, then least-recently trained

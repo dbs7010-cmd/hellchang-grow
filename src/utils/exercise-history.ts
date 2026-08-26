@@ -204,7 +204,13 @@ function detectPrForSets(sets: PrSet[], bests: ExerciseBests): PrAchievement | n
 function setsFromRecordExercise(exercise: NonNullable<WorkoutRecord['exercises']>[number]): PrSet[] {
   const details = effectiveSetDetails(exercise);
   if (details) return details;
-  if (exercise.weightKg === undefined && exercise.reps === undefined) return [];
+  /*
+    옛 기록에는 세트별 completed 플래그가 없다. 그래서 "실제로 들었는가"를 판단할 단서는
+    횟수뿐이고, 0회(또는 없음)는 `isEffectiveSet`이 이미 무효로 보는 값이다. 여기서만
+    통과시키면 100kg × 0회짜리 요약이 "최고 중량 100kg 첫 기록"이라는, 한 번도 일어난 적
+    없는 성취가 된다. 판정 규칙을 바꾸는 것이 아니라 같은 기준을 옛 요약값에도 적용한다.
+  */
+  if ((exercise.reps ?? 0) <= 0) return [];
   return [{ weightKg: exercise.weightKg, reps: exercise.reps }];
 }
 
