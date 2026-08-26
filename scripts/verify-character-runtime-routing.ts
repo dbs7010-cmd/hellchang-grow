@@ -20,7 +20,6 @@ const walk = (dir: string): string[] =>
   });
 
 const player = read('src/components/character/player-character.tsx');
-const viewer = read('src/components/character/character-viewer.tsx');
 const registry = read('src/config/character-assets.ts');
 const onboarding = read('src/app/(onboarding)/index.tsx');
 const home = read('src/app/(tabs)/index.tsx');
@@ -40,13 +39,17 @@ expect('HISTORY renders through PlayerCharacter', history.includes('<PlayerChara
 expect('SESSION routes live body through CharacterMotionStage', session.includes('bodyParameters={bodyParameters}'));
 expect('RESULT keeps explicit reveal body snapshot', session.includes('bodyParameters={displayedBody}'));
 expect('BEFORE/AFTER comparison keeps explicit snapshot', session.includes('bodyParameters={bodyParameters}'));
-expect('360 fallback receives current persistent body', viewer.includes('const { bodyParameters } = useAppData()') && viewer.includes('bodyParameters={bodyParameters}'));
 
 const runtimeFiles = [
   ...walk('src/app'),
   ...walk('src/components'),
   ...walk('src/config'),
 ].filter((file) => /\.(ts|tsx)$/.test(file));
+
+// The 360 viewer shell was deliberately deleted (f466f00). Nothing may bring back a second
+// player-rendering path: every surface keeps routing through PlayerCharacter.
+const viewerImporters = runtimeFiles.filter((file) => read(file).includes("character/character-viewer"));
+expect('no runtime file imports the removed 360 viewer', viewerImporters.length === 0, viewerImporters);
 
 const forbiddenAssetRefs = runtimeFiles.filter((file) => {
   const source = read(file);
@@ -60,7 +63,7 @@ const forbiddenAssetRefs = runtimeFiles.filter((file) => {
 expect('no runtime import/require uses legacy or CANON reference player images', forbiddenAssetRefs.length === 0, forbiddenAssetRefs);
 
 const directSilhouetteUsers = runtimeFiles.filter((file) => {
-  if (file.endsWith('player-character.tsx') || file.endsWith('character-viewer.tsx')) return false;
+  if (file.endsWith('player-character.tsx')) return false;
   return read(file).includes("character-silhouette");
 });
 expect('screens cannot bypass PlayerCharacter with CharacterSilhouette', directSilhouetteUsers.length === 0, directSilhouetteUsers);
