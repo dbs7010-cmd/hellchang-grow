@@ -21,6 +21,15 @@ export const DanbaekWorldProofStages: DanbaekWorldStage[] = [
       reason: '랫풀다운 기록이 생기면 단백이가 위에서 당기는 동작을 보고 이 절벽을 오를 수 있어요.',
     },
   },
+  {
+    id: 'squat-stones',
+    requirement: {
+      movementFamily: 'squat',
+      minimumLearningStage: 'observing',
+      specificExerciseId: 'squat',
+      reason: '스쿼트 기록이 생기면 단백이가 낮게 앉아 중심을 잡는 동작을 보고 돌길을 건널 수 있어요.',
+    },
+  },
 ];
 
 /**
@@ -69,7 +78,7 @@ export interface DanbaekWorldStageScene {
   /** 지나간 뒤의 장면. */
   clearedLine: string;
   /** 화면이 그릴 장애물. 판정에는 관여하지 않는다. */
-  obstacle: 'gate' | 'cliff';
+  obstacle: 'gate' | 'cliff' | 'stones';
   /** 같은 관문을 막힌 채 본 뒤 운동하고 돌아왔을 때만 쓰는 반응. */
   returnedLine: string;
   /** 열린 순간의 짧은 제목. */
@@ -101,6 +110,14 @@ export const DanbaekWorldStageScenes: Record<string, DanbaekWorldStageScene> = {
     returnedLine: '아까는 미끄러졌는데, 운동에서 본 대로 당기니 올라왔어!',
     clearedTitle: '절벽을 올랐어요!',
   },
+  'squat-stones': {
+    label: '굽이진 돌길',
+    blockedLine: '단백이가 기울어진 돌에 올라서지만, 몸이 흔들려 다시 출발점으로 내려와요.',
+    clearedLine: '단백이가 몸을 낮추고 중심을 잡아 흔들리는 돌길을 건넜어요.',
+    obstacle: 'stones',
+    returnedLine: '아까는 휘청였는데, 운동에서 본 대로 몸을 낮추니 중심이 잡혔어!',
+    clearedTitle: '돌길을 건넜어요!',
+  },
 };
 
 /**
@@ -111,6 +128,6 @@ export const DanbaekWorldStageScenes: Record<string, DanbaekWorldStageScene> = {
  * 다음 콘텐츠가 실제로 생길 때 스테이지로 승격시키면 된다.
  */
 export const DanbaekWorldNextPath = {
-  label: '굽이진 돌길',
-  teaser: '절벽 너머로 균형을 잡아 건너야 할 좁은 돌길이 이어져요.',
+  label: '바람 부는 능선',
+  teaser: '돌길 너머 높은 능선에서 거센 바람 소리가 들려와요.',
 } as const;

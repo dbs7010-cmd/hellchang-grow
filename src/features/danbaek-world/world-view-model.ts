@@ -25,7 +25,7 @@ interface DanbaekWorldSceneBase {
   journey: DanbaekWorldJourneyNode[];
   /** 지금 서 있는(또는 방금 지나온) 구간. 방문 기억이 이 값으로 변화를 판단한다. */
   stageId: string;
-  obstacle: 'gate' | 'cliff';
+  obstacle: 'gate' | 'cliff' | 'stones';
   /** 눈앞에서 벌어지는 일 한 줄. */
   sceneLine: string;
   /** 단백이 한마디 (PRIMARY). */
@@ -125,7 +125,9 @@ export function buildDanbaekWorldScene(profile: DanbaekLearningProfile): Danbaek
       danbaekLine:
         sceneOf(lastStageId).obstacle === 'cliff'
           ? DanbaekWorldVoiceLines.cliffCleared
-          : DanbaekWorldVoiceLines.gateCleared,
+          : sceneOf(lastStageId).obstacle === 'stones'
+            ? DanbaekWorldVoiceLines.stonesCleared
+            : DanbaekWorldVoiceLines.gateCleared,
       returnedLine: sceneOf(lastStageId).returnedLine,
       statusLine:
         (family && learnedStatusLine(profile, family)) ?? '단백이가 본 동작으로 길을 열었어요',
@@ -169,5 +171,8 @@ export function describeFirstPathEntry(profile: DanbaekLearningProfile): string 
   if (scene.state === 'blocked' && scene.stageId === 'pull-cliff') {
     return '첫 번째 길이 열려 있어요 · 다음은 랫풀다운으로 당기는 절벽';
   }
-  return `당기는 절벽을 올랐어요 · 다음은 ${DanbaekWorldNextPath.label}`;
+  if (scene.state === 'blocked' && scene.stageId === 'squat-stones') {
+    return '당기는 절벽을 올랐어요 · 다음은 스쿼트로 굽이진 돌길';
+  }
+  return `굽이진 돌길을 건넜어요 · 다음은 ${DanbaekWorldNextPath.label}`;
 }

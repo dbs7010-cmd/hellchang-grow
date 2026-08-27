@@ -10,6 +10,7 @@ import { PrimaryButton } from '@/components/ui/primary-button';
 import { SubScreen } from '@/components/ui/sub-screen';
 import { WorldCliff, WorldCliffHeight } from '@/components/world/world-cliff';
 import { WorldGate, WorldGateHeight } from '@/components/world/world-gate';
+import { WorldStonePath, WorldStonePathHeight } from '@/components/world/world-stone-path';
 import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import {
@@ -139,9 +140,18 @@ export default function DanbaekWorldScreen() {
 
       {/* 장애물은 배경이고 주인공은 언제나 앞에 서 있는 단백이다. */}
       <View style={styles.stage}>
-        <View style={scene.obstacle === 'cliff' ? styles.cliffSlot : styles.gateSlot}>
+        <View
+          style={
+            scene.obstacle === 'cliff'
+              ? styles.cliffSlot
+              : scene.obstacle === 'stones'
+                ? styles.stonesSlot
+                : styles.gateSlot
+          }>
           {scene.obstacle === 'cliff' ? (
             <WorldCliff state={scene.state === 'blocked' ? 'blocked' : 'cleared'} />
+          ) : scene.obstacle === 'stones' ? (
+            <WorldStonePath state={scene.state === 'blocked' ? 'blocked' : 'cleared'} />
           ) : (
             <WorldGate state={scene.gate} />
           )}
@@ -253,11 +263,13 @@ const styles = StyleSheet.create({
   railRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    rowGap: Spacing.one,
   },
   railNode: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexShrink: 1,
+    flexBasis: '50%',
   },
   railLine: {
     width: Spacing.three,
@@ -265,6 +277,7 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.half,
   },
   railNodeText: {
+    flex: 1,
     flexShrink: 1,
   },
   /** 첫 인사. 한 번만 보이고, 닫으면 바로 원래 화면이다. */
@@ -301,6 +314,14 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     paddingLeft: 104,
+  },
+  stonesSlot: {
+    position: 'absolute',
+    top: StageHeight - WorldStonePathHeight,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingLeft: 72,
   },
   sceneLine: {
     textAlign: 'center',
