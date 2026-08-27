@@ -7,7 +7,12 @@ import { ThemedView } from '@/components/themed-view';
 import { HomeColors, Layout, Motion, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-export type PrimaryButtonVariant = 'primary' | 'secondary' | 'gold' | 'homeGold';
+/**
+ * 행동의 무게. **채워진 것이 누를 것이다** — 화면에서 가장 중요한 행동 하나만 gold로 채우고,
+ * 나머지는 물러난다. 예전에는 gold가 카드와 같은 배경(backgroundElement)에 금색 글자만
+ * 얹은 형태라, [세트 완료]와 [운동 종료]가 같은 회색 사각형으로 보였다.
+ */
+export type PrimaryButtonVariant = 'primary' | 'secondary' | 'quiet' | 'gold' | 'homeGold';
 export type PrimaryButtonSize = 'default' | 'large';
 export type PrimaryButtonHaptic = 'light' | 'medium' | 'success' | 'none';
 
@@ -28,6 +33,7 @@ const DEFAULT_HAPTIC: Record<PrimaryButtonVariant, PrimaryButtonHaptic> = {
   gold: 'medium',
   primary: 'light',
   secondary: 'none',
+  quiet: 'none',
   homeGold: 'medium',
 };
 
@@ -66,6 +72,8 @@ export function PrimaryButton({
 
   const isGold = variant === 'gold';
   const isHomeGold = variant === 'homeGold';
+  const isQuiet = variant === 'quiet';
+  const isSecondary = variant === 'secondary';
 
   return (
     <Pressable
@@ -85,23 +93,38 @@ export function PrimaryButton({
       style={[style, disabled && styles.disabled]}>
       <Animated.View style={animatedStyle}>
         <ThemedView
-          type={variant === 'secondary' ? 'backgroundElement' : isGold ? 'backgroundElement' : 'backgroundSelected'}
+          type={isSecondary || isQuiet ? 'background' : 'backgroundSelected'}
           style={[
             styles.button,
             size === 'large' && styles.buttonLarge,
-            isGold && { borderWidth: 2, borderColor: theme.gold },
+            // 주 행동은 칠해진 금색 덩어리다. 테두리+금색 글자로는 카드와 구분되지 않았다.
+            isGold && { backgroundColor: theme.gold, boxShadow: '0 6px 16px rgba(0, 0, 0, 0.28)' },
+            // 보조는 물러난다 — 같은 화면에서 주 행동과 면적을 겨루지 않는다.
+            (isSecondary || isQuiet) && { borderWidth: 1, borderColor: theme.border },
+            isQuiet && styles.quiet,
             isHomeGold && styles.homeGold,
           ]}>
           <ThemedText
             type={size === 'large' ? 'heading' : 'smallBold'}
-            style={isGold ? { color: theme.gold } : isHomeGold ? styles.homeGoldLabel : undefined}>
+            themeColor={isQuiet ? 'textSecondary' : undefined}
+            style={
+              isGold
+                ? { color: theme.background }
+                : isHomeGold
+                  ? styles.homeGoldLabel
+                  : undefined
+            }>
             {label}
           </ThemedText>
           {subLabel && (
             <ThemedText
               type="small"
               themeColor="textSecondary"
-              style={[styles.subLabel, isHomeGold && styles.homeGoldSubLabel]}>
+              style={[
+                styles.subLabel,
+                isGold && { color: theme.background, opacity: 0.75 },
+                isHomeGold && styles.homeGoldSubLabel,
+              ]}>
               {subLabel}
             </ThemedText>
           )}
@@ -122,6 +145,10 @@ const styles = StyleSheet.create({
   buttonLarge: {
     minHeight: Layout.ctaHeightLarge,
     borderRadius: Radius.large,
+  },
+  /** 파괴적/후퇴 행동. 면적은 같아도 눈에 먼저 들어오지 않는다. */
+  quiet: {
+    minHeight: Layout.compactRowHeight,
   },
   homeGold: {
     backgroundColor: HomeColors.gold,

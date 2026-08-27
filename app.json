@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "hellchang-grow",
+    "name": "헬창키우기",
     "slug": "hellchang-grow",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,11 +8,14 @@
     "scheme": "hellchanggrow",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.helchanggrow.app",
+      "buildNumber": "1"
     },
     "android": {
+      "package": "com.helchanggrow.app",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#1B1D20",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -28,7 +31,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#1B1D20",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
@@ -36,13 +39,22 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "몸 형태를 참고할 사진을 고를 때 사진 라이브러리에 접근해요."
+          "photosPermission": "몸 형태를 참고할 사진을 고를 때 사진 라이브러리에 접근해요.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "97f8c096-44c5-4cda-b389-958e26542e8f"
+      }
+    },
+    "owner": "usunge"
   }
 }

@@ -1,5 +1,5 @@
 import { useNavigation, useRootNavigationState, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
@@ -8,11 +8,13 @@ import * as Haptics from 'expo-haptics';
 import { CharacterMotionStage } from '@/components/character/character-motion-stage';
 import { PlayerCharacter } from '@/components/character/player-character';
 import { GoldsunReaction } from '@/components/goldsun/goldsun-reaction';
+import { SessionExerciseSelector } from '@/components/session/session-exercise-selector';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
 import { CircularProgressRing } from '@/components/ui/circular-progress-ring';
+import { InlineAction } from '@/components/ui/inline-action';
 import { ExerciseArtSlot } from '@/components/ui/exercise-art-slot';
 import { MetricGrid, MetricTile } from '@/components/ui/metric-tile';
 import { PRBadge } from '@/components/ui/pr-badge';
@@ -20,7 +22,7 @@ import { PrimaryButton } from '@/components/ui/primary-button';
 import { Section } from '@/components/ui/section';
 import { TextField } from '@/components/ui/text-field';
 import { AppConfig } from '@/config/app-config';
-import { getResolvedExerciseById, searchExercises } from '@/config/exercises';
+import { Exercises, getResolvedExerciseById, searchExercises } from '@/config/exercises';
 import { inferMotionFamily } from '@/config/motion-families';
 import { StanleyTrainer } from '@/config/trainers';
 import { WorkoutCategories, WorkoutCategoryLabels } from '@/config/workout-labels';
@@ -29,8 +31,24 @@ import { EndSessionSummary, useAppData } from '@/context/app-data-context';
 import { useTheme } from '@/hooks/use-theme';
 import { WorkoutRecord, WorkoutSetEntry } from '@/types/workout';
 import { SessionExerciseEntry, WorkoutSession } from '@/types/workout-session';
-import { detectPRs, findPreviousPerformance, PrEvent } from '@/utils/exercise-history';
+import {
+  describePrAchievement,
+  describePrPrevious,
+  detectPRs,
+  findPreviousPerformance,
+  PrEvent,
+} from '@/utils/exercise-history';
+import {
+  clearWorldReturn,
+  getWorldReturn,
+  subscribeToWorldReturn,
+} from '@/services/world/world-visit';
 import { createId } from '@/utils/id';
+import {
+  buildDanbaekGainVoice,
+  buildDanbaekSetVoice,
+  describeLearningGain,
+} from '@/utils/danbaek-learning-presence';
 import {
   buildGrowthRevealMuscles,
   buildGrowthHighlight,
@@ -43,10 +61,10 @@ import {
 } from '@/utils/growth-reveal';
 import {
   resolveSessionConfirm,
-  shouldClearEndConfirm,
   shouldConfirmSessionExit,
 } from '@/utils/session-exit';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
+import { findWorkoutRecordForSession } from '@/utils/workout-record-detail';
 import { formatVolumeKg } from '@/utils/workout-stats';
 import {
   deriveWorkoutCharacterState,
@@ -56,6 +74,9 @@ import {
   willCountAsEffectiveSet,
 } from '@/utils/workout-character-motion';
 import {
+  buildSessionExerciseNavigation,
+} from '@/utils/session-navigation';
+import {
   computeCompletedSetsCount,
   computeElapsedSeconds,
   isEffectiveSet,
@@ -63,7 +84,6 @@ import {
   getAutoRestSeconds,
   getCurrentExercise,
   getLastSetValues,
-  getNextExercise,
   getRestProgress,
   getRestSecondsRemaining,
   getSetProgress,
@@ -73,8 +93,15 @@ interface SessionSummaryWithLine extends EndSessionSummary {
   trainerLine: string;
 }
 
+/**
+ * 축하 연출을 한 번만 띄우기 위한 PR 식별자.
+ *
+ * 예전에는 `운동-중량`만 봤다. 그러면 같은 중량에서 일어난 **중량 PR과 횟수 PR이 한 개로**
+ * 접히고, 같은 중량에서 횟수를 더 올린 뒤에 오는 다음 rep PR도 이미 본 것으로 취급돼
+ * 축하가 사라졌다. 종류와 달성 횟수까지 넣어야 서로 다른 성취가 서로를 지우지 않는다.
+ */
 function prKey(pr: PrEvent) {
-  return `${pr.exerciseId}-${pr.weightKg}`;
+  return `${pr.exerciseId}-${pr.kind}-${pr.weightKg}-${pr.reps ?? ''}`;
 }
 
 /**
@@ -106,6 +133,7 @@ export default function SessionScreen() {
     updateSessionSet,
     adjustSessionSet,
     completeSessionSet,
+    removeSessionSet,
     ensureSessionPendingSet,
     startSessionRest,
     skipSessionRest,
@@ -168,6 +196,8 @@ export default function SessionScreen() {
   const [customRestSeconds, setCustomRestSeconds] = useState('');
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
+  /** 지금 고치고 있는 완료 세트. 한 번에 하나만 연다 — 목록 전체가 입력칸이 되면 읽을 수 없다. */
+  const [editingSetId, setEditingSetId] = useState<string | null>(null);
   /** 뒤로가기를 가로챈 상태인지. 확인 바를 띄우는 동안 화면은 그대로 남는다. */
   /**
    * 방금 유효 세트를 끝냈다는 짧은 표시. **표현 전용 일시 상태다** — 성장/보상과 무관하고
@@ -195,7 +225,7 @@ export default function SessionScreen() {
    *
    * **뒤로가기는 운동 종료가 아니다.** 여기서는 어떤 저장도 하지 않는다 — 세션은 그대로
    * 남고, 확인 후 나가더라도 기록/XP/streak/Growth는 만들어지지 않는다. 사용자는 홈의
-   * [운동으로 돌아가기]로 같은 세션에 복귀한다. 완료는 오직 [운동 종료] 경로에서만 일어난다.
+   * [운동 계속하기]로 같은 세션에 복귀한다. 완료는 오직 [운동 종료] 경로에서만 일어난다.
    */
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove' as never, ((event: {
@@ -375,22 +405,6 @@ export default function SessionScreen() {
    */
   const restScreenShowing = isResting && !presentingSetComplete;
 
-  /**
-   * 휴식 화면으로 넘어가면 종료 확인은 갈 곳이 없다 — 상태까지 꺼 둔다.
-   *
-   * 감추기만 하면 ACTIVE로 돌아왔을 때 그대로 다시 떠서, 같은 자리의 다음 탭이
-   * [종료하고 기록]에 맞는 사고가 난다(실기기 재현). 이탈 확인(confirmExit)은 휴식
-   * 화면에서도 보여야 하므로 정리하지 않는다.
-   * setState를 effect 본문에서 동기 호출하지 않도록 콜백으로 감싼다 — 위 휴식 반응과 같은 방식.
-   */
-  useEffect(() => {
-    if (!shouldClearEndConfirm({ resting: restScreenShowing, confirmEnd })) return;
-    const timer = setTimeout(() => {
-      setConfirmEnd(false);
-      setEndError(null);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [restScreenShowing, confirmEnd]);
 
   if (!activeSession) {
     // 종료 직후에는 결과 화면이 이 자리를 차지한다. 그 밖의 "그릴 것이 없는" 상태는
@@ -410,11 +424,7 @@ export default function SessionScreen() {
     nowMs - activeSession.restUntilMs < REST_READY_WINDOW_MS;
 
   const currentExercise = getCurrentExercise(activeSession);
-  const currentIndex = currentExercise
-    ? activeSession.exercises.findIndex((e) => e.id === currentExercise.id)
-    : -1;
-  const nextExercise = getNextExercise(activeSession);
-  const previousExercise = currentIndex > 0 ? activeSession.exercises[currentIndex - 1] : undefined;
+  const exerciseNavigationItems = buildSessionExerciseNavigation(activeSession);
   const pendingSet = currentExercise?.sets.find((set) => !set.completed);
   const completedSets = currentExercise?.sets.filter(isEffectiveSet) ?? [];
   // 화면에 보이는 완료 세트 수도 기록과 같은 기준을 쓴다 — 체크만 하고 횟수가 없는
@@ -479,7 +489,13 @@ export default function SessionScreen() {
     const completedSet = currentExercise.sets.find((set) => set.id === setId);
     if (willCountAsEffectiveSet(completedSet)) {
       if (setReactionTimerRef.current) clearTimeout(setReactionTimerRef.current);
-      setSetReaction(getExerciseReactionCopy(resolvedCurrent?.primaryMuscles[0] ?? activeSession.primaryMuscleGroup));
+      // 어떤 동작인지 알면 단백이가 그것을 따라 한다고 말하고, 모르는 운동(직접 추가 등)은
+      // 기존 부위 반응으로 떨어진다 — 아는 척하지 않는다. 문구 선택만 바뀌고 세트 기록/휴식
+      // 전환/연출 타이밍은 그대로다.
+      setSetReaction(
+        buildDanbaekSetVoice(currentExercise.exerciseId) ??
+          getExerciseReactionCopy(resolvedCurrent?.primaryMuscles[0] ?? activeSession.primaryMuscleGroup)
+      );
       setReactionTimerRef.current = setTimeout(() => {
         setSetReaction(null);
         setReactionTimerRef.current = null;
@@ -512,14 +528,32 @@ export default function SessionScreen() {
     await adjustSessionSet(currentExercise.id, setId, delta);
   };
 
+  /**
+   * 잘못 기록한 세트를 지운다. 지우는 것은 세션 상태 하나뿐이고, 기록/보상/성장은 세션이
+   * 끝날 때 남아 있는 유효 세트만 보고 기존 파이프라인이 계산한다.
+   */
+  const handleRemoveSet = async (setId: string) => {
+    if (!currentExercise) return;
+    setEditingSetId(null);
+    await removeSessionSet(currentExercise.id, setId);
+  };
+
+  /**
+   * 운동을 담으면 **그 운동이 곧바로 지금 하는 운동이 된다.**
+   *
+   * 예전에는 [+ 운동 추가]에서 스쿼트를 골라도 화면은 벤치프레스 그대로여서, 방금 한
+   * 행동이 아무 일도 하지 않은 것처럼 보였다. 순서를 강제하는 것이 아니다 — 사용자가
+   * 방금 직접 고른 운동으로 옮기는 것뿐이고, 선택기에서 언제든 다시 바꿀 수 있다.
+   */
   const handleAddExerciseByName = async (exerciseId: string, exerciseName: string) => {
     const resolved = getResolvedExerciseById(exerciseId);
-    await addExerciseToSession({
+    const entryId = await addExerciseToSession({
       exerciseId,
       exerciseName,
       targetSets: resolved?.defaultSets,
       defaultRestSeconds: resolved?.defaultRestSeconds,
     });
+    await setCurrentSessionExercise(entryId);
     setAddExerciseQuery('');
     setShowAddExercise(false);
   };
@@ -527,7 +561,11 @@ export default function SessionScreen() {
   const handleAddCustomExercise = async () => {
     const name = addExerciseQuery.trim();
     if (!name) return;
-    await addExerciseToSession({ exerciseId: createId('custom-exercise'), exerciseName: name });
+    const entryId = await addExerciseToSession({
+      exerciseId: createId('custom-exercise'),
+      exerciseName: name,
+    });
+    await setCurrentSessionExercise(entryId);
     setAddExerciseQuery('');
     setShowAddExercise(false);
   };
@@ -603,7 +641,7 @@ export default function SessionScreen() {
         운동이 아직 진행 중이에요. 세션을 그대로 두고 나갈까요?
       </ThemedText>
       <ThemedText type="caption" themeColor="textSecondary" style={styles.confirmText}>
-        나가도 기록되지 않아요. 홈의 [운동으로 돌아가기]로 이어서 할 수 있어요.
+        나가도 기록되지 않아요. 홈의 [운동 계속하기]로 이어서 할 수 있어요.
       </ThemedText>
       <View style={styles.inlineRow}>
         <PrimaryButton
@@ -622,6 +660,57 @@ export default function SessionScreen() {
       </View>
     </View>
   );
+
+  /**
+   * 운동 종료 확인 바. **정의는 하나뿐이고** ACTIVE와 REST가 같은 것을 그린다 —
+   * 마지막 세트 뒤에는 곧바로 휴식이 시작되므로, 운동을 끝내는 가장 흔한 자리가 휴식 화면이다.
+   */
+  const endConfirmBar = (
+    <View style={styles.confirmBar}>
+      <ThemedText type="small" style={styles.confirmText}>
+        {endError
+          ? endError
+          : sessionCompletedSets === 0
+            ? '완료한 세트가 없어요. 기록 없이 나갈까요?'
+            : '운동을 종료할까요?'}
+      </ThemedText>
+      <View style={styles.inlineRow}>
+        <PrimaryButton
+          label="계속 운동"
+          variant="secondary"
+          style={styles.flexItem}
+          onPress={() => setConfirmEnd(false)}
+        />
+        <PrimaryButton
+          label={endError ? '다시 시도' : sessionCompletedSets === 0 ? '기록 없이 나가기' : '종료하고 기록'}
+          variant="gold"
+          haptic="medium"
+          style={styles.flexItem}
+          onPress={sessionCompletedSets === 0 ? handleDiscard : handleEnd}
+        />
+      </View>
+    </View>
+  );
+
+  /**
+   * 아직 운동이 하나도 담기지 않은 세션. [운동 시작]에서 종목을 고르지 않고 들어왔거나
+   * 유산소로 시작한 경우다 — 예전에는 이 화면에 운동 종류 칩과 휴식 프리셋만 있어서
+   * 지금 무엇을 해야 하는지 말해 주는 것이 하나도 없었다.
+   */
+  const hasSessionExercises = activeSession.exercises.length > 0;
+  /** 담긴 운동이 없으면 추가 화면을 접어 둘 이유가 없다 — 그것이 유일한 다음 단계다. */
+  const addExerciseOpen = showAddExercise || !hasSessionExercises;
+  /**
+   * 검색어를 넣기 전에 보여줄 후보. 세션이 이미 부위를 알고 있으면 그 부위부터 보여준다 —
+   * 추천을 새로 만들어 내는 것이 아니라 세션에 이미 있는 사실로 목록을 좁히는 것뿐이다.
+   */
+  const addExerciseCandidates = addExerciseQuery.trim()
+    ? searchExercises(addExerciseQuery)
+    : activeSession.primaryMuscleGroup
+      ? Exercises.filter(
+          (exercise) => exercise.primaryMuscleGroup === activeSession.primaryMuscleGroup
+        )
+      : Exercises;
 
   const reaction = (
     <GoldsunReaction
@@ -643,16 +732,18 @@ export default function SessionScreen() {
         secondsRemaining={restSecondsRemaining}
         elapsedSeconds={elapsedSeconds}
         currentExercise={currentExercise}
-        nextExercise={nextExercise}
+        exerciseNavigationItems={exerciseNavigationItems}
         appearance={characterAppearance}
         family={motionFamily}
         bodyParameters={bodyParameters}
         characterState={characterState}
         reactionCopy={activeSetReaction}
         reaction={reaction}
-        // 휴식 중 뒤로가기도 여기서 답할 수 있어야 한다 — 있으면 [다음 세트 시작] 자리를 대신한다.
-        exitConfirm={sessionConfirm === 'exit' ? exitConfirmBar : null}
+        // 휴식 중 뒤로가기/종료도 여기서 답할 수 있어야 한다 — 있으면 [다음 세트 시작] 자리를 대신한다.
+        confirmBar={sessionConfirm === 'exit' ? exitConfirmBar : sessionConfirm === 'end' ? endConfirmBar : null}
+        onEnd={() => setConfirmEnd(true)}
         onPauseToggle={handlePauseToggle}
+        onSelectExercise={setCurrentSessionExercise}
         onSkip={skipSessionRest}
       />
     );
@@ -663,29 +754,29 @@ export default function SessionScreen() {
       elapsedSeconds={elapsedSeconds}
       isPaused={isPaused}
       onPauseToggle={handlePauseToggle}
-      statusLabel={
-        currentExercise
-          ? `운동 ${currentIndex + 1}/${activeSession.exercises.length}`
-          : undefined
-      }
+      statusLabel={currentExercise ? '운동 중' : undefined}
       reaction={reaction}>
       {prCelebration && <PrCelebrationOverlay pr={prCelebration} />}
 
-      {activeSession.exercises.length === 0 && (
-        <Section title="운동 종류">
-          <ChipRow>
-            {WorkoutCategories.map((category) => (
-              <Chip
-                key={category}
-                label={WorkoutCategoryLabels[category]}
-                selected={activeSession.primaryCategory === category}
-                disabled={isPaused}
-                onPress={() => changeSessionCategory(category)}
-              />
-            ))}
-          </ChipRow>
-        </Section>
+      {/*
+        빈 세션의 첫 화면. 무엇을 눌러야 하는지와 함께 **기록이 남는 조건**을 먼저 말한다 —
+        예전에는 세트를 하나도 하지 않고 종료했을 때 마지막 순간에야 "기록 없이 나갈까요?"를
+        만나서, 세션 내내 아무것도 남지 않는다는 걸 알 수 없었다.
+      */}
+      {!hasSessionExercises && (
+        <View style={styles.emptySession}>
+          <ThemedText type="heading">무엇부터 할까요?</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            운동을 하나 고르면 바로 세트를 기록할 수 있어요. 세트를 완료해야 기록이 남아요.
+          </ThemedText>
+        </View>
       )}
+
+      <SessionExerciseSelector
+        items={exerciseNavigationItems}
+        disabled={isPaused}
+        onSelect={setCurrentSessionExercise}
+      />
 
       {currentExercise && (
         <>
@@ -701,18 +792,6 @@ export default function SessionScreen() {
                   ? `${setProgress.completed} / ${setProgress.target} 세트`
                   : `${setProgress.completed + 1}세트째`}
               </ThemedText>
-            </View>
-            <View style={styles.exerciseNav}>
-              <NavArrow
-                label="‹"
-                disabled={isPaused || !previousExercise}
-                onPress={() => previousExercise && setCurrentSessionExercise(previousExercise.id)}
-              />
-              <NavArrow
-                label="›"
-                disabled={isPaused || !nextExercise}
-                onPress={() => nextExercise && setCurrentSessionExercise(nextExercise.id)}
-              />
             </View>
           </View>
 
@@ -734,6 +813,7 @@ export default function SessionScreen() {
           <PreviousPerformanceLine
             exerciseId={currentExercise.exerciseId}
             records={workoutRecords}
+            sessionSets={completedSets}
           />
 
           {pendingSet ? (
@@ -763,46 +843,25 @@ export default function SessionScreen() {
             contentContainerStyle={styles.logContent}
             showsVerticalScrollIndicator={false}>
             {completedSets.map((set, index) => (
-              <ThemedText key={set.id} type="caption" themeColor="textSecondary">
-                {index + 1}. {set.weightKg ?? '-'}kg × {set.reps ?? '-'}회 ✓
-              </ThemedText>
+              <CompletedSetRow
+                key={set.id}
+                index={index}
+                set={set}
+                editing={editingSetId === set.id}
+                disabled={isPaused}
+                onToggle={() => setEditingSetId(editingSetId === set.id ? null : set.id)}
+                onChange={(patch) => handleUpdateSet(set.id, patch)}
+                onAdjust={(delta) => handleAdjustSet(set.id, delta)}
+                onRemove={() => handleRemoveSet(set.id)}
+              />
             ))}
           </ScrollView>
 
-          {nextExercise && (
-            <Pressable
-              onPress={() => setCurrentSessionExercise(nextExercise.id)}
-              disabled={isPaused}
-              accessibilityRole="button"
-              accessibilityLabel={`다음 운동 ${nextExercise.exerciseName}로 이동`}
-              style={[styles.nextExerciseRow, isPaused && styles.disabledControl]}>
-              <ThemedText type="caption" themeColor="textSecondary">
-                다음 · {nextExercise.exerciseName}
-              </ThemedText>
-              <ThemedText type="captionBold" themeColor="textSecondary">
-                넘어가기 ›
-              </ThemedText>
-            </Pressable>
-          )}
-
-          {activeSession.exercises.length > 1 && (
-            <ChipRow bleed>
-              {activeSession.exercises.map((exercise) => (
-                <Chip
-                  key={exercise.id}
-                  label={exercise.exerciseName}
-                  selected={exercise.id === currentExercise?.id}
-                  disabled={isPaused}
-                  onPress={() => setCurrentSessionExercise(exercise.id)}
-                />
-              ))}
-            </ChipRow>
-          )}
         </>
       )}
 
-      {showAddExercise && (
-        <Section title="운동 추가">
+      {addExerciseOpen && (
+        <Section title={hasSessionExercises ? '운동 추가' : '운동 고르기'}>
           <TextField
             value={addExerciseQuery}
             onChangeText={setAddExerciseQuery}
@@ -810,16 +869,14 @@ export default function SessionScreen() {
             editable={!isPaused}
           />
           <ChipRow>
-            {searchExercises(addExerciseQuery)
-              .slice(0, 8)
-              .map((exercise) => (
-                <Chip
-                  key={exercise.id}
-                  label={exercise.name}
-                  disabled={isPaused}
-                  onPress={() => handleAddExerciseByName(exercise.id, exercise.name)}
-                />
-              ))}
+            {addExerciseCandidates.slice(0, 8).map((exercise) => (
+              <Chip
+                key={exercise.id}
+                label={exercise.name}
+                disabled={isPaused}
+                onPress={() => handleAddExerciseByName(exercise.id, exercise.name)}
+              />
+            ))}
           </ChipRow>
           <View style={styles.inlineRow}>
             <PrimaryButton
@@ -829,17 +886,37 @@ export default function SessionScreen() {
               style={styles.flexItem}
               onPress={handleAddCustomExercise}
             />
-            <PrimaryButton
-              label="닫기"
-              variant="secondary"
-              style={styles.flexItem}
-              onPress={() => setShowAddExercise(false)}
-            />
+            {/* 담긴 운동이 없을 때는 닫을 곳이 없다 — 닫으면 다시 빈 화면이 된다. */}
+            {hasSessionExercises && (
+              <PrimaryButton
+                label="닫기"
+                variant="secondary"
+                style={styles.flexItem}
+                onPress={() => setShowAddExercise(false)}
+              />
+            )}
           </View>
         </Section>
       )}
 
-      {!showAddExercise && (
+      {/* 운동 종류는 빈 세션에서만, 그리고 무엇을 할지 고른 다음에 온다 (보조 선택). */}
+      {!hasSessionExercises && (
+        <Section title="운동 종류">
+          <ChipRow>
+            {WorkoutCategories.map((category) => (
+              <Chip
+                key={category}
+                label={WorkoutCategoryLabels[category]}
+                selected={activeSession.primaryCategory === category}
+                disabled={isPaused}
+                onPress={() => changeSessionCategory(category)}
+              />
+            ))}
+          </ChipRow>
+        </Section>
+      )}
+
+      {!addExerciseOpen && (
         <View style={styles.restPicker}>
           <ThemedText type="caption" themeColor="textSecondary">
             휴식
@@ -877,42 +954,21 @@ export default function SessionScreen() {
       {sessionConfirm === 'exit' ? (
         exitConfirmBar
       ) : sessionConfirm === 'end' ? (
-        <View style={styles.confirmBar}>
-          <ThemedText type="small" style={styles.confirmText}>
-            {endError
-              ? endError
-              : sessionCompletedSets === 0
-                ? '완료한 세트가 없어요. 기록 없이 나갈까요?'
-                : '운동을 종료할까요?'}
-          </ThemedText>
-          <View style={styles.inlineRow}>
-            <PrimaryButton
-              label="계속 운동"
-              variant="secondary"
-              style={styles.flexItem}
-              onPress={() => setConfirmEnd(false)}
-            />
-            <PrimaryButton
-              label={endError ? '다시 시도' : sessionCompletedSets === 0 ? '기록 없이 나가기' : '종료하고 기록'}
-              variant="gold"
-              haptic="medium"
-              style={styles.flexItem}
-              onPress={sessionCompletedSets === 0 ? handleDiscard : handleEnd}
-            />
-          </View>
-        </View>
+        endConfirmBar
       ) : (
         <View style={styles.bottomBar}>
-          <PrimaryButton
-            label="+ 운동 추가"
-            variant="secondary"
-            disabled={isPaused}
-            style={styles.flexItem}
-            onPress={() => setShowAddExercise(true)}
-          />
+          {!addExerciseOpen && (
+            <PrimaryButton
+              label="+ 운동 추가"
+              variant="secondary"
+              disabled={isPaused}
+              style={styles.flexItem}
+              onPress={() => setShowAddExercise(true)}
+            />
+          )}
           <PrimaryButton
             label="운동 종료"
-            variant="secondary"
+            variant="quiet"
             style={styles.flexItem}
             onPress={() => setConfirmEnd(true)}
           />
@@ -997,24 +1053,6 @@ const REST_CHARACTER_HEIGHT = 70;
 /** 상태줄(약 40px) 바로 아래에 골드썬 반응이 겹치도록 하는 오프셋. */
 const REACTION_TOP_OFFSET = 52;
 
-function NavArrow({ label, disabled, onPress }: { label: string; disabled?: boolean; onPress: () => void }) {
-  const theme = useTheme();
-  return (
-    <Pressable onPress={onPress} disabled={disabled} hitSlop={8}>
-      <View
-        style={[
-          styles.navArrow,
-          { borderColor: theme.border, backgroundColor: theme.backgroundElement },
-          disabled && styles.navArrowDisabled,
-        ]}>
-        <ThemedText type="smallBold" themeColor={disabled ? 'textSecondary' : 'text'}>
-          {label}
-        </ThemedText>
-      </View>
-    </Pressable>
-  );
-}
-
 function formatDurationMinutes(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -1039,8 +1077,32 @@ function getTodayRecordCount(records: WorkoutRecord[]): number {
  */
 function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine; onConfirm: () => void }) {
   const theme = useTheme();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { characterAppearance, growth: growthAfter } = useAppData();
+  const { characterAppearance, growth: growthAfter, workoutRecords } = useAppData();
+  /**
+   * 방금 저장된 기록. 결과 화면의 숫자는 메모리 요약이라, 그것이 히스토리에 남은 기록과
+   * 같은 것인지 확인할 방법이 없었다 — [확인]을 누르면 홈으로 나가 버렸다.
+   * 세션 ID로 **이미 저장된 기록을 찾아 읽기만 한다.** 없으면 버튼도 없다(추측하지 않는다).
+   */
+  const savedRecord = useMemo(
+    () => findWorkoutRecordForSession(workoutRecords, summary.sessionResult.sessionId),
+    [workoutRecords, summary.sessionResult.sessionId]
+  );
+  /** 단백세상에서 막혀서 나온 운동인가. 메모리 표시일 뿐이라 앱을 껐다 켜면 사라진다. */
+  const worldReturn = useSyncExternalStore(
+    subscribeToWorldReturn,
+    getWorldReturn,
+    getWorldReturn
+  );
+  const handleReturnToWorld = () => {
+    clearWorldReturn();
+    // 세션/막힘 화면을 스택에 남기지 않는다 — 그러지 않으면 단백세상에서 [닫기]를 눌렀을 때
+    // 뒤에 남아 있던 예전 단백세상 화면으로 돌아가서, 아무 일도 안 일어난 것처럼 보인다.
+    if (router.canDismiss()) router.dismissAll();
+    // 새로 열어야 '막혀 있던 곳이 열렸다'를 그 화면이 알아볼 수 있다.
+    router.push('/danbaek-world');
+  };
   const reducedMotion = useReducedMotion();
   const permanentChanged = hasPermanentBodyChange(
     summary.bodyParametersBefore,
@@ -1099,19 +1161,27 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
     () => resolveGrowthComparisonCamera(summary.growth?.stageChanges ?? []),
     [summary.growth]
   );
+  /*
+    이 그림은 **단백이**다. 내 실제 몸이 아니다.
+
+    실제 신체 수치(체중/골격근량/체지방률)는 내가 직접 입력하거나 측정한 값에서만 오고,
+    히스토리의 [몸 변화]에 있다. 여기 보이는 변화는 오늘 실제로 한 운동이 만들어 낸
+    **게임 성장**(Muscle SP → Stage → 단백이 외형)이다. 둘을 같은 말로 부르면, 운동
+    한 번에 내 몸이 그만큼 커졌다고 앱이 거짓말을 하게 된다.
+  */
   const revealTitle =
     revealPhase === 'pump'
       ? '운동 직후 펌핑'
       : revealPhase === 'before'
         ? '운동 전 단백이'
-        : (growthHighlight ?? '지금 단백이 실제 몸');
+        : (growthHighlight ?? '지금 단백이');
 
   /** 펌핑과 영구 성장의 관계를 한 줄로 짚어 준다 (보조 계층 문구). */
   const revealCaption =
     revealPhase === 'pump'
       ? '지금은 펌핑 상태예요. 잠시 뒤 가라앉아요.'
       : revealPhase === 'after'
-        ? '펌핑이 빠진 실제 몸이에요. 오늘 쌓은 SP는 그대로 남습니다.'
+        ? '펌핑이 빠진 단백이예요. 오늘 쌓은 SP는 그대로 남습니다.'
         : null;
 
   const skipReveal = () => setRevealPhase('after');
@@ -1149,14 +1219,41 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
           )}
           {/* 영구 변화가 없는 날에도 펌핑을 건너뛰고 실제 몸을 바로 볼 수 있다. */}
           {revealPhase !== 'after' && (
-            <Pressable onPress={skipReveal} hitSlop={12} accessibilityRole="button">
-              <ThemedText type="caption" themeColor="textSecondary">바로 보기</ThemedText>
-            </Pressable>
+            <InlineAction label="바로 보기" tone="quiet" onPress={skipReveal} />
           )}
           <ThemedText type="small" themeColor="textSecondary" style={styles.centered}>
             {StanleyTrainer.portraitPlaceholder} {summary.trainerLine}
           </ThemedText>
         </View>
+
+        {/*
+          실제로 한 운동이 먼저다. 성장/학습은 그 결과에 얹히는 이야기라 아래에 온다 —
+          숫자 연출이 오늘 무엇을 했는지를 덮으면 운동 앱이 아니라 게임 화면이 된다.
+        */}
+        <Section title="오늘의 성과">
+          <MetricGrid>
+            <MetricTile index={0} label="총 세트" value={`${summary.completedSets}세트`} />
+            {summary.totalVolumeKg > 0 && (
+              <MetricTile index={1} label="총 볼륨" value={formatVolumeKg(summary.totalVolumeKg)} />
+            )}
+            <MetricTile index={2} label="운동 시간" value={formatDurationMinutes(summary.durationMinutes)} />
+            {summary.prs.length > 0 && (
+              <MetricTile index={3} label="PR" value={`${summary.prs.length}개 NEW`} accent />
+            )}
+          </MetricGrid>
+
+          {summary.prs.length > 0 && (
+            <ThemedView type="backgroundSelected" style={styles.prBox}>
+              <PRBadge />
+              {summary.prs.map((pr) => (
+                <ThemedText key={prKey(pr)} type="small">
+                  {pr.exerciseName} {describePrAchievement(pr)}
+                  {describePrPrevious(pr) ? ` (이전 ${describePrPrevious(pr)})` : ' (첫 기록)'}
+                </ThemedText>
+              ))}
+            </ThemedView>
+          )}
+        </Section>
 
         {muscles.length > 0 && (
           <Section title="오늘 자극된 부위">
@@ -1191,13 +1288,14 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
             </ThemedView>
             {/* 진행도 숫자가 무엇을 향한 것인지 한 줄로 알려 준다. */}
             <ThemedText type="caption" themeColor="textSecondary">
-              100%가 되면 Stage가 올라 단백이 몸이 실제로 커져요.
+              100%가 되면 Stage가 올라 단백이 몸이 커져요. 내 실제 체중·체지방은 히스토리의
+              [몸 변화]에서 봐요.
             </ThemedText>
           </Section>
         )}
 
         {permanentChanged && revealPhase === 'after' && (
-          <Section title={stageChanges.length > 0 ? '실제 성장' : '영구 성장 변화'}>
+          <Section title={stageChanges.length > 0 ? '단백이 성장' : '단백이 몸 변화'}>
             <View style={styles.bodyComparisonRow}>
               <BodyComparison
                 label="BEFORE"
@@ -1221,30 +1319,36 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
           </Section>
         )}
 
-        <Section title="오늘의 성과">
-          <MetricGrid>
-            <MetricTile index={0} label="총 세트" value={`${summary.completedSets}세트`} />
-            {summary.totalVolumeKg > 0 && (
-              <MetricTile index={1} label="총 볼륨" value={formatVolumeKg(summary.totalVolumeKg)} />
-            )}
-            <MetricTile index={2} label="운동 시간" value={formatDurationMinutes(summary.durationMinutes)} />
-            {summary.prs.length > 0 && (
-              <MetricTile index={3} label="PR" value={`${summary.prs.length}개 NEW`} accent />
-            )}
-          </MetricGrid>
 
-          {summary.prs.length > 0 && (
-            <ThemedView type="backgroundSelected" style={styles.prBox}>
-              <PRBadge />
-              {summary.prs.map((pr) => (
-                <ThemedText key={pr.exerciseId} type="small">
-                  {pr.exerciseName} {pr.weightKg}kg
-                  {pr.previousBestWeightKg ? ` (이전 ${pr.previousBestWeightKg}kg)` : ' (첫 기록)'}
-                </ThemedText>
+        {/*
+          단백이는 플레이어의 아바타가 아니라 옆에서 지켜보고 따라 하는 존재다. 그래서 결과에
+          내가 얼마나 컸는가와 별개로 **얘가 오늘 무엇을 배웠는가**가 남는다.
+
+          이 섹션은 **소비자일 뿐이다** — 이미 계산돼 넘어온 summary.learning을 읽기만 한다.
+          여기서 evidence를 만들지 않고, GrowthState도 receipt도 완료 파이프라인도 건드리지 않는다.
+          배운 것이 없으면(계열을 알 수 없는 즉석 운동뿐이면) 섹션 자체가 없다.
+        */}
+        {summary.learning.length > 0 && (
+          <Section title="오늘 단백이가 배운 것">
+            <ThemedView type="backgroundElement" style={styles.learningBox}>
+              {/* 먼저 단백이가 자기 말로 한마디 하고, 정확한 단계는 그 아래에 둔다. */}
+              <ThemedText type="smallBold">🐣 {buildDanbaekGainVoice(summary.learning)}</ThemedText>
+              {summary.learning.map(describeLearningGain).map((copy) => (
+                <View key={copy.movementFamily} style={styles.learningRow}>
+                  <ThemedText type="smallBold" numberOfLines={1} style={styles.learningFamily}>
+                    {copy.familyLabel}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor={copy.stageChanged ? 'text' : 'textSecondary'}>
+                    {copy.line}
+                  </ThemedText>
+                </View>
               ))}
+              <ThemedText type="caption" themeColor="textSecondary">
+                단백이는 오늘 옆에서 본 동작만 따라 합니다.
+              </ThemedText>
             </ThemedView>
-          )}
-        </Section>
+          </Section>
+        )}
 
         <Section title="성장 보상">
           <ThemedView type="backgroundElement" style={[styles.rewardCard, { borderColor: theme.gold }]}>
@@ -1268,8 +1372,44 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
         </Section>
       </ScrollView>
 
+      {/*
+        단백세상에서 막혀서 나온 운동이었다면, 여기서 곧장 그 자리로 돌아갈 수 있어야
+        루프가 끊기지 않는다 — 예전에는 [확인] → 홈 → 스크롤 → 단백세상을 직접 찾아
+        들어가야 방금 한 운동의 결과를 볼 수 있었다.
+
+        돌아갈 곳은 메모리에만 있는 표시일 뿐이다. 완료 파이프라인/기록/보상은 이 버튼과
+        아무 관계가 없고, 이 버튼을 누르지 않아도 결과는 이미 저장돼 있다.
+      */}
       <View style={styles.resultFooter}>
-        <PrimaryButton label="확인" variant="gold" size="large" onPress={onConfirm} />
+        {worldReturn && (
+          <PrimaryButton
+            label="단백세상으로 돌아가기"
+            subLabel="단백이가 방금 본 걸 해볼 차례예요"
+            variant="gold"
+            size="large"
+            onPress={handleReturnToWorld}
+          />
+        )}
+        {/*
+          방금 한 운동이 기록으로 남았다는 것을 그 자리에서 확인할 수 있어야 한다. 홈/히스토리/
+          운동 탭이 여는 것과 **같은 기록 상세 화면**으로 간다 — 상세를 새로 만들지 않는다.
+          기록을 찾지 못하면 버튼도 없다.
+        */}
+        {savedRecord && (
+          <PrimaryButton
+            label="기록 자세히 보기"
+            variant="quiet"
+            onPress={() =>
+              router.push({ pathname: '/workout-record', params: { id: savedRecord.id } })
+            }
+          />
+        )}
+        <PrimaryButton
+          label="확인"
+          variant={worldReturn ? 'secondary' : 'gold'}
+          size={worldReturn ? 'default' : 'large'}
+          onPress={onConfirm}
+        />
       </View>
     </ThemedView>
   );
@@ -1341,19 +1481,42 @@ function formatSp(value: number): string {
 const RESULT_CHARACTER_HEIGHT = 150;
 const RESULT_COMPARISON_HEIGHT = 105;
 
+/**
+ * 중량을 정하기 전에 필요한 참고값.
+ *
+ * **이번 세션에서 방금 한 세트가 가장 중요한 참고값이다.** 예전에는 저장된 기록만 봤기
+ * 때문에, 처음 하는 운동이면 세 세트를 하고 나서도 "이 운동 기록은 이번이 처음이에요"가
+ * 그대로 남아 있었다 — 방금 60kg를 세 번 든 사람에게 아직 아무것도 모른다고 말한 셈이다.
+ */
 function PreviousPerformanceLine({
   exerciseId,
   records,
+  sessionSets = [],
 }: {
   exerciseId: string;
   records: WorkoutRecord[];
+  /** 이번 세션에서 이 운동으로 이미 완료한 세트. */
+  sessionSets?: WorkoutSetEntry[];
 }) {
   const previous = findPreviousPerformance(exerciseId, records);
+  const lastSessionSet = sessionSets[sessionSets.length - 1];
+
+  const sessionLine = lastSessionSet ? (
+    <ThemedText type="caption" themeColor="textSecondary">
+      이번 운동: {lastSessionSet.weightKg ?? '-'}kg × {lastSessionSet.reps ?? '-'}회 ·{' '}
+      {sessionSets.length}세트
+    </ThemedText>
+  ) : null;
+
   if (!previous) {
     return (
-      <ThemedText type="caption" themeColor="textSecondary">
-        이 운동 기록은 이번이 처음이에요.
-      </ThemedText>
+      <View style={styles.previousBlock}>
+        {sessionLine ?? (
+          <ThemedText type="caption" themeColor="textSecondary">
+            이 운동 기록은 이번이 처음이에요.
+          </ThemedText>
+        )}
+      </View>
     );
   }
   const lastSet = previous.sets[previous.sets.length - 1];
@@ -1361,6 +1524,7 @@ function PreviousPerformanceLine({
 
   return (
     <View style={styles.previousBlock}>
+      {sessionLine}
       {lastSet && (
         <ThemedText type="caption" themeColor="textSecondary">
           이전: {lastSet.weightKg ?? '-'}kg × {lastSet.reps ?? '-'}회
@@ -1414,11 +1578,12 @@ function SetHero({
   return (
     <View style={styles.hero}>
       {!showWeight && (
-        <Pressable onPress={() => setWeightOpen(true)} hitSlop={8} disabled={disabled}>
-          <ThemedText type="captionBold" themeColor="textSecondary">
-            + 중량 추가
-          </ThemedText>
-        </Pressable>
+        <InlineAction
+          label="+ 중량 추가"
+          tone="quiet"
+          disabled={disabled}
+          onPress={() => setWeightOpen(true)}
+        />
       )}
       {showWeight && (
       <View style={styles.heroRow}>
@@ -1472,6 +1637,105 @@ function SetHero({
   );
 }
 
+/**
+ * 이미 기록한 세트 한 줄.
+ *
+ * 눌러야 열린다. 헬스장에서 대부분의 시간에 필요한 것은 "내가 뭘 했는지" 읽는 것이고,
+ * 고치는 일은 가끔이다 — 목록 전체를 입력칸으로 만들면 읽기가 먼저 망가진다.
+ * 고친 값은 세션 상태에 바로 반영되고, 기록/보상/성장은 세션이 끝날 때 남아 있는 유효
+ * 세트만 보고 기존 파이프라인이 계산한다.
+ */
+function CompletedSetRow({
+  index,
+  set,
+  editing,
+  disabled,
+  onToggle,
+  onChange,
+  onAdjust,
+  onRemove,
+}: {
+  index: number;
+  set: WorkoutSetEntry;
+  editing: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+  onChange: (patch: { weightKg?: number; reps?: number }) => void;
+  onAdjust: (delta: { weightKg?: number; reps?: number }) => void;
+  onRemove: () => void;
+}) {
+  const theme = useTheme();
+  const weight = set.weightKg ?? 0;
+  const reps = set.reps ?? 0;
+  // 입력칸에 숫자가 아닌 것이 들어와도 세트가 NaN이 되지 않게 한다.
+  const numeric = (text: string, min: number) => {
+    const value = Number(text);
+    return text && Number.isFinite(value) ? Math.max(min, value) : min;
+  };
+
+  if (!editing) {
+    return (
+      <Pressable
+        onPress={onToggle}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel={`${index + 1}번째 세트 ${weight}킬로그램 ${reps}회, 고치기`}
+        style={styles.completedSetRow}>
+        {/*
+          이 줄은 "내가 오늘 뭘 했는지"를 읽는 자리다. 예전에는 화면에서 가장 작은
+          12px caption이라 세트가 쌓일수록 읽히지 않았다. 숫자는 자릿수가 흔들리지
+          않도록 tabular로 둔다.
+        */}
+        <ThemedText type="small" style={styles.completedSetValue}>
+          {index + 1}. {set.weightKg ?? '-'}kg × {set.reps ?? '-'}회 ✓
+        </ThemedText>
+        <ThemedText type="captionBold" style={{ color: theme.gold }}>
+          고치기
+        </ThemedText>
+      </Pressable>
+    );
+  }
+
+  return (
+    <ThemedView type="backgroundElement" style={[styles.setEditor, { borderColor: theme.border }]}>
+      <ThemedText type="captionBold">{index + 1}번째 세트 고치기</ThemedText>
+      <View style={styles.setEditorRow}>
+        <StepperButton label="−" disabled={disabled} onPress={() => onAdjust({ weightKg: -AppConfig.setWeightStepKg })} />
+        <View style={styles.setEditorValue}>
+          <TextField
+            keyboardType="numeric"
+            value={String(weight)}
+            editable={!disabled}
+            onChangeText={(text) => onChange({ weightKg: numeric(text, 0) })}
+            style={[styles.setEditorInput, { color: theme.gold }]}
+          />
+          <ThemedText type="caption" themeColor="textSecondary">kg</ThemedText>
+        </View>
+        <StepperButton label="+" disabled={disabled} onPress={() => onAdjust({ weightKg: AppConfig.setWeightStepKg })} />
+      </View>
+      <View style={styles.setEditorRow}>
+        <StepperButton label="−" disabled={disabled} onPress={() => onAdjust({ reps: -AppConfig.setRepsStep })} />
+        <View style={styles.setEditorValue}>
+          <TextField
+            keyboardType="numeric"
+            value={String(reps)}
+            editable={!disabled}
+            /* 여기서 0회로 만들면 세트가 목록에서 사라져 버린다 — 지우려면 [세트 삭제]다. */
+            onChangeText={(text) => onChange({ reps: numeric(text, 1) })}
+            style={styles.setEditorInput}
+          />
+          <ThemedText type="caption" themeColor="textSecondary">회</ThemedText>
+        </View>
+        <StepperButton label="+" disabled={disabled} onPress={() => onAdjust({ reps: AppConfig.setRepsStep })} />
+      </View>
+      <View style={styles.setEditorActions}>
+        <PrimaryButton label="세트 삭제" variant="secondary" style={styles.flexItem} disabled={disabled} onPress={onRemove} />
+        <PrimaryButton label="완료" variant="gold" style={styles.flexItem} onPress={onToggle} />
+      </View>
+    </ThemedView>
+  );
+}
+
 function StepperButton({ label, disabled, onPress }: { label: string; disabled?: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} hitSlop={8} disabled={disabled} style={disabled && styles.disabledControl}>
@@ -1492,22 +1756,24 @@ function RestScreen({
   secondsRemaining,
   elapsedSeconds,
   currentExercise,
-  nextExercise,
+  exerciseNavigationItems,
   appearance,
   family,
   bodyParameters,
   characterState,
   reactionCopy,
   reaction,
-  exitConfirm,
+  confirmBar,
   onPauseToggle,
+  onSelectExercise,
   onSkip,
+  onEnd,
 }: {
   session: WorkoutSession;
   secondsRemaining: number;
   elapsedSeconds: number;
   currentExercise?: SessionExerciseEntry;
-  nextExercise?: SessionExerciseEntry;
+  exerciseNavigationItems: ReturnType<typeof buildSessionExerciseNavigation>;
   appearance: ReturnType<typeof useAppData>['characterAppearance'];
   family?: Parameters<typeof CharacterMotionStage>[0]['family'];
   bodyParameters: Parameters<typeof CharacterMotionStage>[0]['bodyParameters'];
@@ -1516,12 +1782,15 @@ function RestScreen({
   reactionCopy?: string | null;
   reaction: React.ReactNode;
   /**
-   * 뒤로가기 확인 바. 세션 화면이 만든 **그 하나**를 그대로 받는다 — 여기서 다시 만들지 않는다.
-   * 있으면 [다음 세트 시작] 자리를 대신한다 (둘을 함께 쌓지 않는다).
+   * 뒤로가기/종료 확인 바. 세션 화면이 만든 **그 하나**를 그대로 받는다 — 여기서 다시
+   * 만들지 않는다. 있으면 아래 조작 줄 자리를 대신한다 (둘을 함께 쌓지 않는다).
    */
-  exitConfirm?: React.ReactNode;
+  confirmBar?: React.ReactNode;
   onPauseToggle: () => void;
+  onSelectExercise: (exerciseEntryId: string) => void;
   onSkip: () => void;
+  /** 휴식 중에도 운동을 끝낼 수 있어야 한다 — 마지막 세트 다음이 바로 이 화면이다. */
+  onEnd: () => void;
 }) {
   const theme = useTheme();
   const urgent = secondsRemaining <= AppConfig.restUrgentThresholdSeconds;
@@ -1576,24 +1845,34 @@ function RestScreen({
               {currentExercise.exerciseName} · {nextSetPreview.weightKg ?? '-'}KG ×{' '}
               {nextSetPreview.reps ?? '-'}회
             </ThemedText>
-            {nextExercise && (
-              <ThemedText type="caption" themeColor="textSecondary">
-                이 운동 다음 · {nextExercise.exerciseName}
-              </ThemedText>
-            )}
           </View>
         )}
       </View>
 
-      {/* 뒤로가기 확인이 열리면 CTA 자리를 대신한다 — 겹치거나 함께 쌓이지 않는다. */}
-      {exitConfirm ?? (
-        <PrimaryButton
-          label="다음 세트 시작"
-          variant="gold"
-          size="large"
-          disabled={session.status === 'paused'}
-          onPress={onSkip}
-        />
+      <SessionExerciseSelector
+        items={exerciseNavigationItems}
+        disabled={session.status === 'paused'}
+        compact
+        onSelect={onSelectExercise}
+      />
+
+      {/* 확인 바가 열리면 조작 줄 자리를 대신한다 — 겹치거나 함께 쌓이지 않는다. */}
+      {confirmBar ?? (
+        <>
+          <PrimaryButton
+            label="다음 세트 시작"
+            variant="gold"
+            size="large"
+            disabled={session.status === 'paused'}
+            onPress={onSkip}
+          />
+          {/*
+            마지막 세트를 끝내면 곧바로 이 화면이 뜬다 — 운동을 끝내는 가장 흔한 순간이
+            여기다. 예전에는 타이머를 기다리거나 [다음 세트 시작]으로 운동 화면에 돌아간
+            뒤에야 끝낼 수 있었다. 종료는 여기서도 2단계 확인을 그대로 거친다.
+          */}
+          <PrimaryButton label="운동 종료" variant="quiet" onPress={onEnd} />
+        </>
       )}
     </SessionShell>
   );
@@ -1631,7 +1910,7 @@ function PrCelebrationOverlay({ pr }: { pr: PrEvent }) {
         🏆 NEW PR
       </ThemedText>
       <ThemedText type="smallBold">
-        {pr.exerciseName} {pr.weightKg}kg
+        {pr.exerciseName} {describePrAchievement(pr)}
       </ThemedText>
     </Animated.View>
   );
@@ -1660,10 +1939,11 @@ const styles = StyleSheet.create({
   timerCompact: {
     fontVariant: ['tabular-nums'],
   },
+  /** 운동 내내 화면에 남아 있는 유일한 상시 컨트롤 — 터치 하한선(44) 아래로 두지 않는다. */
   pauseButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: Layout.compactRowHeight,
+    height: Layout.compactRowHeight,
+    borderRadius: Layout.compactRowHeight / 2,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1692,35 +1972,52 @@ const styles = StyleSheet.create({
   exerciseHeaderText: {
     flex: 1,
   },
-  exerciseNav: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-  },
-  navArrow: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.medium,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navArrowDisabled: {
-    opacity: 0.35,
-  },
-  /** 다음 운동 안내는 카드가 아니라 한 줄이다 — 화면을 세로로 더 쓰지 않는다. */
-  nextExerciseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
-    paddingVertical: Spacing.one,
-  },
   logScroll: {
     flex: 1,
   },
   logContent: {
     gap: Spacing.half,
     paddingVertical: Spacing.one,
+  },
+  /** 완료 세트 한 줄 — 읽기가 먼저고, 오른쪽에 조용한 [고치기]가 붙는다. */
+  completedSetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    minHeight: Layout.compactRowHeight,
+  },
+  completedSetValue: {
+    fontVariant: ['tabular-nums'],
+  },
+  setEditor: {
+    borderWidth: 1,
+    borderRadius: Radius.medium,
+    padding: Spacing.two,
+    gap: Spacing.two,
+  },
+  setEditorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+  },
+  setEditorValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  setEditorInput: {
+    backgroundColor: 'transparent',
+    width: 72,
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    minHeight: 40,
+  },
+  setEditorActions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
   },
   previousBlock: {
     gap: Spacing.half,
@@ -1774,6 +2071,10 @@ const styles = StyleSheet.create({
   disabledControl: {
     opacity: 0.4,
   },
+  /** 빈 세션의 안내 블록. 다음 단계(운동 고르기)가 바로 아래에 오므로 여백만 준다. */
+  emptySession: {
+    gap: Spacing.half,
+  },
   bottomBar: {
     flexDirection: 'row',
     gap: Spacing.two,
@@ -1815,6 +2116,7 @@ const styles = StyleSheet.create({
   },
   resultFooter: {
     paddingTop: Spacing.two,
+    gap: Spacing.two,
   },
   stimulusCard: {
     borderRadius: Radius.large,
@@ -1879,6 +2181,24 @@ const styles = StyleSheet.create({
     borderRadius: Radius.medium,
     padding: Spacing.three,
     gap: Spacing.one,
+  },
+  /**
+   * PR 카드와 같은 카드 모양이지만 스타일을 공유하지 않는다 — 학습은 성장/PR과 별개 축이라
+   * 한쪽 카드를 손볼 때 다른 쪽이 따라 움직이면 안 된다.
+   */
+  learningBox: {
+    borderRadius: Radius.medium,
+    padding: Spacing.three,
+    gap: Spacing.one,
+  },
+  learningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  learningFamily: {
+    flexShrink: 1,
   },
   /**
    * PR 축하는 1.8초 뒤 사라지는 연출이다. 흐름에 두면 나타났다 사라질 때마다 세트 조작 UI가

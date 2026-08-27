@@ -52,7 +52,7 @@ import {
 } from '@/data/workout-session-repository';
 import { clearAllKeys } from '@/services/storage/local-storage';
 import { StorageKeys } from '@/services/storage/keys';
-import { rewardedAdService } from '@/services/ads/mock-rewarded-ad-service';
+import { rewardedAdService } from '@/services/ads';
 import { referralService } from '@/services/referral/mock-referral-service';
 import { subscriptionService } from '@/services/subscription/mock-subscription-service';
 import { growthEngine } from '@/services/growth';
@@ -70,6 +70,9 @@ import { ReferralState, ReferralRedemptionResult } from '@/types/referral';
 import { Routine } from '@/types/routine';
 import { StreakState } from '@/types/streak';
 import { SubscriptionState } from '@/types/subscription';
+import type { EntitlementCapabilities, EntitlementState } from '@/types/entitlement';
+import { FreeEntitlement } from '@/types/entitlement';
+import { entitlementCapabilities, resolveEntitlement } from '@/utils/entitlement';
 import { TrainerUsageState } from '@/types/ads';
 import { UserProfile } from '@/types/user';
 import { WorkoutCategory, WorkoutRecord } from '@/types/workout';
@@ -85,10 +88,14 @@ import {
 import { todayDateString, tomorrowDateString } from '@/utils/date';
 import { PrEvent, detectPRs } from '@/utils/exercise-history';
 import { createId } from '@/utils/id';
-import { addXp, computePassLevelProgress } from '@/utils/pass';
+import { resolveRewardedAdGrant } from '@/utils/ad-reward';
+import { addXp, computePassLevelProgress, computeSessionXpAward } from '@/utils/pass';
 import { CharacterAppearance, characterAppearanceFromProfile } from '@/utils/character-appearance';
 import { buildPtContext, buildPtExerciseBrief, matchExerciseInText, PtContext } from '@/utils/pt-context';
+import { buildDanbaekLearningProfile, diffLearningProfiles, type LearningGain } from '@/utils/danbaek-learning';
+import type { DanbaekLearningProfile } from '@/types/danbaek-contract';
 import { getTodaysScheduledRoutine } from '@/utils/routine';
+import { resolveOnboardingState } from '@/utils/stored-state';
 import { buildWorkoutSessionResult } from '@/utils/workout-session-result';
 import { createDefaultGrowthState, updateBodyComposition } from '@/utils/growth-state';
 import { buildDanbaekBodyState } from '@/utils/body-state';
@@ -117,6 +124,7 @@ import {
   resumeSession,
   sessionToWorkoutRecordInput,
   SessionExerciseInput,
+  removeSetFromExercise as removeSetPure,
   setCurrentExercise as setCurrentExercisePure,
   startRest as startRestPure,
   updateSet as updateSetPure,
@@ -124,12 +132,23 @@ import {
 
 interface AppDataState {
   loading: boolean;
+  /**
+   * 저장된 데이터를 읽지 못한 채 부팅이 끝났는가. loading(아직 읽는 중)과 다르다 —
+   * 여기까지 오면 "모른다"는 뜻이고, 모르는 상태로 온보딩을 다시 시키면 멀쩡한
+   * 프로필을 덮어쓴다. 그래서 진행시키지 않고 다시 시도할 기회를 준다.
+   */
+  bootstrapFailed: boolean;
   onboardingComplete: boolean;
   profile: UserProfile | null;
   bodyHistory: BodyHistoryEntry[];
   workoutRecords: WorkoutRecord[];
   streak: StreakState;
   subscription: SubscriptionState;
+  /**
+   * provider 기록을 현재 시각·신뢰 정책에 통과시킨 결과. **앱 전체에서 유료 여부의 유일한
+   * 근거**다 (src/utils/entitlement.ts). 화면이 subscription.status를 직접 보고 판단하지 않는다.
+   */
+  entitlement: EntitlementState;
   trainerUsage: TrainerUsageState;
   referral: ReferralState;
   openEventPass: OpenEventPassState;
@@ -176,9 +195,17 @@ export interface EndSessionSummary {
    * 결과 화면/성장 연출이 이 값만 그대로 쓰면 된다.
    */
   bodyParametersWithPump: DanbaekBodyParameters;
+  /**
+   * 이번 운동으로 단백이가 무엇을 배웠는가 (rebuild 학습 계약).
+   *
+   * GrowthEngine 결과(`growth`)와 **별개의 축**이다 — 성장 계산은 그대로 두고, 같은 운동
+   * 기록을 학습의 눈으로 한 번 더 읽은 것뿐이다. 배운 것이 없으면 빈 배열이다.
+   */
+  learning: LearningGain[];
 }
 
 interface AppDataContextValue extends AppDataState {
+  capabilities: EntitlementCapabilities;
   hasSubscriptionAccess: boolean;
   hasAiPtAccess: boolean;
   /** 오늘 사진 기반 신체 기록을 추가할 수 있는지 (DEV 빌드에서는 항상 true) */
@@ -213,7 +240,10 @@ interface AppDataContextValue extends AppDataState {
   deleteWorkoutRecord: (recordId: string) => Promise<void>;
   addBodyHistoryEntry: (input: Parameters<typeof addBodyHistoryEntryRepo>[0]) => Promise<void>;
   claimStreakReward: () => Promise<void>;
-  watchRewardedAd: () => Promise<void>;
+  /** 보상을 실제로 받았는지 돌려준다. false면 이용권은 늘지 않았다. */
+  watchRewardedAd: () => Promise<boolean>;
+  /** 이 빌드에 광고 provider가 연결돼 있는가. 없으면 광고 버튼을 내보내지 않는다. */
+  adProviderAvailable: boolean;
   startWorkoutSession: (
     category: WorkoutCategory,
     options?: {
@@ -226,7 +256,12 @@ interface AppDataContextValue extends AppDataState {
   pauseWorkoutSession: () => Promise<void>;
   resumeWorkoutSession: () => Promise<void>;
   changeSessionCategory: (category: WorkoutCategory) => Promise<void>;
-  addExerciseToSession: (exercise: SessionExerciseInput) => Promise<void>;
+  /**
+   * 세션에 운동을 하나 더 담는다. 만들어진 세션 항목 ID를 돌려준다 — 화면이 방금 담은
+   * 운동으로 곧바로 포커스를 옮길 수 있어야 하기 때문이다 (담았는데 화면이 그대로면
+   * 아무 일도 일어나지 않은 것처럼 보인다).
+   */
+  addExerciseToSession: (exercise: SessionExerciseInput) => Promise<string>;
   setCurrentSessionExercise: (exerciseEntryId: string) => Promise<void>;
   addSetToExercise: (
     exerciseEntryId: string,
@@ -243,6 +278,11 @@ interface AppDataContextValue extends AppDataState {
     setId: string,
     delta: { weightKg?: number; reps?: number }
   ) => Promise<void>;
+  /**
+   * 잘못 기록한 세트를 지운다. **세션 상태만** 바뀌고 저장된 기록/보상은 건드리지 않는다 —
+   * 세션이 끝날 때 기존 완료 파이프라인이 남아 있는 유효 세트만 그대로 옮긴다.
+   */
+  removeSessionSet: (exerciseEntryId: string, setId: string) => Promise<void>;
   /**
    * 세트 완료. restSeconds를 주면 같은 변경 안에서 휴식까지 바로 시작한다
    * (확인 팝업 없이 "완료 → 휴식 → 다음 세트"로 이어지는 흐름의 한 걸음).
@@ -268,8 +308,18 @@ interface AppDataContextValue extends AppDataState {
   saveRoutine: (input: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateRoutine: (routineId: string, input: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   removeRoutine: (routineId: string) => Promise<void>;
+  /** 부팅 실패 화면의 [다시 시도]. 저장된 값을 처음부터 다시 읽는다. */
+  reloadAppData: () => void;
   /** PT에게 넘길 압축 컨텍스트. 화면과 서비스가 같은 값을 본다. */
   ptContext: PtContext;
+  /**
+   * 저장된 운동 기록에서 읽어낸 단백이의 학습 상태 (읽기 전용 스냅샷).
+   *
+   * 화면들이 각자 다시 계산하면 같은 순간에 서로 다른 학습을 말할 수 있다 — HOME과 PT가
+   * 같은 값을 보게 여기서 한 번만 만든다. **성장(Growth/HELL PASS)과 별개 축이고**,
+   * 이 값이 기록이나 성장 계산을 바꾸는 경로는 없다 (기록을 읽기만 한다).
+   */
+  danbaekLearning: DanbaekLearningProfile;
   /** 실제 AI 백엔드가 연결돼 있는지. false면 화면이 "AI 연결 전"임을 알린다. */
   aiConnected: boolean;
   /**
@@ -299,12 +349,14 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 
 const initialState: AppDataState = {
   loading: true,
+  bootstrapFailed: false,
   onboardingComplete: false,
   profile: null,
   bodyHistory: [],
   workoutRecords: [],
   streak: { currentStreakDays: 0, longestStreakDays: 0, rewardClaimed: false },
   subscription: { status: 'none' },
+  entitlement: FreeEntitlement,
   trainerUsage: { rewardedPtUsesRemaining: 0 },
   referral: { bonusDaysGranted: 0 },
   openEventPass: { active: false },
@@ -358,10 +410,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [mutateActiveSession]
   );
 
+  const [reloadToken, setReloadToken] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
+      try {
       const [
         onboardingComplete,
         profile,
@@ -394,13 +449,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       if (cancelled) return;
 
-      // 기존 사용자 보호: 온보딩이 새로 생기기 전에 이미 프로필을 만든 사용자가 첫 화면에
-      // 다시 갇히지 않도록, 핵심 데이터(체중)가 있으면 완료로 간주하고 플래그를 채워준다.
-      // 기존 데이터는 건드리지 않는다 — 플래그만 보강한다.
-      let resolvedOnboardingComplete = onboardingComplete;
-      if (!onboardingComplete && profile && profile.weightKg > 0) {
-        resolvedOnboardingComplete = true;
-        await setOnboardingCompleteRepo(true);
+      // 기존 사용자 보호와 그 반대 방향(플래그는 있는데 프로필이 없는 경우)을 모두
+      // resolveOnboardingState가 판정한다 — 순수 함수라 검증할 수 있다
+      // (scripts/verify-storage-recovery.ts). 다른 키(운동 기록/성장)는 건드리지 않는다.
+      const { onboardingComplete: resolvedOnboardingComplete, shouldPersistFlag } =
+        resolveOnboardingState(onboardingComplete, profile);
+      if (shouldPersistFlag) {
+        // 플래그 보강은 편의 기능이다. 저장에 실패해도 이번 실행은 그대로 진행하고,
+        // 다음 실행에서 같은 조건으로 다시 시도한다 — 부팅을 막을 이유가 없다.
+        try {
+          await setOnboardingCompleteRepo(true);
+        } catch {
+          // 무시한다.
+        }
       }
 
       // 세션이 'active'로 저장된 채 오래 방치됐다면(백그라운드/강제종료) 마지막으로 확인된
@@ -425,12 +486,18 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       setState({
         loading: false,
+        bootstrapFailed: false,
         onboardingComplete: resolvedOnboardingComplete,
         profile,
         bodyHistory,
         workoutRecords,
         streak,
         subscription,
+        entitlement: resolveEntitlement({
+          subscription,
+          nowMs: Date.now(),
+          allowDevProvider: __DEV__,
+        }),
         trainerUsage,
         referral,
         openEventPass,
@@ -439,11 +506,26 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         pass,
         growth,
       });
+      } catch {
+        // 여기까지 오면 안 되지만, 온다면 **빈 화면에 갇히는 것만은 막는다.**
+        // loading이 true로 남으면 RootNavigator가 계속 null을 그려서 사용자는 영원히
+        // 검은 화면을 본다 — 재설치 외에는 빠져나올 방법이 없다.
+        //
+        // 대신 온보딩으로 떨어뜨리지도 않는다. 읽지 못한 것과 없는 것은 다르고,
+        // 온보딩을 다시 완료시키면 멀쩡히 남아 있던 프로필을 덮어쓴다.
+        if (!cancelled) setState((prev) => ({ ...prev, loading: false, bootstrapFailed: true }));
+      }
     })();
 
     return () => {
       cancelled = true;
     };
+  }, [reloadToken]);
+
+  /** 부팅 실패 화면의 [다시 시도]. 저장된 값을 처음부터 다시 읽게 만든다. */
+  const reloadAppData = useCallback(() => {
+    setState((prev) => ({ ...prev, loading: true, bootstrapFailed: false }));
+    setReloadToken((token) => token + 1);
   }, []);
 
   // 앱이 백그라운드로 전환되는 순간 활성 세션을 즉시 일시정지해, 방치된 시간이 운동 시간에
@@ -464,6 +546,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           return { ...prev, activeSession: updated };
         });
       } else {
+        // 백그라운드에 있는 동안 구독이 만료됐을 수 있다. 돌아온 순간 다시 판단한다 —
+        // 렌더 중에 시계를 읽지 않기 위해, 시각이 필요한 판단은 전부 이런 이벤트에서만 한다.
+        setState((prev) => {
+          const entitlement = resolveEntitlement({
+            subscription: prev.subscription,
+            nowMs,
+            allowDevProvider: __DEV__,
+          });
+          return entitlement.tier === prev.entitlement.tier && entitlement.reason === prev.entitlement.reason
+            ? prev
+            : { ...prev, entitlement };
+        });
+
         setState((prev) => {
           if (!prev.activeSession) return prev;
           const updated = resumeIfRecentBackground(
@@ -638,6 +733,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     async (exercise) => {
       const id = createId('session-ex');
       mutateRunningSession((session) => addExerciseToSessionPure(session, { id, ...exercise }));
+      return id;
     },
     [mutateRunningSession]
   );
@@ -683,6 +779,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [mutateRunningSession]
   );
 
+  const removeSessionSet = useCallback<AppDataContextValue['removeSessionSet']>(
+    async (exerciseEntryId, setId) => {
+      mutateRunningSession((session) => removeSetPure(session, exerciseEntryId, setId));
+    },
+    [mutateRunningSession]
+  );
+
   const ensureSessionPendingSet = useCallback<AppDataContextValue['ensureSessionPendingSet']>(
     async (exerciseEntryId, defaults) => {
       const setId = createId('set');
@@ -713,6 +816,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         nowIso,
       })
     );
+
+    // 학습 비교용 스냅샷 — 이 세션이 저장되기 **전**의 기록이다.
+    const recordsBeforeSession = state.workoutRecords;
 
     const prs = detectPRs(completed, state.workoutRecords);
 
@@ -745,10 +851,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (routine) routineCompleted = isRoutineCompleted(completed, routine.exerciseIds);
     }
 
-    const xpAwarded =
-      AppConfig.passXpPerSession +
-      prs.length * AppConfig.passXpPerPr +
-      (routineCompleted ? AppConfig.passXpPerRoutineCompletion : 0);
+    /*
+     * PR XP는 **최고 중량 갱신(weight PR)에만** 나간다. rep PR은 기록에는 남지만 XP를
+     * 추가로 만들지 않는다 — 정책은 utils/pass.ts 한 곳에 있다. 예전에는 여기서 prs.length를
+     * 그대로 곱해 종류 구분 없이 지급했다. 세션/루틴 보너스 값과 계산 의미는 그대로다.
+     */
+    const { xpAwarded } = computeSessionXpAward({ prs, routineCompleted });
     const newXp = addXp(state.pass.xp, xpAwarded);
 
     const initialReceipt: SessionCompletionReceipt = {
@@ -776,7 +884,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     };
 
     const completion = await runSessionCompletion(initialReceipt, {
-      loadReceipt: getPendingSessionCompletion,
+      loadReceipt: () => getPendingSessionCompletion(initialReceipt.sessionId),
       saveReceipt: savePendingSessionCompletion,
       clearReceipt: clearPendingSessionCompletion,
       applyGrowth: async (snapshot) => {
@@ -864,6 +972,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       throw new Error('Session completion receipt is missing its final result snapshot.');
     }
 
+    // 저장이 끝난 뒤의 기록으로 다시 읽는다. 학습은 기록에서만 나오므로, 기록이 남지
+    // 않았다면 배운 것도 없다.
+    const learning = diffLearningProfiles(
+      buildDanbaekLearningProfile({ records: recordsBeforeSession, generatedAt: nowIso }),
+      buildDanbaekLearningProfile({ records: await getWorkoutRecords(), generatedAt: nowIso })
+    );
+
     return {
       durationMinutes: snapshot.durationMinutes,
       category: snapshot.category,
@@ -881,6 +996,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       bodyParametersBefore: snapshot.bodyParametersBefore,
       bodyParametersAfter: snapshot.bodyParametersAfter,
       bodyParametersWithPump: snapshot.bodyParametersWithPump,
+      learning,
     };
   }, [state.workoutRecords, state.routines, state.pass, state.bodyHistory, state.profile, state.growth]);
 
@@ -924,15 +1040,34 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, routines }));
   }, []);
 
-  const watchRewardedAd = useCallback(async () => {
-    const result = await rewardedAdService.showRewardedAd();
-    if (result.granted) {
-      const trainerUsage = await grantRewardedPtUses(result.rewardUnits);
+  /**
+   * 광고 보상. **보상 판정은 여기서 하지 않는다** — 순수 규칙 하나(resolveRewardedAdGrant)가
+   * 정하고, 이 함수는 그 결과대로 이용권을 늘릴 뿐이다. 광고 SDK가 실패하거나 보상을 주지
+   * 않았으면 이용권도 늘지 않는다(그래야 "광고를 본 것처럼" 공짜로 여는 경로가 없다).
+   */
+  const watchRewardedAd = useCallback(async (): Promise<boolean> => {
+    let result;
+    try {
+      result = await rewardedAdService.showRewardedAd();
+    } catch {
+      // 광고 SDK 실패가 앱을 멈추게 하지 않는다. 이용권도 주지 않는다.
+      return false;
+    }
+    // 보상 여부 판정은 순수 규칙 하나에서만 나온다 (scripts/verify-monetization.ts).
+    const grant = resolveRewardedAdGrant(result);
+    if (!grant.granted) return false;
+    try {
+      const trainerUsage = await grantRewardedPtUses(grant.rewardUnits);
       setState((prev) => ({ ...prev, trainerUsage }));
+      return true;
+    } catch {
+      return false;
     }
   }, []);
 
-  const isSubscribed = state.subscription.status === 'active';
+  // 유료 여부는 여기서 다시 계산하지 않는다 — resolveEntitlement가 낸 결과 하나만 읽는다.
+  const capabilities = entitlementCapabilities(state.entitlement);
+  const isSubscribed = capabilities.aiPtWithoutAd;
   const hasAiPtAccess = isSubscribed || state.trainerUsage.rewardedPtUsesRemaining > 0;
 
   /**
@@ -951,6 +1086,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
    * PT에게 넘기는 컨텍스트. 실제 저장된 기록만 들어가고, 없는 값은 null이다.
    * 화면(무료 브리핑)과 AI 요청이 같은 값을 보기 때문에 둘이 서로 다른 숫자를 말할 수 없다.
    */
+  /**
+   * 단백이의 학습 스냅샷. 기록이 바뀔 때만 다시 만든다 — 저장된 기록이 유일한 근거이므로
+   * 다른 상태(성장/PASS/세션)가 바뀌었다고 학습이 달라지지 않는다.
+   */
+  const danbaekLearning = useMemo(
+    () =>
+      buildDanbaekLearningProfile({
+        records: state.workoutRecords,
+        generatedAt: new Date().toISOString(),
+      }),
+    [state.workoutRecords]
+  );
+
   const ptContext = useMemo(
     () =>
       buildPtContext({
@@ -988,15 +1136,29 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [consumeAiAccess, ptContext, state.workoutRecords]
   );
 
-  const subscribeMock = useCallback(async (tierId: string) => {
-    const subscription = await subscriptionService.subscribe(tierId);
-    setState((prev) => ({ ...prev, subscription }));
+  /**
+   * provider가 준 구독 기록을 상태에 반영하는 유일한 자리. 기록을 저장하는 것과
+   * **그 기록이 지금 유효한지 판단하는 것**을 분리해 둔다 — 판단은 resolveEntitlement가 한다.
+   */
+  const applySubscriptionRecord = useCallback((subscription: SubscriptionState) => {
+    const entitlement = resolveEntitlement({
+      subscription,
+      nowMs: Date.now(),
+      allowDevProvider: __DEV__,
+    });
+    setState((prev) => ({ ...prev, subscription, entitlement }));
   }, []);
 
+  const subscribeMock = useCallback(
+    async (tierId: string) => {
+      applySubscriptionRecord(await subscriptionService.subscribe(tierId));
+    },
+    [applySubscriptionRecord]
+  );
+
   const cancelSubscriptionMock = useCallback(async () => {
-    const subscription = await subscriptionService.cancel();
-    setState((prev) => ({ ...prev, subscription }));
-  }, []);
+    applySubscriptionRecord(await subscriptionService.cancel());
+  }, [applySubscriptionRecord]);
 
   const redeemReferralCode = useCallback(async (code: string) => {
     const result = await referralService.redeemCode(code);
@@ -1050,7 +1212,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const resetAllData = useCallback(async () => {
     await clearAllKeys(Object.values(StorageKeys));
-    setState({ ...initialState, loading: false });
+    setState({ ...initialState, loading: false, bootstrapFailed: false });
   }, []);
 
   const today = todayDateString();
@@ -1077,6 +1239,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const value: AppDataContextValue = {
     ...state,
+    capabilities,
     hasSubscriptionAccess: isSubscribed,
     hasAiPtAccess,
     canAddPhotoToday,
@@ -1093,6 +1256,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     deleteWorkoutRecord,
     addBodyHistoryEntry,
     claimStreakReward,
+    adProviderAvailable: rewardedAdService.isProviderAvailable,
     watchRewardedAd,
     startWorkoutSession,
     pauseWorkoutSession,
@@ -1104,6 +1268,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     updateSessionSet,
     adjustSessionSet,
     completeSessionSet,
+    removeSessionSet,
     ensureSessionPendingSet,
     startSessionRest,
     skipSessionRest,
@@ -1112,7 +1277,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     saveRoutine,
     updateRoutine,
     removeRoutine,
+    reloadAppData,
     ptContext,
+    danbaekLearning,
     aiConnected: aiTrainerService.isAiConnected,
     sendPtMessage,
     subscribeMock,

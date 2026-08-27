@@ -46,18 +46,31 @@ export function MetricTile({ label, value, note, accent, index }: MetricTileProp
     <Animated.View
       style={[
         styles.tile,
-        { backgroundColor: theme.backgroundElement },
-        accent && { borderColor: theme.gold, borderWidth: 1 },
+        // PR처럼 실제로 달성한 것만 칠한다. 금색 테두리+금색 숫자는 옆 칸과 같은 무게로 읽혀서,
+        // 오늘 세운 기록이 "총 세트"와 구분되지 않았다.
+        accent ? { backgroundColor: theme.gold } : { backgroundColor: theme.backgroundElement },
         animatedStyle,
       ]}>
-      <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+      <ThemedText
+        type="caption"
+        themeColor={accent ? undefined : 'textSecondary'}
+        style={accent ? { color: theme.background, opacity: 0.75 } : undefined}
+        numberOfLines={1}>
         {label}
       </ThemedText>
-      <ThemedText type="metric" style={accent ? { color: theme.gold } : undefined} numberOfLines={1} adjustsFontSizeToFit>
+      <ThemedText
+        type="metric"
+        style={accent ? { color: theme.background } : undefined}
+        numberOfLines={1}
+        adjustsFontSizeToFit>
         {value}
       </ThemedText>
       {note && (
-        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+        <ThemedText
+          type="caption"
+          themeColor={accent ? undefined : 'textSecondary'}
+          style={accent ? { color: theme.background, opacity: 0.75 } : undefined}
+          numberOfLines={1}>
           {note}
         </ThemedText>
       )}

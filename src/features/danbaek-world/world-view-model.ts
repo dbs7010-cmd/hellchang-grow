@@ -1,0 +1,194 @@
+import { LearningStageLabels } from '@/config/danbaek-learning-policy';
+import { MovementFamilyLabels } from '@/config/danbaek-movement-labels';
+import { DanbaekWorldVoiceLines } from '@/config/danbaek-voice-lines';
+import { runDanbaekAdventure } from '@/features/danbaek-world/adventure-runner';
+import { presentDanbaekWorldBlock } from '@/features/danbaek-world/presentation';
+import {
+  DanbaekWorldNextPath,
+  DanbaekWorldPathTitle,
+  DanbaekWorldProofStages,
+  DanbaekWorldStageScenes,
+} from '@/features/danbaek-world/proof-stages';
+import type { DanbaekWorldStage } from '@/features/danbaek-world/stage-evaluator';
+import type { DanbaekLearningProfile, MovementFamily, StageBlock } from '@/types/danbaek-contract';
+import { withTopicParticle } from '@/utils/korean';
+
+/** 지도 위 한 칸. 상태표가 아니라 "어디까지 왔는가"만 보여준다. */
+export interface DanbaekWorldJourneyNode {
+  id: string;
+  label: string;
+  state: 'done' | 'current' | 'ahead';
+}
+
+interface DanbaekWorldSceneBase {
+  pathTitle: string;
+  journey: DanbaekWorldJourneyNode[];
+  /** 지금 서 있는(또는 방금 지나온) 구간. 방문 기억이 이 값으로 변화를 판단한다. */
+  stageId: string;
+  obstacle: 'gate' | 'cliff' | 'stones' | 'wind';
+  /** 눈앞에서 벌어지는 일 한 줄. */
+  sceneLine: string;
+  /** 단백이 한마디 (PRIMARY). */
+  danbaekLine: string;
+  returnedLine: string;
+  /** 정확한 상태 (SECONDARY). 실제 학습 단계보다 앞서 말하지 않는다. */
+  statusLine: string;
+  clearedStageIds: string[];
+}
+
+export type DanbaekWorldSceneState =
+  | (DanbaekWorldSceneBase & {
+      state: 'cleared';
+      gate: 'open';
+      /** 열린 순간을 알릴 때만 쓰는 제목. */
+      title: string;
+      nextGoal: { label: string; teaser: string };
+    })
+  | (DanbaekWorldSceneBase & {
+      state: 'blocked';
+      gate: 'closed';
+      /** 왜 못 지나가는지. 스테이지가 쓴 문장 그대로. */
+      whyLine: string;
+      actionLabel: string;
+      block: StageBlock;
+    });
+
+function sceneOf(stageId: string) {
+  return (
+    DanbaekWorldStageScenes[stageId] ?? {
+      label: stageId,
+      blockedLine: '단백이가 여기서 멈췄어요.',
+      clearedLine: '단백이가 여기를 지나갔어요.',
+      obstacle: 'gate' as const,
+      returnedLine: '운동에서 본 동작으로 지나왔어!',
+      clearedTitle: '길이 열렸어요!',
+    }
+  );
+}
+
+/**
+ * 지도. 지나온 칸 / 지금 칸 / 아직 못 간 칸으로만 나눈다.
+ *
+ * 마지막에 붙는 "다음 길"은 스테이지가 아니라 기대다 — 판정에 쓰이지 않고, 여기서도
+ * 언제나 `ahead`다. 이걸 `current`로 만들면 갈 수 없는 곳이 지금 갈 곳처럼 보인다.
+ */
+function buildJourney(
+  stages: readonly DanbaekWorldStage[],
+  currentStageId: string | null
+): DanbaekWorldJourneyNode[] {
+  const currentIndex = currentStageId
+    ? stages.findIndex((stage) => stage.id === currentStageId)
+    : stages.length;
+
+  const nodes: DanbaekWorldJourneyNode[] = stages.map((stage, index) => ({
+    id: stage.id,
+    label: sceneOf(stage.id).label,
+    state: index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'ahead',
+  }));
+
+  nodes.push({ id: 'next-path', label: DanbaekWorldNextPath.label, state: 'ahead' });
+  return nodes;
+}
+
+/** 그 계열을 지금 어디까지 배웠는지. 배운 적이 없으면 null — 지어내지 않는다. */
+function learnedStatusLine(
+  profile: DanbaekLearningProfile,
+  movementFamily: MovementFamily
+): string | null {
+  const capability = profile.capabilities.find(
+    (candidate) => candidate.movementFamily === movementFamily
+  );
+  if (!capability) return null;
+  return `${MovementFamilyLabels[movementFamily]} · ${LearningStageLabels[capability.learningStage]}`;
+}
+
+/** APP supplies persisted learning. WORLD only evaluates and projects it. */
+export function buildDanbaekWorldScene(profile: DanbaekLearningProfile): DanbaekWorldSceneState {
+  const stages = DanbaekWorldProofStages;
+  const run = runDanbaekAdventure(stages, profile);
+
+  if (run.outcome === 'cleared') {
+    // 방금 지나온 마지막 관문이 이 장면의 주인공이다.
+    const lastGated = [...stages].reverse().find((stage) => stage.requirement);
+    const lastStageId = lastGated?.id ?? stages[stages.length - 1]?.id ?? 'arrival';
+    const family = lastGated?.requirement?.movementFamily ?? null;
+
+    return {
+      state: 'cleared',
+      gate: 'open',
+      pathTitle: DanbaekWorldPathTitle,
+      journey: buildJourney(stages, null),
+      stageId: lastStageId,
+      obstacle: sceneOf(lastStageId).obstacle,
+      title: sceneOf(lastStageId).clearedTitle,
+      sceneLine: sceneOf(lastStageId).clearedLine,
+      danbaekLine:
+        sceneOf(lastStageId).obstacle === 'cliff'
+          ? DanbaekWorldVoiceLines.cliffCleared
+          : sceneOf(lastStageId).obstacle === 'stones'
+            ? DanbaekWorldVoiceLines.stonesCleared
+            : sceneOf(lastStageId).obstacle === 'wind'
+              ? DanbaekWorldVoiceLines.ridgeCleared
+              : DanbaekWorldVoiceLines.gateCleared,
+      returnedLine: sceneOf(lastStageId).returnedLine,
+      statusLine:
+        (family && learnedStatusLine(profile, family)) ?? '단백이가 본 동작으로 길을 열었어요',
+      nextGoal: { label: DanbaekWorldNextPath.label, teaser: DanbaekWorldNextPath.teaser },
+      clearedStageIds: run.clearedStageIds,
+    };
+  }
+
+  const block = run.block!;
+  const presentation = presentDanbaekWorldBlock(block);
+
+  return {
+    state: 'blocked',
+    gate: 'closed',
+    pathTitle: DanbaekWorldPathTitle,
+    journey: buildJourney(stages, block.stageId),
+    stageId: block.stageId,
+    obstacle: sceneOf(block.stageId).obstacle,
+    sceneLine: sceneOf(block.stageId).blockedLine,
+    danbaekLine: presentation.danbaekLine,
+    returnedLine: sceneOf(block.stageId).returnedLine,
+    statusLine: presentation.statusLine,
+    whyLine: presentation.whyLine,
+    actionLabel: presentation.actionLabel,
+    block,
+    clearedStageIds: run.clearedStageIds,
+  };
+}
+
+/** 화면이 "다음에 뭘 하면 되는지"를 한 줄로 물어볼 때. */
+export function describeNextGoal(): string {
+  return `${withTopicParticle(DanbaekWorldNextPath.label)} 아직 잠겨 있어요`;
+}
+
+/**
+ * HOME과 World가 같은 실제 gate 판정에서 입구 문구를 얻는다.
+ *
+ * 구간이 늘어날 때 위험한 건 새로 막힌 구간이 아니라 **맨 끝에 남아 있는 마지막 줄**이다. 능선이
+ * 생기기 전에는 돌길이 마지막이라 "돌길을 건넜어요 · 다음은 빛나는 동굴 입구"가 맞았지만,
+ * 능선이 플레이어블해진 뒤에도 그 줄이 남아 있으면 HOME은 건너뛴 구간을 끝낸 것처럼
+ * 말하게 된다. 그래서 막힌 구간은 구간대로 말하고, 다 지난 경우에만 마지막 줄로 닫는다.
+ */
+export function describeFirstPathEntry(profile: DanbaekLearningProfile): string {
+  const scene = buildDanbaekWorldScene(profile);
+  if (!scene.clearedStageIds.includes('push-door')) {
+    return '벤치프레스 기록이 생기면 첫 번째 길이 열려요';
+  }
+  if (scene.state === 'blocked' && scene.stageId === 'pull-cliff') {
+    return '첫 번째 길이 열려 있어요 · 다음은 랫풀다운으로 당기는 절벽';
+  }
+  if (scene.state === 'blocked' && scene.stageId === 'squat-stones') {
+    return '당기는 절벽을 올랐어요 · 다음은 스쿼트로 굽이진 돌길';
+  }
+  if (scene.state === 'blocked' && scene.stageId === 'hinge-ridge') {
+    return `굽이진 돌길을 건넜어요 · 다음은 데드리프트로 ${sceneOf('hinge-ridge').label}`;
+  }
+  if (scene.state === 'blocked') {
+    // 아직 문구를 안 쓴 구간에 막혔다면, 지난 구간 자랑보다 지금 막힌 곳을 말한다.
+    return `${withTopicParticle(sceneOf(scene.stageId).label)} 아직 막혀 있어요`;
+  }
+  return `${sceneOf('hinge-ridge').label}을 건너왔어요 · 다음은 ${DanbaekWorldNextPath.label}`;
+}

@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ProgressBar } from '@/components/ui/progress-bar';
-import { HomeColors, Spacing } from '@/constants/theme';
+import { HomeColors, Layout, Spacing } from '@/constants/theme';
 
 export interface GrowthHudProps {
   passLevel: number;
@@ -59,9 +59,11 @@ export function GrowthHud({
 }
 
 const styles = StyleSheet.create({
+  /** 줄 전체가 성장 리포트로 가는 링크다 — 글자 높이(16px)만 눌리지 않게 한다. */
   container: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: Layout.compactRowHeight,
     gap: Spacing.two,
   },
   bar: {

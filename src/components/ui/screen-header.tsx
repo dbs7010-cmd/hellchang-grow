@@ -26,11 +26,17 @@ export function ScreenHeader({ title, accent, right, onBack }: ScreenHeaderProps
   const router = useRouter();
   const theme = useTheme();
 
-  // 딥링크/알림으로 이 화면에 바로 들어오면 되돌아갈 스택이 없다 — 그때는 홈으로 보낸다.
+  /**
+   * 딥링크/알림으로 이 화면에 바로 들어오면 되돌아갈 스택이 없다 — 그때는 홈으로 보낸다.
+   *
+   * 목적지는 탭 그룹이어야 한다. `'/'`로 replace하면 스택 밖의 그룹이라 **아무 일도
+   * 일어나지 않고** [‹ 닫기]가 먹통이 된다 — 세션 화면이 같은 이유로 이미 고쳐진 곳이다
+   * (src/app/session.tsx의 exitToHome). 하위 화면 전체가 이 헤더를 쓰므로 여기서 한 번에 맞춘다.
+   */
   const handleBack = () => {
     if (onBack) return onBack();
     if (router.canGoBack()) router.back();
-    else router.replace('/');
+    else router.replace('/(tabs)');
   };
 
   return (
@@ -62,8 +68,14 @@ const styles = StyleSheet.create({
     minHeight: Layout.compactRowHeight,
     paddingBottom: Spacing.two,
   },
+  /**
+   * 좌우 슬롯은 헤더 줄 높이를 그대로 채운다. 예전에는 글자 높이(20px)만 눌려서,
+   * 모든 하위 화면의 [‹ 닫기]가 실제로는 아주 얇은 띠였다.
+   */
   side: {
     width: SIDE_WIDTH,
+    alignSelf: 'stretch',
+    minHeight: Layout.compactRowHeight,
     justifyContent: 'center',
   },
   sideRight: {

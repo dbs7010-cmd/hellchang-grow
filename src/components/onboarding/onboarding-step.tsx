@@ -46,7 +46,12 @@ export function OnboardingStep({ step, title, subtitle, footer, children }: Onbo
           {step !== undefined && (
             <View style={styles.progressRow}>
               {router.canGoBack() ? (
-                <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="이전 단계">
+                <Pressable
+                  onPress={() => router.back()}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="이전 단계"
+                  style={styles.backButton}>
                   <ThemedText type="smallBold" themeColor="textSecondary">
                     ‹
                   </ThemedText>
@@ -159,6 +164,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     minHeight: Layout.compactRowHeight,
+  },
+  /** 글자 하나라 실제 폭이 5px였다 — 진행 줄 높이만큼 눌리는 영역을 준다. */
+  backButton: {
+    minWidth: Layout.compactRowHeight,
+    minHeight: Layout.compactRowHeight,
+    justifyContent: 'center',
+    marginLeft: -Spacing.three,
+    paddingLeft: Spacing.three,
   },
   backSpacer: {
     width: 8,

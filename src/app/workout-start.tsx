@@ -5,7 +5,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
+import { InlineAction } from '@/components/ui/inline-action';
 import { PrimaryButton } from '@/components/ui/primary-button';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { Section } from '@/components/ui/section';
 import { TextField } from '@/components/ui/text-field';
@@ -41,7 +43,6 @@ const CONTINUE_TITLES: Record<ContinueOption['source'], string> = {
  */
 export default function WorkoutStartScreen() {
   const router = useRouter();
-  const theme = useTheme();
   const { activeSession, workoutRecords, routines, startWorkoutSession } = useAppData();
 
   const [showPicker, setShowPicker] = useState(false);
@@ -53,8 +54,10 @@ export default function WorkoutStartScreen() {
   const [searchQuery, setSearchQuery] = useState('');
 
   // 이미 진행 중인 세션이 있는 상태로 이 화면에 들어오면 (뒤로가기 등) 바로 세션으로 보낸다.
+  // 끝난 세션(status: completed)이 정리되지 못하고 남아 있으면 보내지 않는다 — 그러면
+  // 끝낼 수도 없는 세션 화면과 이 화면 사이에 갇힌다. 그때는 새로 시작하는 것이 탈출구다.
   useEffect(() => {
-    if (activeSession) {
+    if (activeSession && activeSession.status !== 'completed') {
       router.replace('/session');
     }
   }, [activeSession, router]);
@@ -154,10 +157,11 @@ export default function WorkoutStartScreen() {
   /**
    * 뒤로가기. 알림/딥링크로 이 화면에 바로 들어오면 되돌아갈 스택이 없어서 router.back()이
    * 아무 일도 하지 않는다 — 그때는 홈으로 빠져나갈 안전 경로를 준다.
+   * 목적지는 탭 그룹이다 ('/'로 replace하면 스택 밖이라 아무 일도 일어나지 않는다).
    */
   const handleBack = () => {
     if (router.canGoBack()) router.back();
-    else router.replace('/');
+    else router.replace('/(tabs)');
   };
 
   const continueOption = plan.continueOption;
@@ -165,19 +169,12 @@ export default function WorkoutStartScreen() {
 
   return (
     <ScreenScroll>
-      <View style={styles.headerRow}>
-        <Pressable
-          onPress={handleBack}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="뒤로가기">
-          <ThemedText type="smallBold" themeColor="textSecondary">
-            ‹ 뒤로
-          </ThemedText>
-        </Pressable>
-        <ThemedText type="heading">오늘의 운동</ThemedText>
-        <View style={styles.headerSpacer} />
-      </View>
+      {/*
+        스택으로 열리는 다른 화면들과 같은 헤더를 쓴다. 예전에는 이 화면만 자기 헤더를
+        갖고 있어서 되돌아가는 곳의 이름("‹ 뒤로")도, 타이틀 정렬도, 누를 수 있는 크기도
+        혼자 달랐다. 되돌아갈 스택이 없을 때의 처리(handleBack)만 그대로 넘긴다.
+      */}
+      <ScreenHeader title="오늘의 운동" onBack={handleBack} />
 
       {continueOption && (
         <QuickStartRow
@@ -262,11 +259,10 @@ export default function WorkoutStartScreen() {
               <PrimaryButton label="추가" variant="secondary" onPress={handleAddCustomExercise} />
             </View>
           ) : (
-            <Pressable onPress={() => setShowCustomExerciseField(true)} hitSlop={8}>
-              <ThemedText type="captionBold" style={{ color: theme.gold }}>
-                + 목록에 없는 운동 직접 추가
-              </ThemedText>
-            </Pressable>
+            <InlineAction
+              label="+ 목록에 없는 운동 직접 추가"
+              onPress={() => setShowCustomExerciseField(true)}
+            />
           )}
 
           <PrimaryButton
@@ -319,17 +315,27 @@ function QuickStartRow({
       accessibilityLabel={title + '. ' + subtitle}
       style={[
         styles.quickRow,
-        { backgroundColor: theme.backgroundElement, borderColor: accent ? theme.gold : theme.border },
+        accent
+          ? // 오늘 여기서 할 행동 하나. 칠해진 금색이라 세 줄 중 무엇을 누를지 고민하지 않는다.
+            { backgroundColor: theme.gold, borderColor: theme.gold, boxShadow: '0 6px 16px rgba(0, 0, 0, 0.28)' }
+          : { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+        accent && styles.quickRowAccent,
       ]}>
       <View style={styles.quickRowText}>
-        <ThemedText type="smallBold" style={accent ? { color: theme.gold } : undefined}>
+        <ThemedText
+          type={accent ? 'sectionTitle' : 'smallBold'}
+          style={accent ? { color: theme.background } : undefined}>
           {title}
         </ThemedText>
-        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={2}>
+        <ThemedText
+          type="caption"
+          themeColor={accent ? undefined : 'textSecondary'}
+          numberOfLines={2}
+          style={accent ? { color: theme.background, opacity: 0.75 } : undefined}>
           {subtitle}
         </ThemedText>
       </View>
-      <ThemedText type="smallBold" style={{ color: accent ? theme.gold : theme.textSecondary }}>
+      <ThemedText type="smallBold" style={{ color: accent ? theme.background : theme.textSecondary }}>
         ›
       </ThemedText>
     </Pressable>
@@ -337,14 +343,6 @@ function QuickStartRow({
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerSpacer: {
-    width: 44,
-  },
   quickRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -354,6 +352,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: Spacing.three,
     minHeight: Layout.listRowHeight,
+  },
+  /** 주 경로는 보조 경로보다 실제로 크다 — 금색 글자만으로는 같은 줄로 읽혔다. */
+  quickRowAccent: {
+    borderRadius: Radius.large,
+    minHeight: Layout.ctaHeightLarge,
   },
   quickRowText: {
     flex: 1,

@@ -1,0 +1,308 @@
+<!doctype html><meta charset="utf-8"><title>DANBAEK P0 EVIDENCE</title>
+<body style="background:#222;color:#eee;font:12px monospace">
+<pre id="log">running...</pre>
+<div id="strip"></div>
+<script>
+const SS = 4, W = 200, H = 280;              // CANON coordinate system, supersampled
+const CW = W * SS, CH = H * SS;
+const log = (m) => { document.getElementById('log').textContent += '\n' + m; };
+
+function mkCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+function loadImage(src) { return new Promise((ok, err) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => err(new Error('load ' + src.slice(0, 40))); i.src = src; }); }
+async function loadSvg(url) {
+  let t = await (await fetch(url)).text();
+  if (!/<svg[^>]*\swidth=/.test(t)) t = t.replace('<svg', '<svg width="' + W + '" height="' + H + '"');
+  return loadImage('data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(t))));
+}
+async function save(name, body) { await fetch('/save?name=' + name, { method: 'POST', body }); }
+const saveCanvas = (name, c) => save(name, c.toDataURL('image/png'));
+
+function maskOf(ctx, w, h) {
+  const d = ctx.getImageData(0, 0, w, h).data;
+  const m = new Uint8Array(w * h);
+  for (let i = 0, p = 3; i < m.length; i++, p += 4) m[i] = d[p] >= 24 ? 1 : 0;
+  return m;
+}
+function bbox(m, w, h) {
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (m[y * w + x]) {
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  return { x0: x0, y0: y0, x1: x1, y1: y1, width: x1 - x0 + 1, height: y1 - y0 + 1 };
+}
+function rowSpan(m, w, y) {
+  let x0 = -1, x1 = -1;
+  for (let x = 0; x < w; x++) if (m[y * w + x]) { if (x0 < 0) x0 = x; x1 = x; }
+  return x0 < 0 ? null : { x0: x0, x1: x1, width: x1 - x0 + 1, center: (x0 + x1) / 2 };
+}
+
+// Neck = the narrowest row in the band between 8% and 35% of the figure height.
+// Both figures are head-heavy, so 'widest row near the top' would land on the torso;
+// the narrowest row in that band is the head/torso junction in both. Head width is
+// then the widest row above that neck.
+function rowRuns(m, w, y) {
+  const runs = []; let start = -1;
+  for (let x = 0; x <= w; x++) {
+    const on = x < w && m[y * w + x];
+    if (on && start < 0) start = x;
+    if (!on && start >= 0) { runs.push([start, x - 1]); start = -1; }
+  }
+  return runs;
+}
+
+function headMetrics(m, w, h) {
+  const box = bbox(m, w, h);
+  const spans = [];
+  for (let y = box.y0; y <= box.y1; y++) spans.push(rowSpan(m, w, y));
+  const raw = spans.map((s) => (s ? s.width : 0));
+  const lo = Math.round(box.height * 0.08), hi = Math.round(box.height * 0.35);
+  let neck = lo;
+  for (let i = lo; i <= hi; i++) if (raw[i] < raw[neck]) neck = i;
+  let headWidth = 0, widest = spans[0];
+  for (let i = 0; i <= neck; i++) if (raw[i] > headWidth) { headWidth = raw[i]; widest = spans[i]; }
+  let peak = raw.indexOf(headWidth);
+  return {
+    top: box.y0, peakY: box.y0 + peak, neckY: box.y0 + neck, neckWidth: raw[neck],
+    headWidth: headWidth, headHeight: neck + 1, headCenterX: widest.center,
+    box: box, profile: raw
+  };
+}
+
+(async function () {
+  // ---- E02: production neutral renderer, rasterized in the CANON frame ----
+  const rendererImg = await loadSvg('/neutral-renderer.svg');
+  const rc = mkCanvas(CW, CH), rctx = rc.getContext('2d');
+  rctx.drawImage(rendererImg, 0, 0, CW, CH);
+  const rMask = maskOf(rctx, CW, CH);
+  const rHead = headMetrics(rMask, CW, CH);
+  const rBox = bbox(rMask, CW, CH);
+
+  // ---- LOCKED layered Stage 0 master, same frame (does the renderer implement it?) ----
+  let rawSvg = await (await fetch('/neutral-renderer.svg')).text();
+  if (!rawSvg.includes('scale(1 0.8)')) throw new Error('proportion transform not found in neutral svg');
+  const noSquashImg = await loadImage('data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(rawSvg.replace('scale(1 0.8)', 'scale(1 1)')))));
+  const nsc = mkCanvas(CW, CH), nsctx = nsc.getContext('2d');
+  nsctx.drawImage(noSquashImg, 0, 0, CW, CH);
+  const nsMask = maskOf(nsctx, CW, CH);
+  const nsBox = bbox(nsMask, CW, CH);
+  const nsHead = headMetrics(nsMask, CW, CH);
+
+  const layeredImg = await loadSvg('/layered.svg');
+  const lc = mkCanvas(CW, CH), lctx = lc.getContext('2d');
+  lctx.drawImage(layeredImg, 0, 0, CW, CH);
+  const lMask = maskOf(lctx, CW, CH);
+  const lBox = bbox(lMask, CW, CH);
+
+  // ---- confirmed Lv.1 reference, measured in its own pixel space first ----
+  const refImg = await loadImage('/ref.png');
+  const nat = { w: refImg.naturalWidth, h: refImg.naturalHeight };
+  const pc = mkCanvas(nat.w, nat.h), pctx = pc.getContext('2d');
+  pctx.drawImage(refImg, 0, 0);
+  const pMask = maskOf(pctx, nat.w, nat.h);
+  const pBox = bbox(pMask, nat.w, nat.h);
+  const pHead = headMetrics(pMask, nat.w, nat.h);
+
+  // ---- canonical normalization: UNIFORM scale + translation only ----
+  // Anchor A (primary): the LOCKED head. Head/face is fixed identity at every level,
+  // so it is the one part guaranteed to mean the same thing in both images.
+  const headScale = rHead.headWidth / pHead.headWidth;
+  const headTx = rHead.headCenterX - pHead.headCenterX * headScale;
+  const headTy = rHead.top - pHead.top * headScale;
+  // Anchor B (cross-check): whole figure bbox height + centre.
+  const figScale = rBox.height / pBox.height;
+  const figTx = (rBox.x0 + rBox.x1) / 2 - ((pBox.x0 + pBox.x1) / 2) * figScale;
+  const figTy = rBox.y0 - pBox.y0 * figScale;
+
+  function normalized(scale, tx, ty) {
+    const c = mkCanvas(CW, CH), ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.setTransform(scale, 0, 0, scale, tx, ty);
+    ctx.drawImage(refImg, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return c;
+  }
+  const nHead = normalized(headScale, headTx, headTy);
+  const nFig = normalized(figScale, figTx, figTy);
+  const nMask = maskOf(nHead.getContext('2d'), CW, CH);
+  const nBox = bbox(nMask, CW, CH);
+  const nHeadM = headMetrics(nMask, CW, CH);
+  const fMask = maskOf(nFig.getContext('2d'), CW, CH);
+  const fHeadM = headMetrics(fMask, CW, CH);
+
+  const LANDMARKS = {
+    'head-widest': 57, 'neck-seam': 78, 'arm-root': 86, 'chest': 100, 'mid-torso': 116,
+    'back-low': 140, 'waist': 155, 'pelvis-seam': 168, 'upper-thigh': 180,
+    'mid-thigh': 195, 'knee': 214, 'calf': 235, 'ankle': 252
+  };
+  const u = (v) => (v === null || v === undefined ? null : Math.round((v / SS) * 100) / 100);
+  const rows = {};
+  for (const name of Object.keys(LANDMARKS)) {
+    const y = LANDMARKS[name], py = Math.round(y * SS);
+    const a = rowSpan(rMask, CW, py), b = rowSpan(nMask, CW, py), c = rowSpan(fMask, CW, py);
+    const fmt = (s) => s && { left: u(s.x0), right: u(s.x1), width: u(s.width), center: u(s.center) };
+    rows[name] = {
+      y: y, renderer: fmt(a), referenceHeadAnchored: fmt(b), referenceFigureAnchored: fmt(c),
+      widthDeltaHeadAnchored: a && b ? Math.round(((b.width - a.width) / SS) * 100) / 100 : null
+    };
+  }
+
+  function iou(m1, m2, y0, y1) {
+    y0 = y0 || 0; y1 = y1 === undefined ? CH - 1 : y1;
+    let inter = 0, uni = 0, only1 = 0, only2 = 0;
+    for (let y = y0; y <= y1; y++) for (let x = 0; x < CW; x++) {
+      const i = y * CW + x, a = m1[i], b = m2[i];
+      if (a && b) inter++;
+      if (a || b) uni++;
+      if (a && !b) only1++;
+      if (b && !a) only2++;
+    }
+    return { iou: uni ? Math.round((inter / uni) * 10000) / 10000 : 0, aOnlyPx: only1, bOnlyPx: only2 };
+  }
+  const profileCanon = (hm) => {
+    const out = [];
+    for (let y = 0; y < H; y++) {
+      const i = Math.round(y * SS) - hm.box.y0;
+      out.push(i >= 0 && i < hm.profile.length ? Math.round((hm.profile[i] / SS) * 100) / 100 : 0);
+    }
+    return out;
+  };
+
+  const metrics = {
+    generatedFor: 'DANBAEK VALUE TRAIN 1 / P0 - PRODUCTION STATIC IDENTITY',
+    base: 'integration/rebuild-app-after-recovery @ 18f2ca1d88fa2767be7ff9b93e9fc40dc232dec4',
+    canonFrame: { width: W, height: H, supersample: SS, unit: 'CANON units (viewBox 0 0 200 280)' },
+    reference: {
+      file: 'assets/characters/danbaek/canon/reference_v3/levels/danbaek-lv01.png',
+      naturalSize: nat, alphaBBox: pBox,
+      padding: { left: pBox.x0, right: nat.w - 1 - pBox.x1, top: pBox.y0, bottom: nat.h - 1 - pBox.y1 },
+      head: { top: pHead.top, widestY: pHead.peakY, neckY: pHead.neckY, headWidth: pHead.headWidth, headHeight: pHead.headHeight, neckWidth: pHead.neckWidth, headCenterX: pHead.headCenterX },
+      headToFigure: { headWidthOverFigureWidth: Math.round((pHead.headWidth / pBox.width) * 1000) / 1000, headHeightOverFigureHeight: Math.round((pHead.headHeight / pBox.height) * 1000) / 1000, headsTall: Math.round((pBox.height / pHead.headHeight) * 100) / 100 }
+    },
+    renderer: {
+      source: 'src/config/character-body-config.ts + src/utils/character-body-geometry.ts (all BodyParameters = 0)',
+      alphaBBoxCanon: { x0: u(rBox.x0), y0: u(rBox.y0), x1: u(rBox.x1), y1: u(rBox.y1), width: u(rBox.width), height: u(rBox.height) },
+      frameFill: { usedHeightRatio: Math.round((rBox.height / CH) * 1000) / 1000, emptyBottomCanon: u(CH - 1 - rBox.y1), emptyTopCanon: u(rBox.y0) },
+      head: { top: u(rHead.top), widestY: u(rHead.peakY), neckY: u(rHead.neckY), headWidth: u(rHead.headWidth), headHeight: u(rHead.headHeight), neckWidth: u(rHead.neckWidth), headCenterX: u(rHead.headCenterX) },
+      headToFigure: { headWidthOverFigureWidth: Math.round((rHead.headWidth / rBox.width) * 1000) / 1000, headHeightOverFigureHeight: Math.round((rHead.headHeight / rBox.height) * 1000) / 1000, headsTall: Math.round((rBox.height / rHead.headHeight) * 100) / 100 }
+    },
+    layeredStage0Master: {
+      file: 'assets/characters/danbaek/canon/layered/danbaek_stage0_layered_master.svg',
+      alphaBBoxCanon: { x0: u(lBox.x0), y0: u(lBox.y0), x1: u(lBox.x1), y1: u(lBox.y1), width: u(lBox.width), height: u(lBox.height) },
+      vsRenderer: iou(rMask, lMask)
+    },
+    normalization: {
+      rule: 'uniform scale + translation only (no stretch, no per-axis scale)',
+      headAnchored: { scale: headScale, translateX: headTx / SS, translateY: headTy / SS },
+      figureAnchored: { scale: figScale, translateX: figTx / SS, translateY: figTy / SS },
+      referenceAfterHeadAnchor: {
+        alphaBBoxCanon: { x0: u(nBox.x0), y0: u(nBox.y0), x1: u(nBox.x1), y1: u(nBox.y1), width: u(nBox.width), height: u(nBox.height) },
+        head: { top: u(nHeadM.top), widestY: u(nHeadM.peakY), neckY: u(nHeadM.neckY), headWidth: u(nHeadM.headWidth), headHeight: u(nHeadM.headHeight), headCenterX: u(nHeadM.headCenterX) }
+      },
+      referenceAfterFigureAnchor: {
+        head: { headWidth: u(fHeadM.headWidth), headHeight: u(fHeadM.headHeight), neckY: u(fHeadM.neckY) }
+      }
+    },
+    agreement: {
+      wholeFigure_headAnchored: iou(rMask, nMask),
+      head_headAnchored: iou(rMask, nMask, 0, Math.round(rHead.neckY)),
+      body_headAnchored: iou(rMask, nMask, Math.round(rHead.neckY) + 1, CH - 1),
+      wholeFigure_figureAnchored: iou(rMask, fMask)
+    },
+    rendererWithoutStage0Squash: {
+      what: 'identical production paths with stage0BodyProportion.scaleY forced to 1 - read-only what-if, nothing was changed',
+      alphaBBoxCanon: { x0: u(nsBox.x0), y0: u(nsBox.y0), x1: u(nsBox.x1), y1: u(nsBox.y1), width: u(nsBox.width), height: u(nsBox.height) },
+      headsTall: Math.round((nsBox.height / nsHead.headHeight) * 100) / 100,
+      vsReferenceHeadAnchored: iou(nsMask, nMask)
+    },
+    rowRuns: (function () {
+      const out = {};
+      for (const name of Object.keys(LANDMARKS)) {
+        const py = Math.round(LANDMARKS[name] * SS);
+        const cv = (rs) => rs.map((r) => [u(r[0]), u(r[1])]);
+        out[name] = { y: LANDMARKS[name], renderer: cv(rowRuns(rMask, CW, py)), referenceHeadAnchored: cv(rowRuns(nMask, CW, py)) };
+      }
+      return out;
+    })(),
+    landmarkRows: rows,
+    widthProfileCanon: {
+      note: 'silhouette width in CANON units, indexed by CANON y (0..279)',
+      renderer: profileCanon(rHead),
+      referenceHeadAnchored: profileCanon(nHeadM)
+    }
+  };
+
+  // ---- evidence images ----
+  await saveCanvas('E01-reference-normalized.png', nHead);
+  await saveCanvas('E01b-reference-normalized-figure-anchored.png', nFig);
+  await saveCanvas('E02-renderer-neutral.png', rc);
+
+  const e3 = mkCanvas(CW, CH), e3c = e3.getContext('2d');
+  e3c.fillStyle = '#fff'; e3c.fillRect(0, 0, CW, CH);
+  e3c.globalAlpha = 0.5; e3c.drawImage(nHead, 0, 0); e3c.drawImage(rc, 0, 0); e3c.globalAlpha = 1;
+  await saveCanvas('E03-overlay-50-50.png', e3);
+
+  const paint = (masks) => {
+    const c = mkCanvas(CW, CH), cx = c.getContext('2d'), img = cx.createImageData(CW, CH);
+    for (let i = 0; i < CW * CH; i++) {
+      const a = masks.a[i], b = masks.b[i], p = i * 4;
+      let col = [255, 255, 255];
+      if (a && b) col = [185, 185, 185];
+      else if (a) col = [30, 90, 220];   // renderer only
+      else if (b) col = [220, 50, 50];   // reference only
+      img.data[p] = col[0]; img.data[p + 1] = col[1]; img.data[p + 2] = col[2]; img.data[p + 3] = 255;
+    }
+    cx.putImageData(img, 0, 0);
+    return c;
+  };
+  await saveCanvas('E04-silhouette-difference.png', paint({ a: rMask, b: nMask }));
+  await saveCanvas('E04b-silhouette-difference-figure-anchored.png', paint({ a: rMask, b: fMask }));
+  await saveCanvas('E07-renderer-vs-layered-stage0.png', paint({ a: rMask, b: lMask }));
+
+  const edge = (m) => {
+    const e = new Uint8Array(m.length);
+    for (let y = 1; y < CH - 1; y++) for (let x = 1; x < CW - 1; x++) {
+      const i = y * CW + x;
+      if (m[i] && (!m[i - 1] || !m[i + 1] || !m[i - CW] || !m[i + CW])) e[i] = 1;
+    }
+    return e;
+  };
+  const er = edge(rMask), en = edge(nMask);
+  const e5 = mkCanvas(CW, CH), e5c = e5.getContext('2d');
+  const img5 = e5c.createImageData(CW, CH);
+  for (let i = 0; i < er.length; i++) {
+    const p = i * 4;
+    let col = [255, 255, 255];
+    if (en[i]) col = [220, 50, 50];
+    if (er[i]) col = [30, 90, 220];
+    img5.data[p] = col[0]; img5.data[p + 1] = col[1]; img5.data[p + 2] = col[2]; img5.data[p + 3] = 255;
+  }
+  e5c.putImageData(img5, 0, 0);
+  e5c.strokeStyle = 'rgba(0,0,0,0.3)'; e5c.lineWidth = 1; e5c.font = '18px monospace'; e5c.fillStyle = 'rgba(0,0,0,0.55)';
+  for (const name of Object.keys(LANDMARKS)) {
+    const y = LANDMARKS[name] * SS;
+    e5c.beginPath(); e5c.moveTo(0, y); e5c.lineTo(CW, y); e5c.stroke();
+    e5c.fillText(name + ' y=' + LANDMARKS[name], 6, y - 4);
+  }
+  await saveCanvas('E05-contour-comparison.png', e5);
+  await saveCanvas('E08-whatif-renderer-without-stage0-squash.png', nsc);
+  await saveCanvas('E08b-whatif-nosquash-vs-reference.png', paint({ a: nsMask, b: nMask }));
+
+  // E06 - fixed identity (head/face) side by side + overlay
+  const hy1 = Math.min(CH, Math.round(rHead.neckY) + 10 * SS);
+  const crop = (src) => { const c = mkCanvas(CW, hy1); c.getContext('2d').drawImage(src, 0, 0); return c; };
+  const e6 = mkCanvas(CW * 2 + 20, hy1), e6c = e6.getContext('2d');
+  e6c.fillStyle = '#fff'; e6c.fillRect(0, 0, e6.width, e6.height);
+  e6c.drawImage(crop(nHead), 0, 0);
+  e6c.drawImage(crop(rc), CW + 20, 0);
+  e6c.globalAlpha = 0.45; e6c.drawImage(crop(nHead), CW + 20, 0); e6c.globalAlpha = 1;
+  await saveCanvas('E06-fixed-identity-comparison.png', e6);
+
+  await save('metrics.json', JSON.stringify(metrics, null, 2));
+  log('DONE');
+  log('renderer head: ' + JSON.stringify(metrics.renderer.head));
+  log('reference head: ' + JSON.stringify(metrics.reference.head));
+  log('agreement: ' + JSON.stringify(metrics.agreement));
+  log('layered vs renderer: ' + JSON.stringify(metrics.layeredStage0Master.vsRenderer));
+  for (const img of [nHead, rc, e3, e5]) { img.style.width = '150px'; img.style.background = '#fff'; document.getElementById('strip').appendChild(img); }
+})().catch((e) => log('ERROR ' + e.message + '\n' + e.stack));
+</script>

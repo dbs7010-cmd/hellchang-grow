@@ -6,6 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { TextField } from '@/components/ui/text-field';
 import { AiQuickActionIds, AiQuickActionLabels } from '@/config/ai-quick-actions';
@@ -54,6 +55,15 @@ export function AiPtPanel({ accessLabel, aiConnected, initialQuickAction, onSend
   const [lastRequest, setLastRequest] = useState<{ text: string; quickActionId?: AiQuickActionId } | null>(
     null
   );
+  /**
+   * 실패 이유가 "이용권이 없어서"인가.
+   *
+   * 이 경우와 통신/서버 실패는 사용자가 할 수 있는 일이 다르다. 예전에는 둘을 같은 오류로
+   * 묶어서 [다시 시도]를 띄웠는데, 이용권이 0이면 그 버튼은 눌러도 **절대 성공할 수 없다** —
+   * 눌러도 아무 일이 없는 버튼이었다. 게다가 안내는 "광고를 보거나 구독하면"이라고 했지만
+   * 이 화면에는 광고 버튼이 없다(광고/구독은 대화가 열리기 전 화면에 있다).
+   */
+  const [outOfUses, setOutOfUses] = useState(false);
   /** 전송 중 중복 요청 차단 — 버튼 disabled보다 앞선 방어선이다. */
   const sendingRef = useRef(false);
 
@@ -62,6 +72,7 @@ export function AiPtPanel({ accessLabel, aiConnected, initialQuickAction, onSend
     if (!trimmed || sendingRef.current) return;
     sendingRef.current = true;
     setError(null);
+    setOutOfUses(false);
     setLastRequest({ text: trimmed, quickActionId });
 
     const history: AiTrainerHistoryEntry[] = messages.map((message) => ({
@@ -78,7 +89,9 @@ export function AiPtPanel({ accessLabel, aiConnected, initialQuickAction, onSend
     try {
       const reply = await onSend({ text: trimmed, quickActionId, history });
       if (!reply) {
-        setError('이용권이 부족해요. 광고를 보거나 구독하면 다시 이용할 수 있어요.');
+        // 여기서 할 수 있는 일을 그대로 말한다. 지금까지 한 대화는 그대로 남는다.
+        setOutOfUses(true);
+        setError('이용권을 다 썼어요. [‹ 닫기]로 나갔다가 AI 상담을 다시 열면 광고를 보고 이어서 물어볼 수 있어요.');
         return;
       }
       setMessages((prev) => [
@@ -151,6 +164,20 @@ export function AiPtPanel({ accessLabel, aiConnected, initialQuickAction, onSend
         contentContainerStyle={styles.conversationContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
+        {/*
+          대화가 시작되기 전의 화면. 예전에는 여기가 그냥 빈 공간이라, 이용권까지 쓰고
+          들어온 사용자가 "열리긴 한 건가?" 싶은 화면을 마주했다.
+        */}
+        {messages.length === 0 && !loading && (
+          <View style={styles.emptyConversation}>
+            <EmptyState
+              icon={StanleyTrainer.portraitPlaceholder}
+              line={`${StanleyTrainer.displayName}에게 물어볼 차례예요.`}
+              hint="위의 빠른 질문을 누르거나, 아래에 직접 적어서 보내요."
+            />
+          </View>
+        )}
+
         {messages.map((message) => (
           <MessageBubble key={message.id} role={message.role} text={message.text} />
         ))}
@@ -162,7 +189,8 @@ export function AiPtPanel({ accessLabel, aiConnected, initialQuickAction, onSend
             <ThemedText type="caption" themeColor="textSecondary">
               {error}
             </ThemedText>
-            {lastRequest && (
+            {/* 다시 눌러도 성공할 수 없는 상황(이용권 0)에서는 재시도를 내보내지 않는다. */}
+            {lastRequest && !outOfUses && (
               <PrimaryButton label="다시 시도" variant="secondary" onPress={handleRetry} disabled={loading} />
             )}
           </ThemedView>
@@ -235,6 +263,10 @@ const styles = StyleSheet.create({
   },
   conversation: {
     flex: 1,
+  },
+  /** 빈 대화 안내는 화면을 채우는 것이 아니라 위쪽에 조용히 놓인다. */
+  emptyConversation: {
+    paddingTop: Spacing.two,
   },
   conversationContent: {
     gap: Spacing.two,

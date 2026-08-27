@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { ImageSourcePropType, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { HomeColors, Radius, Spacing } from '@/constants/theme';
+import { HomeColors, Layout, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export interface GoldsunBubbleProps {
@@ -79,6 +79,8 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   homeBubble: {
+    justifyContent: 'center',
+    minHeight: Layout.compactRowHeight,
     borderWidth: 0,
     boxShadow: HomeColors.shadow,
   },

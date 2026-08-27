@@ -137,6 +137,158 @@ function record(overrides: Partial<WorkoutRecord>): WorkoutRecord {
   check('an uncompleted set never counts toward a PR, no matter the weight', prsUncompleted.length, 0);
 }
 
+// 4-B. rep PR: 같은 중량으로 전보다 더 많이 (맨몸 운동의 유일한 성장 표시)
+{
+  const past: WorkoutRecord[] = [
+    record({
+      id: 'r1',
+      date: '2026-08-10',
+      exercises: [
+        {
+          id: 'e1',
+          exerciseId: 'bench-press',
+          name: '벤치프레스',
+          setDetails: [{ id: 's1', weightKg: 70, reps: 10, completed: true }],
+        },
+        {
+          id: 'e2',
+          exerciseId: 'pull-up',
+          name: '풀업',
+          setDetails: [{ id: 's2', reps: 8, completed: true }],
+        },
+      ],
+    }),
+  ];
+
+  const sessionWith = (
+    exerciseId: string,
+    exerciseName: string,
+    sets: { weightKg?: number; reps: number }[]
+  ) => {
+    let session = createSession('strength', 'rep-pr', '2026-08-15T09:00:00.000Z');
+    session = addExerciseToSession(session, { id: 'ex-1', exerciseId, exerciseName });
+    sets.forEach((set, index) => {
+      const setId = `set-${index}`;
+      session = addSetToExercise(session, 'ex-1', setId, set);
+      session = completeSet(session, 'ex-1', setId);
+    });
+    return session;
+  };
+
+  const moreReps = detectPRs(sessionWith('bench-press', '벤치프레스', [{ weightKg: 70, reps: 12 }]), past);
+  check('same weight with more reps is a PR', moreReps.length, 1);
+  check('...and it is reported as a rep PR', moreReps[0]?.kind, 'reps');
+  check('...carrying the achieved reps', moreReps[0]?.reps, 12);
+  check('...and the previous best reps at that weight', moreReps[0]?.previousBestReps, 10);
+
+  const sameReps = detectPRs(sessionWith('bench-press', '벤치프레스', [{ weightKg: 70, reps: 10 }]), past);
+  check('matching (not exceeding) the previous reps is NOT a PR', sameReps.length, 0);
+
+  const fewerReps = detectPRs(sessionWith('bench-press', '벤치프레스', [{ weightKg: 70, reps: 9 }]), past);
+  check('fewer reps at the same weight is NOT a PR', fewerReps.length, 0);
+
+  const lighterMoreReps = detectPRs(sessionWith('bench-press', '벤치프레스', [{ weightKg: 60, reps: 20 }]), past);
+  check('a weight never used before does not fire a rep PR', lighterMoreReps.length, 0);
+
+  const heavier = detectPRs(sessionWith('bench-press', '벤치프레스', [{ weightKg: 75, reps: 12 }]), past);
+  check('a new best weight is still a weight PR', heavier[0]?.kind, 'weight');
+  check('...and only one PR is reported for that exercise', heavier.length, 1);
+
+  const bodyweight = detectPRs(sessionWith('pull-up', '풀업', [{ reps: 10 }]), past);
+  check('bodyweight work can PR on reps alone', bodyweight.length, 1);
+  check('...as a rep PR at zero weight', [bodyweight[0]?.kind, bodyweight[0]?.weightKg], ['reps', 0]);
+  check('...with the previous rep count for context', bodyweight[0]?.previousBestReps, 8);
+
+  const heaviestRepPr = detectPRs(
+    sessionWith('bench-press', '벤치프레스', [{ weightKg: 70, reps: 12 }, { weightKg: 70, reps: 11 }]),
+    past
+  );
+  check('only the best set at that weight is reported', heaviestRepPr.length, 1);
+  check('...and it is the highest rep count', heaviestRepPr[0]?.reps, 12);
+
+  // 저장된 기록 쪽도 같은 규칙으로 읽는다 — 세션 화면과 HISTORY가 다른 말을 하지 않도록.
+  const followUp = record({
+    id: 'r2',
+    date: '2026-08-15',
+    exercises: [
+      {
+        id: 'e1',
+        exerciseId: 'bench-press',
+        name: '벤치프레스',
+        setDetails: [{ id: 's1', weightKg: 70, reps: 12, completed: true }],
+      },
+    ],
+  });
+  const events = listPRs([...past, followUp]);
+  check('listPRs sees the first record as a weight PR', events[0]?.kind, 'weight');
+  check('listPRs sees the follow-up as a rep PR', events.at(-1)?.kind, 'reps');
+  check(
+    'countPeriodPRs counts exactly the events listPRs reports',
+    countPeriodPRs([followUp], [...past, followUp]),
+    1
+  );
+  check(
+    'the two functions never disagree in total',
+    countPeriodPRs([...past, followUp], [...past, followUp]),
+    events.length
+  );
+
+  // 횟수가 없는 세트는 어떤 종류의 PR도 만들지 않는다 (기존 유효 세트 기준 그대로).
+  const noReps = record({
+    id: 'r3',
+    date: '2026-08-16',
+    exercises: [
+      {
+        id: 'e1',
+        exerciseId: 'bench-press',
+        name: '벤치프레스',
+        setDetails: [{ id: 's1', weightKg: 70, reps: 0, completed: true }],
+      },
+    ],
+  });
+  check(
+    'a set without reps produces no PR event',
+    listPRs([...past, noReps]).length,
+    listPRs(past).length
+  );
+
+  /*
+    같은 규칙이 setDetails가 없는 옛 기록에도 적용돼야 한다. 옛 요약값에는 세트별 completed
+    플래그가 없어서 유일한 단서가 횟수인데, 0회를 통과시키면 "들지 않은 100kg"이 최고 중량
+    PR로 올라가고 그대로 홈의 실제 성취 자리를 차지한다.
+  */
+  const legacyZeroReps = record({
+    id: 'r4',
+    date: '2026-08-17',
+    exercises: [
+      { id: 'e1', exerciseId: 'deadlift', name: '데드리프트', sets: 3, weightKg: 100, reps: 0 },
+    ],
+  });
+  check(
+    'a legacy summary with 0 reps produces no PR event',
+    listPRs([legacyZeroReps]).length,
+    0
+  );
+  check(
+    'a legacy summary with 0 reps never claims a top weight',
+    listPRs([legacyZeroReps]).map((pr) => pr.weightKg),
+    []
+  );
+
+  // 반대로, 실제로 수행한 옛 기록은 그대로 살아 있어야 한다.
+  const legacyValid = record({
+    id: 'r5',
+    date: '2026-08-18',
+    exercises: [
+      { id: 'e1', exerciseId: 'deadlift', name: '데드리프트', sets: 3, weightKg: 100, reps: 5 },
+    ],
+  });
+  const legacyEvents = listPRs([legacyValid]);
+  check('a valid legacy summary still produces its weight PR', legacyEvents.length, 1);
+  check('the valid legacy PR keeps its weight', legacyEvents[0]?.weightKg, 100);
+  check('the valid legacy PR is still a first record', legacyEvents[0]?.previousBestWeightKg, undefined);
+}
+
 // 5. recommendMuscleGroup prioritizes muscle groups that were never trained, then least-recently trained
 {
   const groups = ['chest', 'back', 'legs'] as const;

@@ -267,6 +267,25 @@ export function adjustSet(
   }));
 }
 
+/**
+ * 이미 기록한 세트를 세션에서 지운다.
+ *
+ * 헬스장에서 숫자를 잘못 넣는 일은 드물지 않은데 되돌릴 방법이 없었고, 그래서 오타 하나가
+ * 볼륨·PR·Muscle SP·단백이 학습까지 그대로 타고 들어갔다. 여기서 지우는 것은 **세션 상태
+ * 하나뿐**이다 — 저장된 기록도 완료 파이프라인도 건드리지 않는다. 세션이 끝날 때 기존
+ * `sessionToWorkoutRecordInput`이 남아 있는 유효 세트만 그대로 옮긴다.
+ */
+export function removeSetFromExercise(
+  session: WorkoutSession,
+  exerciseEntryId: string,
+  setId: string
+): WorkoutSession {
+  return mapExercise(session, exerciseEntryId, (entry) => ({
+    ...entry,
+    sets: entry.sets.filter((set) => set.id !== setId),
+  }));
+}
+
 export function completeSet(
   session: WorkoutSession,
   exerciseEntryId: string,

@@ -1,9 +1,11 @@
+import Constants from 'expo-constants';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
+import { InlineAction } from '@/components/ui/inline-action';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { Section } from '@/components/ui/section';
@@ -35,6 +37,7 @@ export default function SettingsScreen() {
     subscription,
     referral,
     openEventPass,
+    adProviderAvailable,
     updateProfile,
     subscribeMock,
     cancelSubscriptionMock,
@@ -128,20 +131,38 @@ export default function SettingsScreen() {
           value={isSubscribed ? '구독 중' : '구독 안 함'}
           openSection={openSection}
           onToggle={toggleSection}>
+          {/*
+            결제 SDK가 붙기 전까지 출시 빌드에 구독 버튼을 두지 않는다 — 누르면 결제된
+            것처럼 보이는 버튼은 거짓말이고, 그 경로가 그대로 유료 기능 우회가 된다.
+            AI PT 화면(ai-chat)이 이미 같은 규칙을 쓰고 있어서 두 화면이 어긋나 있었다.
+          */}
           {isSubscribed ? (
-            <PrimaryButton label="구독 해지" variant="secondary" onPress={cancelSubscriptionMock} />
-          ) : (
             <>
               <ThemedText type="caption" themeColor="textSecondary">
-                구독하면 광고 없이 AI PT를 이용할 수 있어요.
+                구독 중이라 광고 없이 AI PT를 이용할 수 있어요.
               </ThemedText>
-              <PrimaryButton label="구독하기" variant="secondary" onPress={() => subscribeMock('pro')} />
+              <PrimaryButton label="구독 해지" variant="secondary" onPress={cancelSubscriptionMock} />
             </>
-          )}
-          {__DEV__ && (
+          ) : (
+            /*
+              광고 경로를 안내할지는 **AI PT 화면과 같은 신호**로 정한다.
+              출시 빌드에서는 광고 provider가 없어서 AI PT 화면에 [광고 보고 이용하기]가
+              아예 나오지 않는데, 이 문구만 "지금은 광고를 보고 이용할 수 있어요"라고
+              말하고 있었다 — 개발 빌드에서는 맞고 출시 빌드에서는 거짓인 안내였다.
+            */
             <ThemedText type="caption" themeColor="textSecondary">
-              DEV: 결제 연동 전이라 mock 구독으로 동작해요.
+              {adProviderAvailable
+                ? '결제를 준비하고 있어요. 준비되면 여기에서 구독할 수 있어요. 지금은 AI PT 화면에서 광고를 보고 이용할 수 있어요.'
+                : '광고와 결제를 준비하고 있어요. 준비되면 여기에서 구독하거나 AI PT를 이용할 수 있어요.'}
             </ThemedText>
+          )}
+          {__DEV__ && !isSubscribed && (
+            <>
+              <PrimaryButton label="구독하기 (DEV)" variant="secondary" onPress={() => subscribeMock('pro')} />
+              <ThemedText type="caption" themeColor="textSecondary">
+                DEV: 결제 연동 전이라 mock 구독으로 동작해요.
+              </ThemedText>
+            </>
           )}
         </SettingsRow>
 
@@ -227,14 +248,21 @@ export default function SettingsScreen() {
               </Pressable>
             </View>
           ) : (
-            <Pressable onPress={() => setConfirmReset(true)} hitSlop={8} style={styles.destructiveLink}>
-              <ThemedText type="captionBold" style={{ color: theme.mutedRed }}>
-                초기화하기
-              </ThemedText>
-            </Pressable>
+            <InlineAction label="초기화하기" tone="danger" onPress={() => setConfirmReset(true)} />
           )}
         </SettingsRow>
       </Section>
+
+      {/*
+        앱 정보. 설정 맨 아래가 그냥 잘려 있으면 화면이 덜 만들어진 것처럼 보이고,
+        문제가 생겼을 때 사용자가 알려줄 수 있는 버전 정보도 앱 어디에도 없었다.
+        지어내지 않고 실제 빌드 값(app.json)만 읽는다.
+      */}
+      <View style={styles.appInfo}>
+        <ThemedText type="caption" themeColor="textSecondary">
+          {Constants.expoConfig?.name ?? '헬창키우기'} v{Constants.expoConfig?.version ?? '-'}
+        </ThemedText>
+      </View>
     </ScreenScroll>
   );
 }
@@ -333,8 +361,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  destructiveLink: {
-    alignSelf: 'flex-start',
-    paddingVertical: Spacing.one,
+  /** 목록의 끝을 알리는 조용한 마지막 줄. */
+  appInfo: {
+    alignItems: 'center',
+    paddingTop: Spacing.two,
   },
 });

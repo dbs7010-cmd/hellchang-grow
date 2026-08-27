@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -7,6 +8,8 @@ import { ThemedText } from '@/components/themed-text';
 import { BarChart } from '@/components/ui/bar-chart';
 import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
+import { EmptyState } from '@/components/ui/empty-state';
+import { InlineAction } from '@/components/ui/inline-action';
 import { MetricGrid, MetricTile } from '@/components/ui/metric-tile';
 import { PhotoSlot } from '@/components/ui/photo-slot';
 import { PrimaryButton } from '@/components/ui/primary-button';
@@ -22,7 +25,7 @@ import {
   WorkoutIntensities,
   WorkoutIntensityLabels,
 } from '@/config/workout-labels';
-import { Radius, Spacing } from '@/constants/theme';
+import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { getThisMonthRecords, getThisWeekRecords, getThisYearRecords } from '@/data/workout-repository';
 import { useTheme } from '@/hooks/use-theme';
@@ -30,6 +33,11 @@ import { WorkoutCategory, WorkoutIntensity } from '@/types/workout';
 import { todayDateString } from '@/utils/date';
 import { countPeriodPRs } from '@/utils/exercise-history';
 import { buildHistoryDays } from '@/utils/history';
+import {
+  buildLearningBoard,
+  learnedFamilyCount,
+  seenFamilyCount,
+} from '@/utils/danbaek-learning-presence';
 import { buildRecommendationContext } from '@/utils/recommendation-context';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
 import {
@@ -66,6 +74,7 @@ function formatDelta(value: number, unit: string): string {
  */
 export default function HistoryScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const {
     profile,
     bodyHistory,
@@ -76,6 +85,7 @@ export default function HistoryScreen() {
     canAddPhotoToday,
     nextPhotoAvailableDate,
     characterAppearance,
+    danbaekLearning,
   } = useAppData();
 
   const [period, setPeriod] = useState<Period>('week');
@@ -128,6 +138,22 @@ export default function HistoryScreen() {
     () => historyDays.filter((day) => day.hasPhoto).map((day) => day.date),
     [historyDays]
   );
+
+  /*
+   * 단백이가 이 기록에서 무엇을 배웠는지. 계산은 어댑터가 이미 했고 여기서는 옮겨 적기만
+   * 한다 — 없는 성장 수치를 만들지 않는다.
+   */
+  const topLearnedLabel = useMemo(() => {
+    const [top] = buildLearningBoard(danbaekLearning, 1);
+    return top ? `${top.label} · ${top.stageLabel}` : null;
+  }, [danbaekLearning]);
+  const learningEvidenceLine = useMemo(() => {
+    const seen = seenFamilyCount(danbaekLearning);
+    if (seen === 0) return '아직 단백이가 본 동작이 없어요. 운동을 기록하면 여기에 쌓여요.';
+    const learned = learnedFamilyCount(danbaekLearning);
+    const learnedPart = learned > 0 ? ` 그중 ${learned}가지는 배웠어요.` : '';
+    return `이 기록으로 단백이가 ${seen}가지 동작을 지켜봤어요.${learnedPart}`;
+  }, [danbaekLearning]);
 
   const recommendationContext = useMemo(
     () => buildRecommendationContext(profile, bodyHistory, workoutRecords),
@@ -248,9 +274,11 @@ export default function HistoryScreen() {
         {chartHasData ? (
           <BarChart items={chartData} height={72} />
         ) : (
-          <ThemedText type="caption" themeColor="textSecondary">
-            이 기간에는 볼륨으로 계산할 세트 기록이 없어요.
-          </ThemedText>
+          <EmptyState
+            icon="📊"
+            line="이 기간에는 볼륨으로 계산할 세트 기록이 없어요."
+            hint="세트를 기록한 운동이 쌓이면 여기에 그래프가 그려져요."
+          />
         )}
       </Section>
 
@@ -416,19 +444,35 @@ export default function HistoryScreen() {
         </Section>
       )}
 
+      {/*
+        이 기록이 단백이 학습의 근거였다는 사실 한 줄. **보조 층이다** — History는 여전히
+        내 기록과 내 몸의 화면이고, 단백이 화면이 아니다. 그래서 통계/몸 변화 아래에 오고,
+        상세 목록(무엇을 몇 번 봤는지)은 운동 탭이 보여주므로 여기서 반복하지 않는다.
+      */}
+      <View style={styles.learningNote}>
+        <ThemedText type="captionBold" themeColor="textSecondary">
+          🐣 {learningEvidenceLine}
+        </ThemedText>
+        {topLearnedLabel && (
+          <ThemedText type="caption" themeColor="textSecondary">
+            가장 많이 본 동작 · {topLearnedLabel}
+          </ThemedText>
+        )}
+      </View>
+
       {/* 놓친 기록 채우기와 전체 기록 보기는 History의 보조 기능이다 —
           Primary 버튼처럼 보이지 않게 텍스트 액션으로 둔다. */}
       <View style={styles.secondaryActions}>
-        <Pressable onPress={() => setManualOpen((v) => !v)} hitSlop={8}>
-          <ThemedText type="captionBold" themeColor="textSecondary">
-            {manualOpen ? '놓친 운동 기록 닫기' : '놓친 운동 기록 추가'}
-          </ThemedText>
-        </Pressable>
-        <Pressable onPress={() => setFullListOpen((v) => !v)} hitSlop={8}>
-          <ThemedText type="captionBold" themeColor="textSecondary">
-            {fullListOpen ? '전체 기록 접기 ︿' : '전체 기록 보기 ﹀'}
-          </ThemedText>
-        </Pressable>
+        <InlineAction
+          label={manualOpen ? '놓친 기록 닫기' : '+ 놓친 기록 추가'}
+          tone={manualOpen ? 'quiet' : 'gold'}
+          onPress={() => setManualOpen((v) => !v)}
+        />
+        <InlineAction
+          label={fullListOpen ? '전체 기록 접기 ︿' : '전체 기록 보기 ﹀'}
+          tone="quiet"
+          onPress={() => setFullListOpen((v) => !v)}
+        />
       </View>
 
       {manualOpen && (
@@ -494,9 +538,11 @@ export default function HistoryScreen() {
       {fullListOpen && (
         <Section>
           {historyDays.length === 0 ? (
-            <ThemedText type="small" themeColor="textSecondary">
-              아직 기록이 없어요.
-            </ThemedText>
+            <EmptyState
+              icon="📝"
+              line="아직 기록이 없어요."
+              hint="운동을 마치거나 놓친 기록을 채우면 날짜별로 여기에 쌓여요."
+            />
           ) : (
             historyDays.map((day) => (
               <View key={day.date} style={[styles.dayRow, { backgroundColor: theme.backgroundElement }]}>
@@ -515,19 +561,34 @@ export default function HistoryScreen() {
                   const suspicious = (record.durationMinutes ?? 0) > AppConfig.suspiciousDurationMinutes;
                   return (
                     <View key={record.id}>
-                      <ThemedText type="caption" themeColor="textSecondary">
-                        · {record.title} ({WorkoutCategoryLabels[record.category]})
-                        {record.durationMinutes ? ` · ${record.durationMinutes}분` : ''}
-                        {exerciseCount > 0
-                          ? ` · 운동 ${exerciseCount}개 · ${setCount}세트`
-                          : ''}
-                      </ThemedText>
+                      {/*
+                        기록 줄은 눌러서 세트 상세로 들어간다 — 예전에는 여기가 끝이라,
+                        결과 화면을 닫고 나면 뭘 얼마나 들었는지 볼 곳이 없었다.
+                      */}
+                      <Pressable
+                        onPress={() =>
+                          router.push({ pathname: '/workout-record', params: { id: record.id } })
+                        }
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${record.title} 기록 자세히 보기`}
+                        style={styles.recordRow}>
+                        <ThemedText type="caption" themeColor="textSecondary" style={styles.recordText}>
+                          · {record.title} ({WorkoutCategoryLabels[record.category]})
+                          {record.durationMinutes ? ` · ${record.durationMinutes}분` : ''}
+                          {exerciseCount > 0
+                            ? ` · 운동 ${exerciseCount}개 · ${setCount}세트`
+                            : ''}
+                        </ThemedText>
+                        <ThemedText type="caption" style={{ color: theme.gold }}>›</ThemedText>
+                      </Pressable>
                       {suspicious && (
-                        <Pressable onPress={() => deleteWorkoutRecord(record.id)} hitSlop={8}>
-                          <ThemedText type="captionBold" style={{ color: theme.mutedRed }}>
-                            ⚠ 비정상 기록 · 삭제
-                          </ThemedText>
-                        </Pressable>
+                        <InlineAction
+                          label="⚠ 비정상 기록 · 삭제"
+                          tone="danger"
+                          accessibilityLabel={`${record.title} 비정상 기록 삭제`}
+                          onPress={() => deleteWorkoutRecord(record.id)}
+                        />
                       )}
                     </View>
                   );
@@ -542,6 +603,11 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
+  /** 학습 근거는 카드도 섹션도 아니다 — 보조 한 줄이다. */
+  learningNote: {
+    gap: Spacing.half,
+    paddingVertical: Spacing.one,
+  },
   bodyRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -584,11 +650,21 @@ const styles = StyleSheet.create({
   flexItem: {
     flex: 1,
   },
+  /** 두 보조 액션은 같은 줄에서 나란히 — 양 끝으로 벌리면 서로 다른 층처럼 보인다. */
   secondaryActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    paddingVertical: Spacing.one,
+    gap: Spacing.two,
+  },
+  recordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: Layout.compactRowHeight,
+  },
+  recordText: {
+    flex: 1,
   },
   dayRow: {
     gap: Spacing.half,

@@ -3,7 +3,12 @@
 import { AppConfig } from '@/config/app-config';
 import { Exercises, searchExercises } from '@/config/exercises';
 import { countPeriodPRs, listPRs } from '@/utils/exercise-history';
-import { buildPtContext, matchExerciseInText } from '@/utils/pt-context';
+import { withObjectParticle, withSubjectParticle, withTopicParticle } from '@/utils/korean';
+import {
+  buildPtContext,
+  matchExerciseInText,
+  type PtContext,
+} from '@/utils/pt-context';
 import {
   buildExerciseRecordLine,
   buildPrLine,
@@ -126,6 +131,59 @@ const squatRecord = record({
   check('the weekly line admits an empty week', buildWeeklyLine(context), '이번 주 기록 없음');
   check('the recent line admits there are no sets', buildRecentTrainingLine(context), '최근 세트 기록이 없어서 볼 게 없습니다.');
   check('no PR line is invented when there is no PR', buildPrLine(context), null);
+}
+
+// 1-A. 한글 조사는 받침을 보고 붙인다 — 문장에 박아 두면 "등를"이 그대로 나간다
+{
+  check('받침이 있으면 을', withObjectParticle('등'), '등을');
+  check('받침이 없으면 를', withObjectParticle('하체'), '하체를');
+  check('가슴은 받침이 있다', withObjectParticle('가슴'), '가슴을');
+  check('어깨는 받침이 없다', withObjectParticle('어깨'), '어깨를');
+  check('팔도 받침이 있다', withObjectParticle('팔'), '팔을');
+
+  check('풀업은 받침이 있다', withTopicParticle('풀업'), '풀업은');
+  check('벤치프레스는 받침이 없다', withTopicParticle('벤치프레스'), '벤치프레스는');
+  check('풀업이 주격', withSubjectParticle('풀업'), '풀업이');
+  check('벤치프레스가 주격', withSubjectParticle('벤치프레스'), '벤치프레스가');
+
+  // 한글이 아닌 글자로 끝나면 받침을 알 수 없다 — 읽었을 때 무난한 쪽으로 둔다.
+  check('영문으로 끝나도 문장이 깨지지 않는다', withObjectParticle('EZ-bar'), 'EZ-bar을');
+  check('숫자로 끝나도 마찬가지', withTopicParticle('스쿼트 3'), '스쿼트 3은');
+}
+
+// 1-B. PR 한 줄은 종류를 구분해서 말한다 (DEC-011)
+{
+  const base = buildPtContext({
+    profile: null,
+    bodyHistory: [],
+    workoutRecords: [],
+    streak: emptyStreak,
+    routines: [],
+    activeSession: null,
+    today: TODAY,
+  });
+  const withPr = (pr: PtContext['recentTraining']['recentPRs'][number]): PtContext =>
+    ({ ...base, recentTraining: { ...base.recentTraining, recentPRs: [pr] } }) as PtContext;
+
+  const firstWeight = buildPrLine(
+    withPr({ exerciseId: 'squat', name: '스쿼트', kind: 'weight', weightKg: 65, reps: null, date: '2026-08-25', previousBestWeightKg: null, previousBestReps: null })
+  );
+  check('a first-ever weight is reported as a first record', firstWeight, '스쿼트는 65kg가 첫 기록입니다.');
+
+  const heavier = buildPrLine(
+    withPr({ exerciseId: 'squat', name: '스쿼트', kind: 'weight', weightKg: 70, reps: null, date: '2026-08-25', previousBestWeightKg: 65, previousBestReps: null })
+  );
+  check('a heavier lift names the weight it beat', heavier, '스쿼트 70kg, 이전 최고 65kg 넘기셨습니다.');
+
+  const moreReps = buildPrLine(
+    withPr({ exerciseId: 'squat', name: '스쿼트', kind: 'reps', weightKg: 65, reps: 12, date: '2026-08-25', previousBestWeightKg: null, previousBestReps: 8 })
+  );
+  check('a rep PR is never called a first weight record', moreReps, '스쿼트 65kg로 12회, 횟수 기록 넘기셨습니다.');
+
+  const bodyweight = buildPrLine(
+    withPr({ exerciseId: 'pull-up', name: '풀업', kind: 'reps', weightKg: 0, reps: 10, date: '2026-08-25', previousBestWeightKg: null, previousBestReps: 8 })
+  );
+  check('bodyweight rep PRs do not mention 0kg', bodyweight, '풀업 맨몸로 10회, 횟수 기록 넘기셨습니다.');
 }
 
 // 2. 신체 수치를 한 번도 입력하지 않은 사용자 — 온보딩 체중만 있고 나머지는 null
@@ -262,9 +320,49 @@ const squatRecord = record({
     status: 'active',
     currentExerciseName: '벤치프레스',
     completedSets: 1,
+    currentExerciseCompletedSets: 1,
   });
   check('the free PT talks about the set that is actually done',
     buildStatusLine(context), '지금 벤치프레스 하는 중이시죠. 1세트 끝났습니다.');
+
+  /*
+    한 세션에서 두 운동을 하면, 운동 이름 옆의 숫자는 **그 운동의** 세트 수여야 한다.
+    예전에는 세션 합계를 붙여서 "벤치프레스 · 2세트 완료"가 됐다 — 벤치를 두 세트 한
+    적이 없는 날에도.
+  */
+  const twoExercises = buildPtContext({
+    profile,
+    bodyHistory: [],
+    workoutRecords: [],
+    streak: emptyStreak,
+    routines: [],
+    activeSession: {
+      ...session,
+      exercises: [
+        session.exercises[0],
+        {
+          id: 'ex-2',
+          exerciseId: 'dumbbell-bench-press',
+          exerciseName: '덤벨 벤치프레스',
+          sets: [{ id: 'd1', weightKg: 20, reps: 10, completed: true }],
+        },
+      ],
+      currentExerciseId: 'ex-2',
+    },
+    today: TODAY,
+  });
+
+  check('the session total counts every exercise', twoExercises.today.activeSession?.completedSets, 2);
+  check(
+    'the number next to the exercise name is that exercise only',
+    twoExercises.today.activeSession?.currentExerciseCompletedSets,
+    1
+  );
+  check(
+    'the free PT never credits the current exercise with the session total',
+    buildStatusLine(twoExercises),
+    '지금 덤벨 벤치프레스 1세트 하셨습니다. 오늘 전체 2세트입니다.'
+  );
 
   const finished = buildPtContext({
     profile,

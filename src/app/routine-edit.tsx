@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Section } from '@/components/ui/section';
 import { SubScreen } from '@/components/ui/sub-screen';
@@ -102,9 +103,11 @@ export default function RoutineEditScreen() {
 
       <Section title="운동 순서">
         {exerciseIds.length === 0 ? (
-          <ThemedText type="small" themeColor="textSecondary">
-            아래에서 운동을 검색해 추가하세요.
-          </ThemedText>
+          <EmptyState
+            icon="🏋️"
+            line="아직 담은 운동이 없어요."
+            hint="아래 [운동 추가]에서 검색해 담으면 이 순서대로 세션이 만들어져요."
+          />
         ) : (
           exerciseIds.map((exerciseId, index) => (
             <View key={exerciseId} style={[styles.exerciseRow, { backgroundColor: theme.backgroundElement }]}>
@@ -114,20 +117,39 @@ export default function RoutineEditScreen() {
               <ThemedText type="small" style={styles.exerciseName} numberOfLines={1}>
                 {getExerciseById(exerciseId)?.name ?? exerciseId}
               </ThemedText>
-              <Pressable onPress={() => moveExercise(index, -1)} hitSlop={10} disabled={index === 0}>
+              {/*
+                순서 바꾸기와 빼기는 글자 하나짜리 컨트롤이었다(↑ ↓ 7x20, ✕ 11x20).
+                누르기도 어렵고, 무엇보다 [빼기]가 [순서 바꾸기] 바로 옆이라 빗나간 탭이
+                그대로 삭제가 됐다. 아이콘 크기는 그대로 두고 눌리는 영역만 하한선에 맞춘다.
+              */}
+              <Pressable
+                onPress={() => moveExercise(index, -1)}
+                hitSlop={6}
+                disabled={index === 0}
+                accessibilityRole="button"
+                accessibilityLabel={`${getExerciseById(exerciseId)?.name ?? exerciseId} 위로`}
+                style={styles.rowButton}>
                 <ThemedText type="smallBold" themeColor={index === 0 ? 'border' : 'text'}>
                   ↑
                 </ThemedText>
               </Pressable>
               <Pressable
                 onPress={() => moveExercise(index, 1)}
-                hitSlop={10}
-                disabled={index === exerciseIds.length - 1}>
+                hitSlop={6}
+                disabled={index === exerciseIds.length - 1}
+                accessibilityRole="button"
+                accessibilityLabel={`${getExerciseById(exerciseId)?.name ?? exerciseId} 아래로`}
+                style={styles.rowButton}>
                 <ThemedText type="smallBold" themeColor={index === exerciseIds.length - 1 ? 'border' : 'text'}>
                   ↓
                 </ThemedText>
               </Pressable>
-              <Pressable onPress={() => removeExercise(exerciseId)} hitSlop={10}>
+              <Pressable
+                onPress={() => removeExercise(exerciseId)}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`${getExerciseById(exerciseId)?.name ?? exerciseId} 빼기`}
+                style={styles.rowButton}>
                 <ThemedText type="smallBold" style={{ color: theme.mutedRed }}>
                   ✕
                 </ThemedText>
@@ -155,11 +177,20 @@ const styles = StyleSheet.create({
   exerciseRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
+    // 버튼이 실제 크기를 갖게 됐으므로 사이 간격은 줄인다 — 좁은 화면에서 운동 이름을 밀어내지 않는다.
+    gap: Spacing.one,
     borderRadius: Radius.medium,
     paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
+    paddingLeft: Spacing.three,
+    paddingRight: Spacing.two,
     minHeight: Layout.compactRowHeight,
+  },
+  /** 순서/빼기 컨트롤의 최소 터치 영역. 글리프 크기는 그대로다. */
+  rowButton: {
+    minWidth: Layout.compactRowHeight,
+    minHeight: Layout.compactRowHeight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   exerciseIndex: {
     width: 14,
