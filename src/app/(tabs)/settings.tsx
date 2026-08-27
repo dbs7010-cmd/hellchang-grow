@@ -37,6 +37,7 @@ export default function SettingsScreen() {
     subscription,
     referral,
     openEventPass,
+    adProviderAvailable,
     updateProfile,
     subscribeMock,
     cancelSubscriptionMock,
@@ -143,9 +144,16 @@ export default function SettingsScreen() {
               <PrimaryButton label="구독 해지" variant="secondary" onPress={cancelSubscriptionMock} />
             </>
           ) : (
+            /*
+              광고 경로를 안내할지는 **AI PT 화면과 같은 신호**로 정한다.
+              출시 빌드에서는 광고 provider가 없어서 AI PT 화면에 [광고 보고 이용하기]가
+              아예 나오지 않는데, 이 문구만 "지금은 광고를 보고 이용할 수 있어요"라고
+              말하고 있었다 — 개발 빌드에서는 맞고 출시 빌드에서는 거짓인 안내였다.
+            */
             <ThemedText type="caption" themeColor="textSecondary">
-              결제를 준비하고 있어요. 준비되면 여기에서 구독할 수 있어요. 지금은 AI PT 화면에서
-              광고를 보고 이용할 수 있어요.
+              {adProviderAvailable
+                ? '결제를 준비하고 있어요. 준비되면 여기에서 구독할 수 있어요. 지금은 AI PT 화면에서 광고를 보고 이용할 수 있어요.'
+                : '광고와 결제를 준비하고 있어요. 준비되면 여기에서 구독하거나 AI PT를 이용할 수 있어요.'}
             </ThemedText>
           )}
           {__DEV__ && !isSubscribed && (

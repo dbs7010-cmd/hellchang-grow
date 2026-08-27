@@ -249,13 +249,37 @@ const repeated = (exerciseId: string, times: number, startDay = 1): WorkoutRecor
   expect('열린 seam에서는 입구가 생긴다', open !== null);
   expect('경로는 seam이 준 값 그대로다', open?.route === './danbaek-world-placeholder');
   expect('입구 이름은 단백세상이다', open?.label === '단백세상');
-  expect('보조 문구는 배운 계열 수에서 나온다', open?.subLabel.includes('1가지') === true);
+  /*
+   * 보조 문구는 **지금 단백세상이 어떤 상황인가**에서 나온다.
+   *
+   * 예전에는 "배운 계열 수"(N가지)를 세어 보여줬고, 배운 게 없으면 고정 문구
+   * '첫 번째 길이 기다리고 있어요'를 썼다. World First Contact 이후로 입구는
+   * 실제 장면(막혔는가 / 열렸는가)을 말하도록 바뀌었고, verify:home FIXTURE E는
+   * 오히려 그 옛 문구가 **남아 있지 않을 것**을 요구한다. 두 verifier가 서로 반대를
+   * 주장하고 있어서 여기를 현재 계약에 맞춘다 — 제품을 옛 verifier에 맞춰 되돌리지 않는다.
+   */
+  expect('보조 문구가 비어 있지 않다', typeof open?.subLabel === 'string' && open.subLabel.trim().length > 0);
+  expect(
+    '보조 문구는 계열 개수 세기가 아니라 상황을 말한다',
+    open !== null && !/d+가지/.test(open.subLabel)
+  );
 
   const nothingLearned = resolveDanbaekWorldEntry({
     profile: profileOf([]),
     seam: { available: true, route: './danbaek-world-placeholder' },
   });
-  expect('배운 게 없으면 첫 길을 안내한다', nothingLearned?.subLabel === '첫 번째 길이 기다리고 있어요');
+  expect(
+    '아직 아무것도 못 본 상태에서는 첫 길이 막혀 있다고 말한다',
+    nothingLearned?.subLabel.includes('열려요') === true
+  );
+  expect(
+    '막힌 상태를 열린 것처럼 말하지 않는다',
+    nothingLearned?.subLabel.includes('열려 있어요') === false
+  );
+  expect(
+    '본 것이 생기면 문구가 달라진다 (고정 문구가 아니다)',
+    open?.subLabel !== nothingLearned?.subLabel
+  );
   expect(
     '입구가 WORLD 진행도를 지어내지 않는다',
     open !== null && !/스테이지|층|클리어|모험 \d/.test(open.subLabel)

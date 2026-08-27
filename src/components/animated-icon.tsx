@@ -1,13 +1,26 @@
-import { Image } from 'expo-image';
 import * as SplashScreen from 'expo-splash-screen';
 import { useState } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import Animated, { Easing, Keyframe } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-const INITIAL_SCALE_FACTOR = Dimensions.get('screen').height / 90;
+import { Colors } from '@/constants/theme';
+
 const DURATION = 600;
 
+/**
+ * 네이티브 스플래시에서 앱 첫 화면으로 넘어가는 한 겹.
+ *
+ * 이 컴포넌트는 앱을 켤 때마다 **가장 먼저 보이는 화면**이다. 예전에는 Expo 템플릿이
+ * 남긴 그대로여서, 헬창키우기를 켜면 Expo 로고가 Expo 파란 배경 위에 떴다 —
+ * 남의 브랜드가 우리 앱의 첫 인상이었다. 웹 빌드는 이 오버레이를 그리지 않기 때문에
+ * (animated-icon.web.tsx는 null을 돌려준다) 웹 QA에서는 한 번도 보이지 않았고,
+ * 실기기 빌드에서만 드러나는 문제였다.
+ *
+ * 지금은 로고를 얹지 않고 앱의 배경색으로만 덮었다가 사라진다 — 네이티브 스플래시가
+ * 내려가는 순간의 깜빡임만 가려 주면 되고, 브랜드 아트는 아이콘/스플래시 이미지가
+ * 실제 아트로 교체될 때 이 자리에서 함께 정한다.
+ */
 export function AnimatedSplashOverlay() {
   const [animate, setAnimate] = useState(false);
   const [visible, setVisible] = useState(true);
@@ -15,25 +28,11 @@ export function AnimatedSplashOverlay() {
   if (!visible) return null;
 
   const splashKeyframe = new Keyframe({
-    0: {
-      transform: [{ scale: 1 }],
-      opacity: 1,
-    },
-    20: {
-      opacity: 1,
-    },
-    70: {
-      opacity: 0,
-      easing: Easing.elastic(0.7),
-    },
-    100: {
-      opacity: 0,
-      transform: [{ scale: 1 }],
-      easing: Easing.elastic(0.7),
-    },
+    0: { opacity: 1 },
+    20: { opacity: 1 },
+    70: { opacity: 0, easing: Easing.elastic(0.7) },
+    100: { opacity: 0, easing: Easing.elastic(0.7) },
   });
-
-  const image = <Image style={styles.image} source={require('@/assets/images/expo-logo.png')} />;
 
   return animate ? (
     <Animated.View
@@ -43,106 +42,25 @@ export function AnimatedSplashOverlay() {
           scheduleOnRN(setVisible, false);
         }
       })}
-      style={styles.splashOverlay}>
-      {image}
-    </Animated.View>
+      style={styles.splashOverlay}
+    />
   ) : (
-    <View
+    <Animated.View
       onLayout={() => {
         SplashScreen.hideAsync().finally(() => {
           setAnimate(true);
         });
       }}
-      style={styles.splashOverlay}>
-      {image}
-    </View>
-  );
-}
-
-const keyframe = new Keyframe({
-  0: {
-    transform: [{ scale: INITIAL_SCALE_FACTOR }],
-  },
-  100: {
-    transform: [{ scale: 1 }],
-    easing: Easing.elastic(0.7),
-  },
-});
-
-const logoKeyframe = new Keyframe({
-  0: {
-    transform: [{ scale: 1.3 }],
-    opacity: 0,
-  },
-  40: {
-    transform: [{ scale: 1.3 }],
-    opacity: 0,
-    easing: Easing.elastic(0.7),
-  },
-  100: {
-    opacity: 1,
-    transform: [{ scale: 1 }],
-    easing: Easing.elastic(0.7),
-  },
-});
-
-const glowKeyframe = new Keyframe({
-  0: {
-    transform: [{ rotateZ: '0deg' }],
-  },
-  100: {
-    transform: [{ rotateZ: '7200deg' }],
-  },
-});
-
-export function AnimatedIcon() {
-  return (
-    <View style={styles.iconContainer}>
-      <Animated.View entering={glowKeyframe.duration(60 * 1000 * 4)} style={styles.glow}>
-        <Image style={styles.glow} source={require('@/assets/images/logo-glow.png')} />
-      </Animated.View>
-
-      <Animated.View entering={keyframe.duration(DURATION)} style={styles.background} />
-      <Animated.View style={styles.imageContainer} entering={logoKeyframe.duration(DURATION)}>
-        <Image style={styles.image} source={require('@/assets/images/expo-logo.png')} />
-      </Animated.View>
-    </View>
+      style={styles.splashOverlay}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  imageContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  glow: {
-    width: 201,
-    height: 201,
-    position: 'absolute',
-  },
-  iconContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 128,
-    height: 128,
-    zIndex: 100,
-  },
-  image: {
-    width: 76,
-    height: 71,
-  },
-  background: {
-    borderRadius: 40,
-    experimental_backgroundImage: `linear-gradient(180deg, #3C9FFE, #0274DF)`,
-    width: 128,
-    height: 128,
-    position: 'absolute',
-  },
+  /** app.json의 splash backgroundColor와 같은 값이어야 이음매가 보이지 않는다. */
   splashOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#208AEF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: Colors.dark.background,
     zIndex: 1000,
   },
 });
