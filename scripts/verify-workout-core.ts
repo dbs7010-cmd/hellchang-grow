@@ -27,7 +27,10 @@ import {
   updateSet,
 } from '@/utils/workout-session';
 import { buildWorkoutSessionResult } from '@/utils/workout-session-result';
-import { buildWorkoutRecordDetail } from '@/utils/workout-record-detail';
+import {
+  buildWorkoutRecordDetail,
+  findWorkoutRecordForSession,
+} from '@/utils/workout-record-detail';
 import { buildQuickStartPlan } from '@/utils/workout-start';
 import type { Routine } from '@/types/routine';
 import type { WorkoutRecord } from '@/types/workout';
@@ -553,6 +556,28 @@ const NOW_MS = NOW.getTime();
     );
     check('한 세트도 안 한 종목은 나오지 않는다', detail.exercises.length, 0);
     check('그때는 안내 한 줄이 있다', typeof detail.emptyLine, 'string');
+  }
+
+  // 방금 끝낸 세션이 남긴 기록을 결과 화면이 찾아갈 수 있다 (읽기만 한다).
+  {
+    const records = [
+      asRecord({ id: 'r-old', sessionId: 'session-1' }),
+      asRecord({ id: 'r-new', sessionId: 'session-2' }),
+      asRecord({ id: 'r-manual' }),
+    ];
+
+    check(
+      '세션 ID로 저장된 기록을 찾는다',
+      findWorkoutRecordForSession(records, 'session-2')?.id,
+      'r-new'
+    );
+    check(
+      '저장되지 않은 세션은 기록을 만들어 내지 않는다',
+      findWorkoutRecordForSession(records, 'session-missing'),
+      null
+    );
+    check('세션 ID가 없으면 아무거나 고르지 않는다', findWorkoutRecordForSession(records, undefined), null);
+    check('기록이 없으면 null이다', findWorkoutRecordForSession([], 'session-2'), null);
   }
 }
 

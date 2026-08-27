@@ -53,8 +53,10 @@ export default function WorkoutStartScreen() {
   const [searchQuery, setSearchQuery] = useState('');
 
   // 이미 진행 중인 세션이 있는 상태로 이 화면에 들어오면 (뒤로가기 등) 바로 세션으로 보낸다.
+  // 끝난 세션(status: completed)이 정리되지 못하고 남아 있으면 보내지 않는다 — 그러면
+  // 끝낼 수도 없는 세션 화면과 이 화면 사이에 갇힌다. 그때는 새로 시작하는 것이 탈출구다.
   useEffect(() => {
-    if (activeSession) {
+    if (activeSession && activeSession.status !== 'completed') {
       router.replace('/session');
     }
   }, [activeSession, router]);

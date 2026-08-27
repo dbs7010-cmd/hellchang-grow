@@ -256,7 +256,12 @@ interface AppDataContextValue extends AppDataState {
   pauseWorkoutSession: () => Promise<void>;
   resumeWorkoutSession: () => Promise<void>;
   changeSessionCategory: (category: WorkoutCategory) => Promise<void>;
-  addExerciseToSession: (exercise: SessionExerciseInput) => Promise<void>;
+  /**
+   * 세션에 운동을 하나 더 담는다. 만들어진 세션 항목 ID를 돌려준다 — 화면이 방금 담은
+   * 운동으로 곧바로 포커스를 옮길 수 있어야 하기 때문이다 (담았는데 화면이 그대로면
+   * 아무 일도 일어나지 않은 것처럼 보인다).
+   */
+  addExerciseToSession: (exercise: SessionExerciseInput) => Promise<string>;
   setCurrentSessionExercise: (exerciseEntryId: string) => Promise<void>;
   addSetToExercise: (
     exerciseEntryId: string,
@@ -728,6 +733,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     async (exercise) => {
       const id = createId('session-ex');
       mutateRunningSession((session) => addExerciseToSessionPure(session, { id, ...exercise }));
+      return id;
     },
     [mutateRunningSession]
   );

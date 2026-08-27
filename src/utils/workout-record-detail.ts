@@ -91,3 +91,21 @@ export function buildWorkoutRecordDetail(record: WorkoutRecord): WorkoutRecordDe
     emptyLine: shown.length === 0 ? '이 기록에는 저장된 세트 상세가 없어요.' : null,
   };
 }
+
+/**
+ * 방금 끝낸 세션이 남긴 **저장된 기록**을 찾는다.
+ *
+ * 결과 화면은 요약을 메모리에 들고 있을 뿐이라, "지금 화면에 보이는 숫자"와 "히스토리에
+ * 남은 기록"이 같은 것인지 사용자가 확인할 방법이 없었다. 세션 ID는 이미 기록에 저장돼
+ * 있으므로(`WorkoutRecord.sessionId`) 여기서는 **읽어서 찾기만 한다** — 완료 파이프라인,
+ * 영수증, 보상 계산은 이 함수와 아무 관계가 없다.
+ *
+ * 찾지 못하면 null이다. 없는 기록을 만들어 내거나 "비슷한 날짜"로 추측하지 않는다.
+ */
+export function findWorkoutRecordForSession(
+  records: WorkoutRecord[],
+  sessionId: string | undefined
+): WorkoutRecord | null {
+  if (!sessionId) return null;
+  return records.find((record) => record.sessionId === sessionId) ?? null;
+}

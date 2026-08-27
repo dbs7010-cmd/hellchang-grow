@@ -51,6 +51,7 @@ function RootNavigator() {
         <Stack.Screen name="session" />
         <Stack.Screen name="pass" />
         <Stack.Screen name="notifications" />
+        <Stack.Screen name="workout-record" />
         <Stack.Screen name="exercise-select" />
         <Stack.Screen name="exercise-detail" />
         <Stack.Screen name="routine-edit" />

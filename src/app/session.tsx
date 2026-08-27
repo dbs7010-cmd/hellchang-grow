@@ -21,7 +21,7 @@ import { PrimaryButton } from '@/components/ui/primary-button';
 import { Section } from '@/components/ui/section';
 import { TextField } from '@/components/ui/text-field';
 import { AppConfig } from '@/config/app-config';
-import { getResolvedExerciseById, searchExercises } from '@/config/exercises';
+import { Exercises, getResolvedExerciseById, searchExercises } from '@/config/exercises';
 import { inferMotionFamily } from '@/config/motion-families';
 import { StanleyTrainer } from '@/config/trainers';
 import { WorkoutCategories, WorkoutCategoryLabels } from '@/config/workout-labels';
@@ -63,6 +63,7 @@ import {
   shouldConfirmSessionExit,
 } from '@/utils/session-exit';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
+import { findWorkoutRecordForSession } from '@/utils/workout-record-detail';
 import { formatVolumeKg } from '@/utils/workout-stats';
 import {
   deriveWorkoutCharacterState,
@@ -536,14 +537,22 @@ export default function SessionScreen() {
     await removeSessionSet(currentExercise.id, setId);
   };
 
+  /**
+   * 운동을 담으면 **그 운동이 곧바로 지금 하는 운동이 된다.**
+   *
+   * 예전에는 [+ 운동 추가]에서 스쿼트를 골라도 화면은 벤치프레스 그대로여서, 방금 한
+   * 행동이 아무 일도 하지 않은 것처럼 보였다. 순서를 강제하는 것이 아니다 — 사용자가
+   * 방금 직접 고른 운동으로 옮기는 것뿐이고, 선택기에서 언제든 다시 바꿀 수 있다.
+   */
   const handleAddExerciseByName = async (exerciseId: string, exerciseName: string) => {
     const resolved = getResolvedExerciseById(exerciseId);
-    await addExerciseToSession({
+    const entryId = await addExerciseToSession({
       exerciseId,
       exerciseName,
       targetSets: resolved?.defaultSets,
       defaultRestSeconds: resolved?.defaultRestSeconds,
     });
+    await setCurrentSessionExercise(entryId);
     setAddExerciseQuery('');
     setShowAddExercise(false);
   };
@@ -551,7 +560,11 @@ export default function SessionScreen() {
   const handleAddCustomExercise = async () => {
     const name = addExerciseQuery.trim();
     if (!name) return;
-    await addExerciseToSession({ exerciseId: createId('custom-exercise'), exerciseName: name });
+    const entryId = await addExerciseToSession({
+      exerciseId: createId('custom-exercise'),
+      exerciseName: name,
+    });
+    await setCurrentSessionExercise(entryId);
     setAddExerciseQuery('');
     setShowAddExercise(false);
   };
@@ -678,6 +691,26 @@ export default function SessionScreen() {
     </View>
   );
 
+  /**
+   * 아직 운동이 하나도 담기지 않은 세션. [운동 시작]에서 종목을 고르지 않고 들어왔거나
+   * 유산소로 시작한 경우다 — 예전에는 이 화면에 운동 종류 칩과 휴식 프리셋만 있어서
+   * 지금 무엇을 해야 하는지 말해 주는 것이 하나도 없었다.
+   */
+  const hasSessionExercises = activeSession.exercises.length > 0;
+  /** 담긴 운동이 없으면 추가 화면을 접어 둘 이유가 없다 — 그것이 유일한 다음 단계다. */
+  const addExerciseOpen = showAddExercise || !hasSessionExercises;
+  /**
+   * 검색어를 넣기 전에 보여줄 후보. 세션이 이미 부위를 알고 있으면 그 부위부터 보여준다 —
+   * 추천을 새로 만들어 내는 것이 아니라 세션에 이미 있는 사실로 목록을 좁히는 것뿐이다.
+   */
+  const addExerciseCandidates = addExerciseQuery.trim()
+    ? searchExercises(addExerciseQuery)
+    : activeSession.primaryMuscleGroup
+      ? Exercises.filter(
+          (exercise) => exercise.primaryMuscleGroup === activeSession.primaryMuscleGroup
+        )
+      : Exercises;
+
   const reaction = (
     <GoldsunReaction
       visible={reactionVisible}
@@ -724,20 +757,18 @@ export default function SessionScreen() {
       reaction={reaction}>
       {prCelebration && <PrCelebrationOverlay pr={prCelebration} />}
 
-      {activeSession.exercises.length === 0 && (
-        <Section title="운동 종류">
-          <ChipRow>
-            {WorkoutCategories.map((category) => (
-              <Chip
-                key={category}
-                label={WorkoutCategoryLabels[category]}
-                selected={activeSession.primaryCategory === category}
-                disabled={isPaused}
-                onPress={() => changeSessionCategory(category)}
-              />
-            ))}
-          </ChipRow>
-        </Section>
+      {/*
+        빈 세션의 첫 화면. 무엇을 눌러야 하는지와 함께 **기록이 남는 조건**을 먼저 말한다 —
+        예전에는 세트를 하나도 하지 않고 종료했을 때 마지막 순간에야 "기록 없이 나갈까요?"를
+        만나서, 세션 내내 아무것도 남지 않는다는 걸 알 수 없었다.
+      */}
+      {!hasSessionExercises && (
+        <View style={styles.emptySession}>
+          <ThemedText type="heading">무엇부터 할까요?</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            운동을 하나 고르면 바로 세트를 기록할 수 있어요. 세트를 완료해야 기록이 남아요.
+          </ThemedText>
+        </View>
       )}
 
       <SessionExerciseSelector
@@ -828,8 +859,8 @@ export default function SessionScreen() {
         </>
       )}
 
-      {showAddExercise && (
-        <Section title="운동 추가">
+      {addExerciseOpen && (
+        <Section title={hasSessionExercises ? '운동 추가' : '운동 고르기'}>
           <TextField
             value={addExerciseQuery}
             onChangeText={setAddExerciseQuery}
@@ -837,16 +868,14 @@ export default function SessionScreen() {
             editable={!isPaused}
           />
           <ChipRow>
-            {searchExercises(addExerciseQuery)
-              .slice(0, 8)
-              .map((exercise) => (
-                <Chip
-                  key={exercise.id}
-                  label={exercise.name}
-                  disabled={isPaused}
-                  onPress={() => handleAddExerciseByName(exercise.id, exercise.name)}
-                />
-              ))}
+            {addExerciseCandidates.slice(0, 8).map((exercise) => (
+              <Chip
+                key={exercise.id}
+                label={exercise.name}
+                disabled={isPaused}
+                onPress={() => handleAddExerciseByName(exercise.id, exercise.name)}
+              />
+            ))}
           </ChipRow>
           <View style={styles.inlineRow}>
             <PrimaryButton
@@ -856,17 +885,37 @@ export default function SessionScreen() {
               style={styles.flexItem}
               onPress={handleAddCustomExercise}
             />
-            <PrimaryButton
-              label="닫기"
-              variant="secondary"
-              style={styles.flexItem}
-              onPress={() => setShowAddExercise(false)}
-            />
+            {/* 담긴 운동이 없을 때는 닫을 곳이 없다 — 닫으면 다시 빈 화면이 된다. */}
+            {hasSessionExercises && (
+              <PrimaryButton
+                label="닫기"
+                variant="secondary"
+                style={styles.flexItem}
+                onPress={() => setShowAddExercise(false)}
+              />
+            )}
           </View>
         </Section>
       )}
 
-      {!showAddExercise && (
+      {/* 운동 종류는 빈 세션에서만, 그리고 무엇을 할지 고른 다음에 온다 (보조 선택). */}
+      {!hasSessionExercises && (
+        <Section title="운동 종류">
+          <ChipRow>
+            {WorkoutCategories.map((category) => (
+              <Chip
+                key={category}
+                label={WorkoutCategoryLabels[category]}
+                selected={activeSession.primaryCategory === category}
+                disabled={isPaused}
+                onPress={() => changeSessionCategory(category)}
+              />
+            ))}
+          </ChipRow>
+        </Section>
+      )}
+
+      {!addExerciseOpen && (
         <View style={styles.restPicker}>
           <ThemedText type="caption" themeColor="textSecondary">
             휴식
@@ -907,13 +956,15 @@ export default function SessionScreen() {
         endConfirmBar
       ) : (
         <View style={styles.bottomBar}>
-          <PrimaryButton
-            label="+ 운동 추가"
-            variant="secondary"
-            disabled={isPaused}
-            style={styles.flexItem}
-            onPress={() => setShowAddExercise(true)}
-          />
+          {!addExerciseOpen && (
+            <PrimaryButton
+              label="+ 운동 추가"
+              variant="secondary"
+              disabled={isPaused}
+              style={styles.flexItem}
+              onPress={() => setShowAddExercise(true)}
+            />
+          )}
           <PrimaryButton
             label="운동 종료"
             variant="secondary"
@@ -1027,7 +1078,16 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { characterAppearance, growth: growthAfter } = useAppData();
+  const { characterAppearance, growth: growthAfter, workoutRecords } = useAppData();
+  /**
+   * 방금 저장된 기록. 결과 화면의 숫자는 메모리 요약이라, 그것이 히스토리에 남은 기록과
+   * 같은 것인지 확인할 방법이 없었다 — [확인]을 누르면 홈으로 나가 버렸다.
+   * 세션 ID로 **이미 저장된 기록을 찾아 읽기만 한다.** 없으면 버튼도 없다(추측하지 않는다).
+   */
+  const savedRecord = useMemo(
+    () => findWorkoutRecordForSession(workoutRecords, summary.sessionResult.sessionId),
+    [workoutRecords, summary.sessionResult.sessionId]
+  );
   /** 단백세상에서 막혀서 나온 운동인가. 메모리 표시일 뿐이라 앱을 껐다 켜면 사라진다. */
   const worldReturn = useSyncExternalStore(
     subscribeToWorldReturn,
@@ -1329,6 +1389,20 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
             variant="gold"
             size="large"
             onPress={handleReturnToWorld}
+          />
+        )}
+        {/*
+          방금 한 운동이 기록으로 남았다는 것을 그 자리에서 확인할 수 있어야 한다. 홈/히스토리/
+          운동 탭이 여는 것과 **같은 기록 상세 화면**으로 간다 — 상세를 새로 만들지 않는다.
+          기록을 찾지 못하면 버튼도 없다.
+        */}
+        {savedRecord && (
+          <PrimaryButton
+            label="기록 자세히 보기"
+            variant="secondary"
+            onPress={() =>
+              router.push({ pathname: '/workout-record', params: { id: savedRecord.id } })
+            }
           />
         )}
         <PrimaryButton
@@ -1987,6 +2061,10 @@ const styles = StyleSheet.create({
   },
   disabledControl: {
     opacity: 0.4,
+  },
+  /** 빈 세션의 안내 블록. 다음 단계(운동 고르기)가 바로 아래에 오므로 여백만 준다. */
+  emptySession: {
+    gap: Spacing.half,
   },
   bottomBar: {
     flexDirection: 'row',
