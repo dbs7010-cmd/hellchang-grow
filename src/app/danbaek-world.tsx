@@ -8,11 +8,14 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { SubScreen } from '@/components/ui/sub-screen';
+import { WorldCliff, WorldCliffHeight } from '@/components/world/world-cliff';
 import { WorldGate, WorldGateHeight } from '@/components/world/world-gate';
 import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
-import { DanbaekWorldFirstContact } from '@/features/danbaek-world/proof-stages';
-import { DanbaekWorldVoiceLines } from '@/config/danbaek-voice-lines';
+import {
+  DanbaekWorldFirstContact,
+  DanbaekWorldStageScenes,
+} from '@/features/danbaek-world/proof-stages';
 import {
   buildDanbaekWorldScene,
   describeNextGoal,
@@ -57,6 +60,7 @@ export default function DanbaekWorldScreen() {
       observeWorldVisit({
         stageId: scene.stageId,
         outcome: scene.state === 'cleared' ? 'cleared' : 'blocked',
+        clearedStageIds: scene.clearedStageIds,
       })
   );
 
@@ -65,10 +69,13 @@ export default function DanbaekWorldScreen() {
     하고, 닫으면 그 자리에서 바로 원래 화면이다 — 흐름을 막지 않는다.
   */
   const [showFirstContact, setShowFirstContact] = useState(visit.firstVisit);
-  const firstContact =
-    scene.state === 'blocked'
-      ? DanbaekWorldFirstContact.locked
-      : DanbaekWorldFirstContact.alreadyUnlocked;
+  const firstPathUnlocked = scene.clearedStageIds.includes('push-door');
+  const firstContact = firstPathUnlocked
+    ? DanbaekWorldFirstContact.alreadyUnlocked
+    : DanbaekWorldFirstContact.locked;
+  const clearedReveal = visit.justClearedStageId
+    ? DanbaekWorldStageScenes[visit.justClearedStageId]
+    : null;
 
   useEffect(() => {
     // 돌아왔으니 결과 화면의 "돌아가기"는 더 이상 필요 없다.
@@ -117,12 +124,12 @@ export default function DanbaekWorldScreen() {
 
       <JourneyRail pathTitle={scene.pathTitle} nodes={scene.journey} />
 
-      {visit.justCleared && scene.state === 'cleared' && (
+      {clearedReveal && (
         <ThemedView
           type="backgroundElement"
           style={[styles.reveal, { borderColor: theme.gold }]}>
           <ThemedText type="smallBold" style={{ color: theme.gold }}>
-            {scene.title}
+            {clearedReveal.clearedTitle}
           </ThemedText>
           <ThemedText type="caption" themeColor="textSecondary">
             방금 한 운동을 단백이가 보고 따라 했어요.
@@ -130,10 +137,14 @@ export default function DanbaekWorldScreen() {
         </ThemedView>
       )}
 
-      {/* 문은 배경이고 주인공은 언제나 앞에 서 있는 단백이다. */}
+      {/* 장애물은 배경이고 주인공은 언제나 앞에 서 있는 단백이다. */}
       <View style={styles.stage}>
-        <View style={styles.gateSlot}>
-          <WorldGate state={scene.gate} />
+        <View style={scene.obstacle === 'cliff' ? styles.cliffSlot : styles.gateSlot}>
+          {scene.obstacle === 'cliff' ? (
+            <WorldCliff state={scene.state === 'blocked' ? 'blocked' : 'cleared'} />
+          ) : (
+            <WorldGate state={scene.gate} />
+          )}
         </View>
         <PlayerCharacter
           appearance={characterAppearance}
@@ -150,7 +161,7 @@ export default function DanbaekWorldScreen() {
       <DanbaekVoiceBubble
         line={
           visit.justCleared && scene.state === 'cleared'
-            ? DanbaekWorldVoiceLines.returnedAfterWorkout
+            ? clearedReveal?.returnedLine ?? scene.returnedLine
             : scene.danbaekLine
         }
         status={scene.statusLine}
@@ -282,6 +293,14 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     paddingRight: 110,
+  },
+  cliffSlot: {
+    position: 'absolute',
+    top: StageHeight - WorldCliffHeight,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingLeft: 104,
   },
   sceneLine: {
     textAlign: 'center',

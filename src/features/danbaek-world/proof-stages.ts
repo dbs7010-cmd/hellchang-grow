@@ -1,6 +1,6 @@
 import type { DanbaekWorldStage } from '@/features/danbaek-world/stage-evaluator';
 
-/** First playable only: one real workout must be enough to cause an immediate World change. */
+/** Each playable segment opens from one real, completed workout record. */
 export const DanbaekWorldProofStages: DanbaekWorldStage[] = [
   { id: 'arrival' },
   {
@@ -10,6 +10,15 @@ export const DanbaekWorldProofStages: DanbaekWorldStage[] = [
       minimumLearningStage: 'observing',
       specificExerciseId: 'bench-press',
       reason: '벤치프레스 기록이 생기면 단백이가 미는 동작을 보고 이 문을 열 수 있어요.',
+    },
+  },
+  {
+    id: 'pull-cliff',
+    requirement: {
+      movementFamily: 'pull_vertical',
+      minimumLearningStage: 'observing',
+      specificExerciseId: 'lat-pulldown',
+      reason: '랫풀다운 기록이 생기면 단백이가 위에서 당기는 동작을 보고 이 절벽을 오를 수 있어요.',
     },
   },
 ];
@@ -59,6 +68,12 @@ export interface DanbaekWorldStageScene {
   blockedLine: string;
   /** 지나간 뒤의 장면. */
   clearedLine: string;
+  /** 화면이 그릴 장애물. 판정에는 관여하지 않는다. */
+  obstacle: 'gate' | 'cliff';
+  /** 같은 관문을 막힌 채 본 뒤 운동하고 돌아왔을 때만 쓰는 반응. */
+  returnedLine: string;
+  /** 열린 순간의 짧은 제목. */
+  clearedTitle: string;
 }
 
 export const DanbaekWorldStageScenes: Record<string, DanbaekWorldStageScene> = {
@@ -66,11 +81,25 @@ export const DanbaekWorldStageScenes: Record<string, DanbaekWorldStageScene> = {
     label: '출발',
     blockedLine: '단백이가 길 앞에 섰어요.',
     clearedLine: '단백이가 길을 나섰어요.',
+    obstacle: 'gate',
+    returnedLine: '길을 나설 준비가 됐어!',
+    clearedTitle: '길을 나섰어요!',
   },
   'push-door': {
     label: '막힌 문',
     blockedLine: '단백이가 온 힘으로 밀어 보지만, 문은 꿈쩍도 하지 않아요.',
     clearedLine: '단백이가 배운 대로 문을 밀어 열었어요.',
+    obstacle: 'gate',
+    returnedLine: '아까는 열리지 않았는데, 운동하고 돌아오니 열렸어!',
+    clearedTitle: '문이 열렸어요!',
+  },
+  'pull-cliff': {
+    label: '당기는 절벽',
+    blockedLine: '단백이가 바위턱에 매달렸지만, 몸을 끌어올리지 못하고 제자리로 내려와요.',
+    clearedLine: '단백이가 배운 대로 몸을 당겨 바위턱 위에 올라섰어요.',
+    obstacle: 'cliff',
+    returnedLine: '아까는 미끄러졌는데, 운동에서 본 대로 당기니 올라왔어!',
+    clearedTitle: '절벽을 올랐어요!',
   },
 };
 
@@ -82,6 +111,6 @@ export const DanbaekWorldStageScenes: Record<string, DanbaekWorldStageScene> = {
  * 다음 콘텐츠가 실제로 생길 때 스테이지로 승격시키면 된다.
  */
 export const DanbaekWorldNextPath = {
-  label: '당기는 길',
-  teaser: '저 너머에 매달려 올라가야 하는 절벽이 보여요.',
+  label: '굽이진 돌길',
+  teaser: '절벽 너머로 균형을 잡아 건너야 할 좁은 돌길이 이어져요.',
 } as const;

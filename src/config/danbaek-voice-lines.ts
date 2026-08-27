@@ -67,6 +67,7 @@ export const DanbaekGainVoiceLines = {
  */
 export const DanbaekWorldVoiceLines = {
   gateCleared: '운동에서 본 밀기다! 문이 열렸어.',
+  cliffCleared: '운동에서 본 당기기다! 위까지 올라왔어.',
   returnedAfterWorkout: '아까는 열리지 않았는데, 운동하고 돌아오니 열렸어!',
 } as const;
 

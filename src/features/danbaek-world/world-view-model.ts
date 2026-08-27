@@ -25,10 +25,12 @@ interface DanbaekWorldSceneBase {
   journey: DanbaekWorldJourneyNode[];
   /** 지금 서 있는(또는 방금 지나온) 구간. 방문 기억이 이 값으로 변화를 판단한다. */
   stageId: string;
+  obstacle: 'gate' | 'cliff';
   /** 눈앞에서 벌어지는 일 한 줄. */
   sceneLine: string;
   /** 단백이 한마디 (PRIMARY). */
   danbaekLine: string;
+  returnedLine: string;
   /** 정확한 상태 (SECONDARY). 실제 학습 단계보다 앞서 말하지 않는다. */
   statusLine: string;
   clearedStageIds: string[];
@@ -57,6 +59,9 @@ function sceneOf(stageId: string) {
       label: stageId,
       blockedLine: '단백이가 여기서 멈췄어요.',
       clearedLine: '단백이가 여기를 지나갔어요.',
+      obstacle: 'gate' as const,
+      returnedLine: '운동에서 본 동작으로 지나왔어!',
+      clearedTitle: '길이 열렸어요!',
     }
   );
 }
@@ -114,9 +119,14 @@ export function buildDanbaekWorldScene(profile: DanbaekLearningProfile): Danbaek
       pathTitle: DanbaekWorldPathTitle,
       journey: buildJourney(stages, null),
       stageId: lastStageId,
-      title: '문이 열렸어요!',
+      obstacle: sceneOf(lastStageId).obstacle,
+      title: sceneOf(lastStageId).clearedTitle,
       sceneLine: sceneOf(lastStageId).clearedLine,
-      danbaekLine: DanbaekWorldVoiceLines.gateCleared,
+      danbaekLine:
+        sceneOf(lastStageId).obstacle === 'cliff'
+          ? DanbaekWorldVoiceLines.cliffCleared
+          : DanbaekWorldVoiceLines.gateCleared,
+      returnedLine: sceneOf(lastStageId).returnedLine,
       statusLine:
         (family && learnedStatusLine(profile, family)) ?? '단백이가 본 동작으로 길을 열었어요',
       nextGoal: { label: DanbaekWorldNextPath.label, teaser: DanbaekWorldNextPath.teaser },
@@ -133,8 +143,10 @@ export function buildDanbaekWorldScene(profile: DanbaekLearningProfile): Danbaek
     pathTitle: DanbaekWorldPathTitle,
     journey: buildJourney(stages, block.stageId),
     stageId: block.stageId,
+    obstacle: sceneOf(block.stageId).obstacle,
     sceneLine: sceneOf(block.stageId).blockedLine,
     danbaekLine: presentation.danbaekLine,
+    returnedLine: sceneOf(block.stageId).returnedLine,
     statusLine: presentation.statusLine,
     whyLine: presentation.whyLine,
     actionLabel: presentation.actionLabel,
@@ -151,7 +163,11 @@ export function describeNextGoal(): string {
 /** HOME과 World가 같은 실제 gate 판정에서 입구 문구를 얻는다. */
 export function describeFirstPathEntry(profile: DanbaekLearningProfile): string {
   const scene = buildDanbaekWorldScene(profile);
-  return scene.state === 'blocked'
-    ? '벤치프레스 기록이 생기면 첫 번째 길이 열려요'
-    : '첫 번째 길이 열려 있어요';
+  if (!scene.clearedStageIds.includes('push-door')) {
+    return '벤치프레스 기록이 생기면 첫 번째 길이 열려요';
+  }
+  if (scene.state === 'blocked' && scene.stageId === 'pull-cliff') {
+    return '첫 번째 길이 열려 있어요 · 다음은 랫풀다운으로 당기는 절벽';
+  }
+  return `당기는 절벽을 올랐어요 · 다음은 ${DanbaekWorldNextPath.label}`;
 }

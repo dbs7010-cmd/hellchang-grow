@@ -27,6 +27,8 @@ export interface WorldVisitSnapshot {
   /** 지금 서 있는(또는 방금 지나온) 구간. */
   stageId: string;
   outcome: WorldVisitOutcome;
+  /** 현재 실제 learning evidence로 이미 통과한 구간들. */
+  clearedStageIds?: readonly string[];
 }
 
 export interface WorldReturn {
@@ -54,6 +56,8 @@ export interface WorldVisitObservation {
   firstVisit: boolean;
   /** 사용자가 같은 관문의 닫힌 모습을 실제로 본 뒤 열린 모습을 보고 있는가. */
   justCleared: boolean;
+  /** 직전 방문에서 막혀 있던 구간이 이번 evidence로 통과됐다면 그 id. */
+  justClearedStageId: string | null;
 }
 
 export function observeWorldVisit(current: WorldVisitSnapshot): WorldVisitObservation {
@@ -61,13 +65,17 @@ export function observeWorldVisit(current: WorldVisitSnapshot): WorldVisitObserv
   const previous = lastVisit;
   hasMetWorld = true;
   lastVisit = current;
+  const justCleared =
+    previous !== null &&
+    previous.outcome === 'blocked' &&
+    (current.stageId === previous.stageId
+      ? current.outcome === 'cleared'
+      : Boolean(current.clearedStageIds?.includes(previous.stageId)));
+
   return {
     firstVisit,
-    justCleared:
-      previous !== null &&
-      previous.outcome === 'blocked' &&
-      current.outcome === 'cleared' &&
-      previous.stageId === current.stageId,
+    justCleared,
+    justClearedStageId: justCleared ? previous!.stageId : null,
   };
 }
 
