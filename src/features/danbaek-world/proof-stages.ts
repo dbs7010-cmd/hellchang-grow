@@ -9,7 +9,7 @@ export const DanbaekWorldProofStages: DanbaekWorldStage[] = [
       movementFamily: 'push_horizontal',
       minimumLearningStage: 'observing',
       specificExerciseId: 'bench-press',
-      reason: '문을 밀어 열려면, 단백이가 미는 동작을 실제로 한 번 봐야 해요.',
+      reason: '벤치프레스 기록이 생기면 단백이가 미는 동작을 보고 이 문을 열 수 있어요.',
     },
   },
 ];
@@ -25,11 +25,20 @@ export const DanbaekWorldProofStages: DanbaekWorldStage[] = [
  * 현실에서 운동하는 사람은 나다. 여기서 새로운 설정을 만들지 않는다.
  */
 export const DanbaekWorldFirstContact = {
-  title: '여기는 단백세상',
-  lines: [
-    '단백이가 사는 곳이에요. 여기 사람들은 아직 몸 쓰는 법을 몰라요.',
-    '내가 실제로 운동하면 단백이가 옆에서 보고 따라 해요. 그렇게 배운 힘으로 막힌 길을 지나가요.',
-  ],
+  locked: {
+    title: '첫 번째 길은 아직 닫혀 있어요',
+    lines: [
+      '단백이가 사는 단백세상이에요. 내가 실제로 운동하면 단백이가 옆에서 보고 따라 해요.',
+      '벤치프레스 기록이 생기면 단백이가 미는 동작을 보고 이 문을 열 수 있어요.',
+    ],
+  },
+  alreadyUnlocked: {
+    title: '첫 번째 길이 이미 열려 있어요',
+    lines: [
+      '단백이가 사는 단백세상이에요. 내가 실제로 운동하면 단백이가 옆에서 보고 따라 해요.',
+      '벤치프레스 운동 기록 덕분에 단백이가 미는 동작을 보고 첫 번째 길을 열었어요.',
+    ],
+  },
   dismissLabel: '알겠어요',
 } as const;
 

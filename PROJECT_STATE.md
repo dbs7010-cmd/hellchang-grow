@@ -29,6 +29,14 @@
 
 - Repository/worktree consolidation.
 
+## RELEASE PLAYABILITY CLOSURE
+
+- A — DONE: REST에서 운동 종료.
+- B — DONE: session first-record stale copy.
+- C — DONE: World first contact가 실제 첫 gate의 locked/already-unlocked/seen-locked-return 상태를 구분하며, HOME 입구도 같은 gate truth를 사용함.
+- D — BLOCKED BY DESIGN: Growth/SP/XP/streak rollback 계약 없이 persisted workout-record 전체 삭제 금지.
+- E — DONE: monetization/release copy.
+
 ## NEXT
 
 - Plan the next playable product milestone.

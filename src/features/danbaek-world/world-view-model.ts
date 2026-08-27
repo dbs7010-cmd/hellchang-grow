@@ -147,3 +147,11 @@ export function buildDanbaekWorldScene(profile: DanbaekLearningProfile): Danbaek
 export function describeNextGoal(): string {
   return `${withTopicParticle(DanbaekWorldNextPath.label)} 아직 잠겨 있어요`;
 }
+
+/** HOME과 World가 같은 실제 gate 판정에서 입구 문구를 얻는다. */
+export function describeFirstPathEntry(profile: DanbaekLearningProfile): string {
+  const scene = buildDanbaekWorldScene(profile);
+  return scene.state === 'blocked'
+    ? '벤치프레스 기록이 생기면 첫 번째 길이 열려요'
+    : '첫 번째 길이 열려 있어요';
+}

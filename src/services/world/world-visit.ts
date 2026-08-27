@@ -49,10 +49,20 @@ function notify() {
  *
  * 렌더 중에 부르면 안 된다 — 상태를 바꾸기 때문이다. 화면은 mount effect에서 부른다.
  */
-export function observeWorldVisit(current: WorldVisitSnapshot): { justCleared: boolean } {
+export interface WorldVisitObservation {
+  /** 이 앱 실행 중 처음 연 World 화면인가. */
+  firstVisit: boolean;
+  /** 사용자가 같은 관문의 닫힌 모습을 실제로 본 뒤 열린 모습을 보고 있는가. */
+  justCleared: boolean;
+}
+
+export function observeWorldVisit(current: WorldVisitSnapshot): WorldVisitObservation {
+  const firstVisit = !hasMetWorld;
   const previous = lastVisit;
+  hasMetWorld = true;
   lastVisit = current;
   return {
+    firstVisit,
     justCleared:
       previous !== null &&
       previous.outcome === 'blocked' &&

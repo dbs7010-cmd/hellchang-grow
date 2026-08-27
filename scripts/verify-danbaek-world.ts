@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 
 import { LearningStageLabels } from '@/config/danbaek-learning-policy';
+import { DanbaekWorldVoiceLines } from '@/config/danbaek-voice-lines';
 import {
   DanbaekWorldFirstContact,
   DanbaekWorldNextPath,
@@ -14,7 +15,6 @@ import {
 import { buildDanbaekWorldScene } from '@/features/danbaek-world/world-view-model';
 import {
   clearWorldReturn,
-  takeDanbaekWorldFirstContact,
   getWorldReturn,
   markWorldWorkoutHandoff,
   observeWorldVisit,
@@ -236,21 +236,31 @@ const cleared = buildDanbaekWorldScene(profileFrom([benchRecord]));
   );
 }
 
-// ── 처음 온 사람에게 먼저 여기가 어디인지 알려준다 ─────────────────────────
-//
-// 처음 들어온 사람에게 "문이 꿈쩍도 안 한다"부터 보여주면, 여기가 어디인지도 모르는 채
-// 실패 화면을 본다. 인사는 한 번이면 충분하고, 진행도가 아니라 연출 타이밍일 뿐이다.
+// ── 첫 접촉은 실제 gate와 사용자가 본 경험만 말한다 ───────────────────────
 {
   resetWorldVisitMemory();
-  expect('처음 들어오면 인사한다', takeDanbaekWorldFirstContact() === true);
-  expect('같은 세션에서 다시 들어오면 인사하지 않는다', takeDanbaekWorldFirstContact() === false);
-  expect('세 번째도 마찬가지다', takeDanbaekWorldFirstContact() === false);
+  const lockedFirstVisit = observeWorldVisit({ stageId: blocked.stageId, outcome: 'blocked' });
+  const lockedIntro = DanbaekWorldFirstContact.locked.lines.join(' ');
+  expect('FIXTURE A: 방문 전 + locked는 첫 접촉이다', lockedFirstVisit.firstVisit);
+  expect('FIXTURE A: 닫힌 길과 실제 벤치프레스 조건을 말한다',
+    DanbaekWorldFirstContact.locked.title.includes('닫혀') && lockedIntro.includes('벤치프레스'));
 
-  // 세계관 규칙을 새로 만들지 않는다 — 움직이는 건 단백이, 운동하는 건 나.
-  const intro = DanbaekWorldFirstContact.lines.join(' ');
-  expect('인사가 이곳이 어디인지 말한다', DanbaekWorldFirstContact.title.includes('단백세상'));
-  expect('인사가 내가 무엇을 하는지 말한다', intro.includes('운동'));
-  expect('움직이는 것은 단백이다', intro.includes('단백이'));
+  resetWorldVisitMemory();
+  const clearedFirstVisit = observeWorldVisit({ stageId: cleared.stageId, outcome: 'cleared' });
+  const unlockedIntro = DanbaekWorldFirstContact.alreadyUnlocked.lines.join(' ');
+  expect('FIXTURE B: 운동 먼저 + 첫 방문도 첫 접촉이다', clearedFirstVisit.firstVisit);
+  expect('FIXTURE B: 기록 덕분에 이미 열렸다고 말한다',
+    DanbaekWorldFirstContact.alreadyUnlocked.title.includes('이미') && unlockedIntro.includes('운동 기록 덕분'));
+  expect('FIXTURE B: 보지 않은 과거 locked 경험을 주장하지 않는다',
+    !/아까|전에|막혀 있|꿈쩍/.test(`${DanbaekWorldFirstContact.alreadyUnlocked.title} ${unlockedIntro} ${cleared.danbaekLine}`));
+
+  resetWorldVisitMemory();
+  observeWorldVisit({ stageId: blocked.stageId, outcome: 'blocked' });
+  const returned = observeWorldVisit({ stageId: cleared.stageId, outcome: 'cleared' });
+  expect('FIXTURE C: locked를 본 뒤 같은 gate가 열렸을 때만 변화 증거가 있다', returned.justCleared);
+  expect('FIXTURE C: 복귀 반응은 운동 전후를 표현한다',
+    /아까/.test(DanbaekWorldVoiceLines.returnedAfterWorkout) && /운동하고 돌아오니/.test(DanbaekWorldVoiceLines.returnedAfterWorkout));
+
   expect(
     '인사가 닫을 수 있는 것이라고 말한다',
     DanbaekWorldFirstContact.dismissLabel.length > 0
@@ -258,7 +268,7 @@ const cleared = buildDanbaekWorldScene(profileFrom([benchRecord]));
 
   const world = read('src/app/danbaek-world.tsx');
   expect('화면이 첫 인사를 그린다', world.includes('DanbaekWorldFirstContact'));
-  expect('첫 인사는 닫을 수 있다', world.includes('setFirstContact(false)'));
+  expect('첫 인사는 닫을 수 있다', world.includes('setShowFirstContact(false)'));
   expect(
     '첫 인사가 실제 운동 경로를 막지 않는다 (CTA는 그대로 고정 자리에 있다)',
     /footer={/.test(world) && world.includes('scene.actionLabel')

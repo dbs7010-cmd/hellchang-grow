@@ -66,7 +66,8 @@ export const DanbaekGainVoiceLines = {
  * 얼마나 배웠는지는 그 아래 상태 줄이 정확하게 말한다.
  */
 export const DanbaekWorldVoiceLines = {
-  gateCleared: '열렸다! 아까는 꿈쩍도 안 했는데.',
+  gateCleared: '운동에서 본 밀기다! 문이 열렸어.',
+  returnedAfterWorkout: '아까는 열리지 않았는데, 운동하고 돌아오니 열렸어!',
 } as const;
 
 /** 단백세상에서 막혔을 때. 도움을 요청하되 플레이어를 탓하지 않는다. */

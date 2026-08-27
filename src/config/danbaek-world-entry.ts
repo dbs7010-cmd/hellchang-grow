@@ -1,6 +1,6 @@
 import type { Href } from 'expo-router';
 
-import { learnedFamilyCount } from '@/utils/danbaek-learning-presence';
+import { describeFirstPathEntry } from '@/features/danbaek-world/world-view-model';
 import type { DanbaekLearningProfile } from '@/types/danbaek-contract';
 
 export interface DanbaekWorldEntrySeam {
@@ -27,10 +27,9 @@ export function resolveDanbaekWorldEntry(input: {
   const seam = input.seam ?? DanbaekWorldEntry;
   if (!seam.available || !seam.route) return null;
 
-  const learned = learnedFamilyCount(input.profile);
   return {
     route: seam.route,
     label: '단백세상',
-    subLabel: learned > 0 ? `단백이가 배운 동작 ${learned}가지` : '첫 번째 길이 기다리고 있어요',
+    subLabel: describeFirstPathEntry(input.profile),
   };
 }

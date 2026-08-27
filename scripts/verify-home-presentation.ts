@@ -3,10 +3,12 @@
 // Run: npm run verify:home
 import { readFileSync } from 'node:fs';
 
+import { resolveDanbaekWorldEntry } from '@/config/danbaek-world-entry';
 import type { BodyHistoryEntry } from '@/types/body';
 import type { UserProfile } from '@/types/user';
 import type { WorkoutRecord } from '@/types/workout';
 import { buildPtContext, type PtContext } from '@/utils/pt-context';
+import { buildDanbaekLearningProfile } from '@/utils/danbaek-learning';
 import {
   buildHomeBodyMetrics,
   buildHomePerformance,
@@ -42,6 +44,25 @@ const entry = (input: Partial<BodyHistoryEntry> & { date: string }): BodyHistory
 
 const valueOf = (metrics: ReturnType<typeof buildHomeBodyMetrics>, label: string) =>
   metrics.find((metric) => metric.label === label)?.value;
+
+// ── HOME World 입구도 실제 첫 gate 판정을 그대로 쓴다 ──────────────────────
+{
+  const emptyLearning = buildDanbaekLearningProfile({ records: [], generatedAt: '2026-08-27T00:00:00.000Z' });
+  const benchRecord: WorkoutRecord = {
+    id: 'world-entry-bench', date: '2026-08-27', category: 'strength', title: '가슴',
+    completed: true, createdAt: '2026-08-27T00:00:00.000Z',
+    exercises: [{ id: 'bench', name: '벤치프레스', exerciseId: 'bench-press', sets: 1, reps: 10,
+      weightKg: 40, setDetails: [{ id: 'bench-set', weightKg: 40, reps: 10, completed: true }] }],
+  };
+  const learned = buildDanbaekLearningProfile({ records: [benchRecord], generatedAt: '2026-08-27T00:00:00.000Z' });
+  const lockedEntry = resolveDanbaekWorldEntry({ profile: emptyLearning });
+  const unlockedEntry = resolveDanbaekWorldEntry({ profile: learned });
+  expect('FIXTURE D: HOME locked는 다음 실제 벤치프레스 행동을 말한다',
+    lockedEntry?.subLabel.includes('벤치프레스') === true && lockedEntry.subLabel.includes('열려요'));
+  expect('FIXTURE E: HOME unlocked는 열린 상태를 말한다', unlockedEntry?.subLabel.includes('열려 있어요') === true);
+  expect('FIXTURE E: HOME unlocked에 stale locked 문구가 없다',
+    unlockedEntry?.subLabel.includes('첫 번째 길이 기다리고 있어요') === false);
+}
 
 // ── 1. 기록이 없으면 온보딩 체중만 쓰고 나머지는 만들지 않는다 ─────────────
 {

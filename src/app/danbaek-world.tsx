@@ -12,6 +12,7 @@ import { WorldGate, WorldGateHeight } from '@/components/world/world-gate';
 import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { DanbaekWorldFirstContact } from '@/features/danbaek-world/proof-stages';
+import { DanbaekWorldVoiceLines } from '@/config/danbaek-voice-lines';
 import {
   buildDanbaekWorldScene,
   describeNextGoal,
@@ -22,7 +23,6 @@ import { handOffDanbaekBlock } from '@/services/world/block-handoff';
 import {
   clearWorldReturn,
   observeWorldVisit,
-  takeDanbaekWorldFirstContact,
 } from '@/services/world/world-visit';
 
 const CharacterHeight = 196;
@@ -52,19 +52,23 @@ export default function DanbaekWorldScreen() {
    */
   // 이 화면을 여는 순간 딱 한 번 판단한다. 부트스트랩이 끝나기 전에는 라우터가 어떤 화면도
   // 그리지 않으므로(resolveBootstrapScreen), 여기서 보는 학습 기록은 이미 실제 값이다.
-  const [justCleared] = useState(
+  const [visit] = useState(
     () =>
       observeWorldVisit({
         stageId: scene.stageId,
         outcome: scene.state === 'cleared' ? 'cleared' : 'blocked',
-      }).justCleared
+      })
   );
 
   /*
     처음 들어온 사람에게는 "문이 안 열린다"보다 여기가 어디인지가 먼저다. 인사는 한 번만
     하고, 닫으면 그 자리에서 바로 원래 화면이다 — 흐름을 막지 않는다.
   */
-  const [firstContact, setFirstContact] = useState(() => takeDanbaekWorldFirstContact());
+  const [showFirstContact, setShowFirstContact] = useState(visit.firstVisit);
+  const firstContact =
+    scene.state === 'blocked'
+      ? DanbaekWorldFirstContact.locked
+      : DanbaekWorldFirstContact.alreadyUnlocked;
 
   useEffect(() => {
     // 돌아왔으니 결과 화면의 "돌아가기"는 더 이상 필요 없다.
@@ -91,14 +95,14 @@ export default function DanbaekWorldScreen() {
           />
         ) : null
       }>
-      {firstContact && (
+      {showFirstContact && (
         <ThemedView
           type="backgroundElement"
           style={[styles.firstContact, { borderColor: theme.gold }]}>
           <ThemedText type="smallBold" style={{ color: theme.gold }}>
-            {DanbaekWorldFirstContact.title}
+            {firstContact.title}
           </ThemedText>
-          {DanbaekWorldFirstContact.lines.map((line) => (
+          {firstContact.lines.map((line) => (
             <ThemedText key={line} type="small" themeColor="textSecondary">
               {line}
             </ThemedText>
@@ -106,14 +110,14 @@ export default function DanbaekWorldScreen() {
           <PrimaryButton
             label={DanbaekWorldFirstContact.dismissLabel}
             variant="secondary"
-            onPress={() => setFirstContact(false)}
+            onPress={() => setShowFirstContact(false)}
           />
         </ThemedView>
       )}
 
       <JourneyRail pathTitle={scene.pathTitle} nodes={scene.journey} />
 
-      {justCleared && scene.state === 'cleared' && (
+      {visit.justCleared && scene.state === 'cleared' && (
         <ThemedView
           type="backgroundElement"
           style={[styles.reveal, { borderColor: theme.gold }]}>
@@ -143,7 +147,14 @@ export default function DanbaekWorldScreen() {
         {scene.sceneLine}
       </ThemedText>
 
-      <DanbaekVoiceBubble line={scene.danbaekLine} status={scene.statusLine} />
+      <DanbaekVoiceBubble
+        line={
+          visit.justCleared && scene.state === 'cleared'
+            ? DanbaekWorldVoiceLines.returnedAfterWorkout
+            : scene.danbaekLine
+        }
+        status={scene.statusLine}
+      />
 
       {scene.state === 'blocked' ? (
         <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
