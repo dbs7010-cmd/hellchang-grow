@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ExerciseArtSlot } from '@/components/ui/exercise-art-slot';
 import { SubScreen } from '@/components/ui/sub-screen';
 import { TextField } from '@/components/ui/text-field';
@@ -52,9 +53,12 @@ export default function ExerciseSelectScreen() {
       </ChipRow>
 
       {exercises.length === 0 ? (
-        <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-          조건에 맞는 운동이 없어요. 검색어나 부위를 바꿔보세요.
-        </ThemedText>
+        // 앱의 다른 빈 상태와 같은 블록을 쓴다 — 여기만 회색 문장 한 줄이면 검색이 고장난 것처럼 보인다.
+        <EmptyState
+          icon="🔍"
+          line="조건에 맞는 운동이 없어요."
+          hint="검색어를 줄이거나 부위 필터를 바꿔보세요."
+        />
       ) : (
         <View style={styles.list}>
           {exercises.map((exercise) => (
@@ -111,8 +115,5 @@ const styles = StyleSheet.create({
     width: 10,
     textAlign: 'right',
   },
-  empty: {
-    paddingVertical: Spacing.four,
-    textAlign: 'center',
-  },
+
 });
