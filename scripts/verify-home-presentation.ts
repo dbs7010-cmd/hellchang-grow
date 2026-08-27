@@ -399,8 +399,15 @@ const ptContextOf = (overrides: {
   expect('주인공 렌더러는 그대로다', home.includes('<PlayerCharacter'));
   expect('단백이는 사라지지 않는다', home.includes('<DanbaekVoiceBubble'));
 
-  // 순서가 곧 우선순위다: 오늘의 운동 → 실제 성취 → 단백이 반응 → 진행도 → 단백세상.
-  const order = ['styles.todayBlock', 'home.performance', 'styles.stage', '<DanbaekVoiceBubble', 'styles.progressBlock', 'worldEntry &&'];
+  /*
+   * 순서가 곧 우선순위다: 오늘의 운동 → 실제 성취 → 단백이 무대/반응 → 진행도 → 단백세상.
+   *
+   * 예전에는 이 순서를 style 이름(styles.todayBlock / styles.progressBlock)으로 확인했는데,
+   * 그건 배치가 아니라 **구현 세부**라서 홈을 다시 배치할 때마다 의미가 그대로인데도 깨졌다.
+   * 지금은 각 층이 실제로 무엇으로 그려지는지를 본다 — 묶음 제목, 성취 값, 무대, 단백이,
+   * 진행도 컴포넌트, 단백세상. 계약(어느 층이 먼저 오는가)은 그대로다.
+   */
+  const order = ['title={home.todayLabel}', 'home.performance', 'styles.stage', '<DanbaekVoiceBubble', '<GrowthHud', 'worldEntry &&'];
   const positions = order.map((token) => home.indexOf(token));
   expect('모든 층이 화면에 있다', positions.every((position) => position >= 0));
   expect(

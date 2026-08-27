@@ -14,6 +14,8 @@ import { PlayerCharacter } from '@/components/character/player-character';
 import { DanbaekVoiceBubble } from '@/components/character/danbaek-voice-bubble';
 import { GoldsunBubble } from '@/components/goldsun/goldsun-bubble';
 import { GrowthHud } from '@/components/home/growth-hud';
+import { HomeHeadlineStat } from '@/components/home/home-headline-stat';
+import { HomeSection } from '@/components/home/home-section';
 import { RecommendedStrip } from '@/components/home/recommended-strip';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { ThemedText } from '@/components/themed-text';
@@ -39,14 +41,22 @@ import { formatVolumeKg, sumVolumeKg } from '@/utils/workout-stats';
  * 01 HOME — 현실 사용자의 오늘 운동이 맨 위에 오는 화면.
  *
  * **주인공은 앱을 쓰는 사람이다.** 단백이는 그 사람의 실제 운동에 반응하는 존재이지,
- * 홈에서 관리해야 하는 대상이 아니다. 그래서 순서가 이렇게 고정된다:
+ * 홈에서 관리해야 하는 대상이 아니다.
  *
- *   오늘 내 운동 상태 → 지금 할 행동(또는 완료 상태) → 오늘 가장 강한 실제 성취
- *   → 단백이 반응(무대 + 한마디) → 실제 진행도/주간 꾸준함 → 단백세상 → 보조 탐색
+ * 홈은 카드 모음이 아니라 **이름이 붙은 묶음의 연속**이다:
  *
- * 예전에는 캐릭터 무대가 화면의 40%를 먼저 가져가고 [운동 시작]이 그 아래에 있었다.
- * 그러면 "오늘 뭘 해야 하는가"보다 아바타가 먼저 읽힌다. 지금은 행동이 먼저고,
- * 세로가 모자라면 **줄어드는 쪽은 언제나 무대**다.
+ *   오늘(행동 또는 완료 + 오늘의 성취) → 단백이(무대 + 반응) → 이번 주(꾸준함 + HELL PASS)
+ *   → 단백세상 → 오늘 추천 운동 → 내 몸
+ *
+ * 각 묶음은 조용한 머리말 하나와 그 안에서 **가장 큰 것 하나**를 갖는다. 예전 홈에는
+ * 위계가 두 단계뿐이었다 — [운동 시작] 22px와 나머지 전부 12~14px. 체중도 볼륨도
+ * HELL PASS도 단백세상도 같은 크기로 늘어서서 화면이 무엇이 중요한지 말하지 않았고,
+ * 숫자 일곱 개가 두 줄로 붙어 있어 대시보드처럼 읽혔다. 지금은 묶음마다 주인공이 있다.
+ *
+ * 세 상태는 문구만 바뀌는 같은 화면이 아니다. 운동 중에는 **묶음 자체가 사라진다** —
+ * 지금 결정할 것은 하나뿐이므로 주간 통계도 추천도 몸 수치도 그때는 내보내지 않는다.
+ *
+ * 세로가 모자라면 줄어드는 쪽은 언제나 무대다.
  *
  * 상태와 문구는 여기서 정하지 않는다 — `utils/home-presentation.ts`의 순수 함수 하나가
  * 정하고(PRE/IN_PROGRESS/POST), 화면은 그 결과를 그리기만 한다. 값도 실제 입력값만
@@ -65,9 +75,12 @@ const CharacterAreaHeightRatio = 0.24;
  * 이 값은 **양보하는 쪽**이다. 오늘의 운동 정보와 행동이 먼저 자리를 잡고, 남는 세로에서
  * 무대가 존재감을 갖는다 — 반대로 하면 작은 화면에서 행동이 첫 화면 밖으로 밀린다.
  */
-const HeroHeightRatio = 0.28;
-const HeroMinHeight = 168;
-const HeroMaxHeight = 280;
+const HeroHeightRatio = 0.2;
+const HeroMinHeight = 132;
+const HeroMaxHeight = 196;
+/** 운동 중에는 아래 묶음이 없으므로 무대가 남는 세로를 가져간다. */
+const HeroFocusRatio = 0.36;
+const HeroFocusMaxHeight = 320;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -166,6 +179,19 @@ export default function HomeScreen() {
     [workoutRecords.length]
   );
 
+  /**
+   * 연속 일수 아래 한 줄.
+   *
+   * 아직 한 번도 안 한 사람에게 큰 "0"만 세워 두면 홈이 실패를 먼저 말한다. 없는 값을
+   * 지어내지 않고, 이미 저장된 값(최고 연속)이나 다음에 무슨 일이 일어나는지만 말한다.
+   */
+  const streakNote =
+    streak.currentStreakDays === 0
+      ? '오늘 하면 1일째'
+      : streak.longestStreakDays > streak.currentStreakDays
+        ? `최고 ${streak.longestStreakDays}일`
+        : null;
+
   const canClaimReward =
     streak.currentStreakDays >= AppConfig.streakRewardDays && !streak.rewardClaimed;
   const noticeAvailable = !openEventPass.active || canClaimReward;
@@ -204,9 +230,18 @@ export default function HomeScreen() {
     setStageHeight(event.nativeEvent.layout.height);
   };
 
+  /**
+   * 무대 높이.
+   *
+   * 평소에는 양보하는 쪽이다 — 오늘의 행동과 이번 주가 먼저 자리를 잡는다.
+   * 운동 중에는 아래 묶음들이 통째로 빠지므로 화면이 짧아지는데, 그때 무대까지 작으면
+   * 홈이 잘린 것처럼 보인다. 그 상태에서만 무대가 남는 자리를 가져간다.
+   */
+  const heroRatio = home.state === 'IN_PROGRESS' ? HeroFocusRatio : HeroHeightRatio;
+  const heroMax = home.state === 'IN_PROGRESS' ? HeroFocusMaxHeight : HeroMaxHeight;
   const heroHeight = Math.min(
-    HeroMaxHeight,
-    Math.max(HeroMinHeight, Math.round(windowHeight * HeroHeightRatio))
+    heroMax,
+    Math.max(HeroMinHeight, Math.round(windowHeight * heroRatio))
   );
   const estimatedAreaHeight = Math.round(windowHeight * CharacterAreaHeightRatio);
   const characterHeight = Math.max(
@@ -263,11 +298,7 @@ export default function HomeScreen() {
           오늘 내 운동. 화면을 열면 이것이 먼저 읽혀야 한다 — 아바타가 아니라.
           지금 할 행동이거나(운동 시작 / 운동 계속하기), 이미 끝냈다면 **행동이 아니라 상태**다.
         */}
-        <View style={styles.todayBlock}>
-          <ThemedText type="captionBold" style={styles.todayLabel}>
-            {home.todayLabel}
-          </ThemedText>
-
+        <HomeSection title={home.todayLabel} gap={Spacing.two}>
           {home.primary.kind === 'action' ? (
             <PrimaryButton
               label={home.primary.label}
@@ -338,8 +369,15 @@ export default function HomeScreen() {
               </ThemedText>
             </Pressable>
           )}
-        </View>
+        </HomeSection>
 
+        {/*
+          단백이 묶음 — 무대와 반응이 **한 묶음**이다.
+          예전에는 스탠리 말풍선, 내 캐릭터, 단백이 한마디가 아무 이름 없이 세로로
+          이어져서 셋 중 누가 말하는 건지, 가운데 서 있는 게 누구인지 알 수 없었다.
+          머리말을 붙여 이 띠가 무엇인지부터 말하고, 학습 상태를 그 옆에 둔다.
+        */}
+        <HomeSection title="단백이" divided gap={0}>
         <View style={[styles.stage, { height: heroHeight }]}>
           <View style={styles.trainerRow}>
             <GoldsunBubble
@@ -384,61 +422,113 @@ export default function HomeScreen() {
           homeLight
           onPress={() => router.push('/(tabs)/workout')}
         />
+        </HomeSection>
 
         {/*
-          내 몸 상태 + 진행도. 실제 입력값만 나오고 없는 값은 '-'다.
-        */}
-        <View style={styles.bodyStrip}>
-          {bodyMetrics.map((metric) => (
-            <HomeStat key={metric.label} label={metric.label} value={metric.value} />
-          ))}
-        </View>
-
-        <View style={styles.progressBlock}>
-          <GrowthHud
-            passLevel={passProgress.level}
-            passXpIntoLevel={passProgress.xpIntoLevel}
-            passXpForLevel={passProgress.xpForLevel}
-            passProgress={passProgress.progress}
-            onPress={() => router.push('/pass')}
-          />
-          <View style={styles.statsRow}>
-            <HomeStat label="이번 주" value={weekRecords.length + '회'} />
-            <HomeStat label="연속" value={'🔥 ' + streak.currentStreakDays + '일'} />
-            <HomeStat label="이번 주 볼륨" value={weeklyVolumeKg > 0 ? formatVolumeKg(weeklyVolumeKg) : '-'} />
-          </View>
-        </View>
-
-        {/*
-          단백세상 입구. **CTA가 아니라 한 줄**이다 — 오늘 할 운동과 무게를 겨루지 않는다.
-          seam이 닫혀 있으면 아무것도 그리지 않는다.
-        */}
-        {worldEntry && (
-          <Pressable
-            onPress={() => router.push(worldEntry.route)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={`${worldEntry.label} 들어가기`}
-            style={styles.worldEntryRow}>
-            <ThemedText type="captionBold" numberOfLines={1} style={styles.worldEntryLabel}>
-              🌱 {worldEntry.label} ›
-            </ThemedText>
-            <ThemedText type="caption" numberOfLines={1} style={styles.worldEntrySub}>
-              {worldEntry.subLabel}
-            </ThemedText>
-          </Pressable>
-        )}
-
-        {/*
-          보조 탐색. 오늘 이미 운동했더라도 그대로 둔다 — 여기가 홈에서 **한 번 더 하러 가는
-          기존 경로**이고, 그 길을 막지 않는다. 진행 중일 때만 숨긴다(지금 할 일은 하나다).
+          운동 중에는 여기서 화면이 끝난다.
+          지금 결정할 것은 "이어서 하러 간다" 하나뿐인데, 그 아래에 주간 통계와 추천과
+          몸 수치를 늘어놓으면 진행 중이라는 사실이 통계에 묻힌다. 세 상태를 문구가 아니라
+          **구성으로** 구분하는 자리다.
         */}
         {home.state !== 'IN_PROGRESS' && (
-          <RecommendedStrip
-            items={recommendedItems}
-            onPressItem={handleRecommendedPress}
-            onPressMore={handleStartPress}
-          />
+          <>
+            {/*
+              이번 주 — 이 묶음의 주인공은 연속 일수다.
+              예전에는 이번 주/연속/볼륨이 전부 14px로 나란히 있어서 무엇을 봐야 할지
+              알 수 없었고, 그 위아래로 몸 수치 네 칸이 또 같은 모양으로 붙어 숫자 일곱 개가
+              한 덩어리로 보였다. 꾸준함이 이 앱이 만들고 싶은 행동이므로 그것만 크게 세운다.
+            */}
+            <HomeSection title="이번 주" divided actionLabel="전체 기록" onPressAction={() => router.push('/(tabs)/history')}>
+              <View style={styles.weekRow}>
+                <HomeHeadlineStat
+                  label="연속"
+                  value={`🔥 ${streak.currentStreakDays}`}
+                  unit="일"
+                  note={streakNote}
+                />
+                <View style={styles.weekSide}>
+                  <HomeStat label="운동" value={weekRecords.length + '회'} />
+                  <HomeStat
+                    label="볼륨"
+                    value={weeklyVolumeKg > 0 ? formatVolumeKg(weeklyVolumeKg) : '-'}
+                  />
+                </View>
+              </View>
+
+              {/* 보상 진행도는 주간 꾸준함과 같은 이야기다 — 따로 떨어진 줄로 두지 않는다. */}
+              <GrowthHud
+                passLevel={passProgress.level}
+                passXpIntoLevel={passProgress.xpIntoLevel}
+                passXpForLevel={passProgress.xpForLevel}
+                passProgress={passProgress.progress}
+                onPress={() => router.push('/pass')}
+              />
+            </HomeSection>
+
+            {/*
+              단백세상 입구.
+              실제 운동이 무엇을 여는지가 이 제품의 정체성인데, 예전에는 통계 아래
+              12px 회색 한 줄이라 각주처럼 보였다. 골드 CTA와 무게를 겨루지는 않되
+              (오늘 할 운동이 여전히 유일한 주 행동이다) 읽을 수 있는 크기로 세운다.
+              seam이 닫혀 있으면 아무것도 그리지 않는다.
+            */}
+            {worldEntry && (
+              <HomeSection title="단백세상" divided>
+                <Pressable
+                  onPress={() => router.push(worldEntry.route)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${worldEntry.label} 들어가기`}
+                  style={styles.worldEntryRow}>
+                  <ThemedText style={styles.worldEntryMark}>🌱</ThemedText>
+                  <View style={styles.worldEntryText}>
+                    <ThemedText type="smallBold" numberOfLines={1} style={styles.worldEntryLabel}>
+                      {worldEntry.label}
+                    </ThemedText>
+                    <ThemedText type="caption" numberOfLines={2} style={styles.worldEntrySub}>
+                      {worldEntry.subLabel}
+                    </ThemedText>
+                  </View>
+                  <ThemedText type="smallBold" style={styles.worldEntryChevron}>
+                    ›
+                  </ThemedText>
+                </Pressable>
+              </HomeSection>
+            )}
+
+            {/*
+              보조 탐색. 오늘 이미 운동했더라도 그대로 둔다 — 여기가 홈에서 한 번 더 하러
+              가는 기존 경로이고, 그 길을 막지 않는다.
+            */}
+            {recommendedItems.length > 0 && (
+              <HomeSection title="오늘 추천 운동" divided actionLabel="더보기" onPressAction={handleStartPress}>
+                <RecommendedStrip
+                  items={recommendedItems}
+                  onPressItem={handleRecommendedPress}
+                  onPressMore={handleStartPress}
+                  headless
+                />
+              </HomeSection>
+            )}
+
+            {/*
+              내 몸. 실제 입력값만 나오고 없는 값은 '-'다.
+              매일 바뀌는 값이 아니라 **참고 수치**이므로 오늘의 행동보다 아래에 둔다 —
+              예전에는 이 네 칸이 화면 한가운데에서 대부분 '-'를 보여주고 있었다.
+              값을 채우는 곳(히스토리의 몸 변화)으로 가는 길을 여기서 같이 준다.
+            */}
+            <HomeSection
+              title="내 몸"
+              divided
+              actionLabel="기록 추가"
+              onPressAction={() => router.push('/(tabs)/history')}>
+              <View style={styles.bodyStrip}>
+                {bodyMetrics.map((metric) => (
+                  <HomeStat key={metric.label} label={metric.label} value={metric.value} />
+                ))}
+              </View>
+            </HomeSection>
+          </>
         )}
       </ScrollView>
     </ThemedView>
@@ -517,11 +607,18 @@ const styles = StyleSheet.create({
    * 오늘의 운동 블록 — 머리말 → 행동(또는 완료) → 오늘의 성취 → 보조 한 줄이 **하나로**
    * 읽힌다. 예전에는 이 넷이 각자 둥근 면을 갖고 따로 떠 있어서 위젯 네 개처럼 보였다.
    */
-  todayBlock: {
-    gap: Spacing.two,
+  /** 이번 주 묶음: 주인공(연속)이 왼쪽, 받쳐 주는 두 값이 오른쪽. */
+  weekRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.three,
+    paddingBottom: Spacing.one,
   },
-  todayLabel: {
-    color: HomeColors.textSecondary,
+  weekSide: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingBottom: Spacing.half,
   },
   /** 완료는 면이 아니라 글자로 선다. 버튼 모양을 흉내 내지 않는다. */
   completion: {
@@ -586,38 +683,38 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.one,
   },
   /**
-   * 진행도(HELL PASS + 주간 기록). 흰 카드로 띄우면 홈에 대시보드 블록이 하나 더 생긴다 —
-   * 값과 기능은 그대로 두고 면 대신 가는 선 하나로 구분한다.
-   */
-  progressBlock: {
-    borderTopWidth: 1,
-    borderTopColor: HomeColors.border,
-    paddingTop: Spacing.three,
-    gap: Spacing.two,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  /**
-   * 몸 상태 한 줄. 카드가 아니라 배경 위에 그대로 얹는다 — 진행도 카드와 같은 무게로
-   * 보이면 홈에 숫자판이 두 개 생긴다.
+   * 몸 상태 한 줄. 카드가 아니라 배경 위에 그대로 얹는다 — 값이 대부분 '-'인 사용자에게
+   * 카드를 세워 주면 빈 대시보드가 하나 더 생긴다.
    */
   bodyStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.one,
   },
-  /** 단백세상 입구는 CTA 아래 한 줄이다 — 골드 CTA와 무게를 겨루지 않는다. */
+  /**
+   * 단백세상 입구. 표시(🌱) → 이름 → 지금 상황이 한 줄로 읽히고 오른쪽에 이동 표시가 선다.
+   * 골드 CTA와 무게를 겨루지 않되, 각주로 보이지도 않는 크기를 갖는다.
+   */
   worldEntryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: Spacing.two,
-    borderTopWidth: 1,
-    borderTopColor: HomeColors.border,
-    paddingTop: Spacing.three,
-    paddingBottom: Spacing.one,
+    minHeight: Layout.listRowHeight,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: HomeColors.questBorder,
+    backgroundColor: HomeColors.questSurface,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  worldEntryMark: {
+    fontSize: 20,
+  },
+  worldEntryText: {
+    flex: 1,
+    gap: 1,
+  },
+  worldEntryChevron: {
+    color: HomeColors.goldStrong,
   },
   stat: {
     flex: 1,
@@ -627,7 +724,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.half,
   },
   brand: { color: HomeColors.text },
-  worldEntryLabel: { color: HomeColors.goldStrong },
+  worldEntryLabel: { color: HomeColors.text },
   worldEntrySub: { color: HomeColors.textSecondary },
   trainerLink: { color: HomeColors.goldStrong },
   statLabel: { color: HomeColors.textSecondary },

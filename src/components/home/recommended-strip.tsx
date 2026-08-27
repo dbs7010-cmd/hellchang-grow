@@ -15,6 +15,11 @@ export interface RecommendedStripProps {
   /** 누른 카드의 Exercise DB ID를 그대로 넘긴다 — 어떤 운동을 눌렀는지 호출부가 안다. */
   onPressItem: (exerciseId: string) => void;
   onPressMore: () => void;
+  /**
+   * 제목/더보기를 바깥(HomeSection)이 이미 그렸는가.
+   * 같은 자리에 머리말이 두 번 나오지 않게 한다.
+   */
+  headless?: boolean;
 }
 
 /** 카드 폭 — 412 화면에서 3개가 온전히 보이고 4번째가 살짝 걸쳐 "더 있다"가 드러나는 값. */
@@ -24,11 +29,12 @@ const ITEM_WIDTH = 108;
  * "오늘 추천 운동" — 홈의 조연. 큰 카드/긴 리스트가 아니라 가로 스크롤 strip.
  * 탭하면 기존 workout-start 흐름으로 이동할 뿐, 새 추천 엔진을 만들지 않는다.
  */
-export function RecommendedStrip({ items, onPressItem, onPressMore }: RecommendedStripProps) {
+export function RecommendedStrip({ items, onPressItem, onPressMore, headless }: RecommendedStripProps) {
   if (items.length === 0) return null;
 
   return (
     <View style={styles.container}>
+      {!headless && (
       <View style={styles.header}>
         <ThemedText type="sectionTitle" style={styles.title}>오늘 추천 운동</ThemedText>
         <Pressable
@@ -42,6 +48,7 @@ export function RecommendedStrip({ items, onPressItem, onPressMore }: Recommende
           </ThemedText>
         </Pressable>
       </View>
+      )}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}

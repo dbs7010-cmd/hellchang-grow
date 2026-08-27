@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { HomeColors, Radius, Spacing } from '@/constants/theme';
+import { HomeColors, Layout, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export interface DanbaekVoiceBubbleProps {
@@ -70,6 +70,7 @@ const styles = StyleSheet.create({
   bubble: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: Layout.compactRowHeight,
     gap: Spacing.two,
     borderWidth: 1,
     borderRadius: Radius.pill,
