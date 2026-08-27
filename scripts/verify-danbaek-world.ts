@@ -111,13 +111,41 @@ const squatRecord: WorkoutRecord = {
   ],
 };
 
+const deadliftRecord: WorkoutRecord = {
+  id: 'r-deadlift',
+  date: '2026-08-29',
+  category: 'strength',
+  title: '등',
+  completed: true,
+  createdAt: '2026-08-29T09:00:00.000Z',
+  exercises: [
+    {
+      id: 'e-deadlift',
+      name: '데드리프트',
+      exerciseId: 'deadlift',
+      sets: 3,
+      reps: 8,
+      weightKg: 50,
+      setDetails: [0, 1, 2].map((index) => ({
+        id: `deadlift-s${index}`,
+        weightKg: 50,
+        reps: 8,
+        completed: true,
+      })),
+    },
+  ],
+};
+
 const profileFrom = (records: WorkoutRecord[]): DanbaekLearningProfile =>
   buildDanbaekLearningProfile({ records, generatedAt: NOW });
 
 const blocked = buildDanbaekWorldScene(profileFrom([]));
 const secondBlocked = buildDanbaekWorldScene(profileFrom([benchRecord]));
 const thirdBlocked = buildDanbaekWorldScene(profileFrom([benchRecord, latPulldownRecord]));
-const cleared = buildDanbaekWorldScene(profileFrom([benchRecord, latPulldownRecord, squatRecord]));
+const fourthBlocked = buildDanbaekWorldScene(profileFrom([benchRecord, latPulldownRecord, squatRecord]));
+const cleared = buildDanbaekWorldScene(
+  profileFrom([benchRecord, latPulldownRecord, squatRecord, deadliftRecord])
+);
 
 // ── HOME도 같은 World truth를 말한다 ────────────────────────────────────────
 {
@@ -177,8 +205,12 @@ const cleared = buildDanbaekWorldScene(profileFrom([benchRecord, latPulldownReco
     thirdBlocked.state === 'blocked' && thirdBlocked.stageId === 'squat-stones');
   expect('세 번째 상황은 스쿼트 기록 전까지 흔들리는 돌길로 막혀 있다',
     thirdBlocked.state === 'blocked' && thirdBlocked.obstacle === 'stones');
-  expect('실제 스쿼트 기록까지 생기면 세 번째 segment가 열린다', cleared.state === 'cleared');
-  expect('세 segment를 마치면 길은 열려 있다', cleared.gate === 'open');
+  expect('실제 스쿼트 기록까지 생기면 네 번째 상황에 도착한다',
+    fourthBlocked.state === 'blocked' && fourthBlocked.stageId === 'hinge-ridge');
+  expect('네 번째 상황은 데드리프트 기록 전까지 강풍 능선으로 막혀 있다',
+    fourthBlocked.state === 'blocked' && fourthBlocked.obstacle === 'wind');
+  expect('실제 데드리프트 기록까지 생기면 네 번째 segment가 열린다', cleared.state === 'cleared');
+  expect('네 segment를 마치면 길은 열려 있다', cleared.gate === 'open');
   expect('같은 함수가 기록 없이는 여전히 막는다', blocked.state === 'blocked');
 
   // 판정이 무엇에 의존하는지는 import 목록이 말해 준다. 저장소/보상/성장/세션 상태를
@@ -205,9 +237,12 @@ const cleared = buildDanbaekWorldScene(profileFrom([benchRecord, latPulldownReco
 // 벤치프레스를 한 번 봤을 뿐인데 "이제 다 할 줄 알아"가 나오면 그 순간 앱이 거짓말이다.
 {
   if (cleared.state === 'cleared') {
-    const capability = profileFrom([benchRecord, latPulldownRecord, squatRecord]).capabilities.find(
-      (candidate) => candidate.movementFamily === 'squat'
-    );
+    const capability = profileFrom([
+      benchRecord,
+      latPulldownRecord,
+      squatRecord,
+      deadliftRecord,
+    ]).capabilities.find((candidate) => candidate.movementFamily === 'hinge');
     expect('한 번 본 동작의 단계는 실제로 낮다', capability?.learningStage === 'observing');
     expect(
       '상태 줄이 실제 단계를 그대로 말한다',
@@ -225,15 +260,19 @@ const cleared = buildDanbaekWorldScene(profileFrom([benchRecord, latPulldownReco
   const labels = (scene: typeof blocked) => scene.journey.map((node) => `${node.label}:${node.state}`);
   expect(
     '막혔을 때 지도는 지나온 곳/지금 곳/앞으로 갈 곳을 구분한다',
-    labels(blocked).join(' > ') === '출발:done > 막힌 문:current > 당기는 절벽:ahead > 굽이진 돌길:ahead > 바람 부는 능선:ahead'
+    labels(blocked).join(' > ') === '출발:done > 막힌 문:current > 당기는 절벽:ahead > 굽이진 돌길:ahead > 바람 부는 능선:ahead > 빛나는 동굴 입구:ahead'
   );
   expect(
     '첫 문을 열면 당기는 절벽이 실제 현재 상황이 된다',
-    labels(secondBlocked).join(' > ') === '출발:done > 막힌 문:done > 당기는 절벽:current > 굽이진 돌길:ahead > 바람 부는 능선:ahead'
+    labels(secondBlocked).join(' > ') === '출발:done > 막힌 문:done > 당기는 절벽:current > 굽이진 돌길:ahead > 바람 부는 능선:ahead > 빛나는 동굴 입구:ahead'
   );
   expect(
     '두 번째 길을 열면 굽이진 돌길이 실제 현재 상황이 된다',
-    labels(thirdBlocked).join(' > ') === '출발:done > 막힌 문:done > 당기는 절벽:done > 굽이진 돌길:current > 바람 부는 능선:ahead'
+    labels(thirdBlocked).join(' > ') === '출발:done > 막힌 문:done > 당기는 절벽:done > 굽이진 돌길:current > 바람 부는 능선:ahead > 빛나는 동굴 입구:ahead'
+  );
+  expect(
+    '세 번째 길을 열면 바람 부는 능선이 실제 현재 상황이 된다',
+    labels(fourthBlocked).join(' > ') === '출발:done > 막힌 문:done > 당기는 절벽:done > 굽이진 돌길:done > 바람 부는 능선:current > 빛나는 동굴 입구:ahead'
   );
   expect(
     '열린 뒤 지도에 남는 현재 칸이 없다',
@@ -247,13 +286,15 @@ const cleared = buildDanbaekWorldScene(profileFrom([benchRecord, latPulldownReco
   // 기대만 만들고 판정에는 쓰이지 않는다. 스테이지로 만들면 문을 연 순간 다시 막혀서
   // 방금 얻은 성취가 화면에서 사라진다.
   expect(
-    '세 번째 playable 뒤의 다음 길만 아직 스테이지가 아니다',
+    '네 번째 playable 뒤의 다음 길만 아직 스테이지가 아니다',
     !DanbaekWorldProofStages.some((stage) => stage.id === 'next-path')
   );
   expect('당기는 길은 실제 두 번째 스테이지다',
     DanbaekWorldProofStages.some((stage) => stage.id === 'pull-cliff'));
   expect('굽이진 돌길은 실제 세 번째 스테이지다',
     DanbaekWorldProofStages.some((stage) => stage.id === 'squat-stones'));
+  expect('바람 부는 능선은 실제 네 번째 스테이지다',
+    DanbaekWorldProofStages.some((stage) => stage.id === 'hinge-ridge'));
   if (cleared.state === 'cleared') {
     expect('열린 뒤 다음 목표가 보인다', cleared.nextGoal.label === DanbaekWorldNextPath.label);
     expect('다음 목표는 개발 상태가 아니라 장면이다', !/준비 중|TODO|구현/.test(cleared.nextGoal.teaser));
@@ -301,6 +342,11 @@ const cleared = buildDanbaekWorldScene(profileFrom([benchRecord, latPulldownReco
   observeWorldVisit({ stageId: 'squat-stones', outcome: 'blocked' });
   const thirdReturn = observeWorldVisit({ stageId: 'squat-stones', outcome: 'cleared' });
   expect('세 번째 상황도 직접 본 뒤 바뀐 순간만 축하한다', thirdReturn.justCleared);
+
+  resetWorldVisitMemory();
+  observeWorldVisit({ stageId: 'hinge-ridge', outcome: 'blocked' });
+  const fourthReturn = observeWorldVisit({ stageId: 'hinge-ridge', outcome: 'cleared' });
+  expect('네 번째 상황도 직접 본 뒤 바뀐 순간만 축하한다', fourthReturn.justCleared);
 }
 
 // ── 운동하러 나갔다가 돌아오는 길 ────────────────────────────────────────────
@@ -329,6 +375,8 @@ const cleared = buildDanbaekWorldScene(profileFrom([benchRecord, latPulldownReco
     world.includes('<WorldCliff') && read('src/components/world/world-cliff.tsx').includes('rope'));
   expect('세 번째 상황은 앞 관문의 복사가 아니라 흔들리는 돌길로 보인다',
     world.includes('<WorldStonePath') && read('src/components/world/world-stone-path.tsx').includes('rotations'));
+  expect('네 번째 상황은 앞 관문의 복사가 아니라 강풍이 가르는 능선으로 보인다',
+    world.includes('<WorldWindRidge') && read('src/components/world/world-wind-ridge.tsx').includes('gust'));
   expect('단백이 말풍선은 공용 컴포넌트 하나를 쓴다', world.includes('<DanbaekVoiceBubble'));
   expect(
     '행동 버튼은 스크롤 밖 고정 자리에 있다 (작은 화면에서 잘리지 않게)',
@@ -399,11 +447,24 @@ const cleared = buildDanbaekWorldScene(profileFrom([benchRecord, latPulldownReco
 
   resetWorldVisitMemory();
   observeWorldVisit({ stageId: thirdBlocked.stageId, outcome: 'blocked' });
-  const thirdClearedReturn = observeWorldVisit({ stageId: cleared.stageId, outcome: 'cleared' });
+  const thirdClearedReturn = observeWorldVisit({
+    stageId: fourthBlocked.stageId,
+    outcome: 'blocked',
+    clearedStageIds: fourthBlocked.clearedStageIds,
+  });
   expect('THIRD FIXTURE: 돌길을 본 뒤 같은 돌길이 바뀌면 변화 증거가 있다',
     thirdClearedReturn.justCleared);
   expect('THIRD FIXTURE: 복귀 반응은 실제로 본 휘청임과 자세만 말한다',
-    /아까는 휘청였/.test(cleared.returnedLine) && /몸을 낮추니/.test(cleared.returnedLine));
+    /아까는 휘청였/.test(DanbaekWorldStageScenes['squat-stones'].returnedLine) &&
+      /몸을 낮추니/.test(DanbaekWorldStageScenes['squat-stones'].returnedLine));
+
+  resetWorldVisitMemory();
+  observeWorldVisit({ stageId: fourthBlocked.stageId, outcome: 'blocked' });
+  const fourthClearedReturn = observeWorldVisit({ stageId: cleared.stageId, outcome: 'cleared' });
+  expect('FOURTH FIXTURE: 능선을 본 뒤 같은 능선이 바뀌면 변화 증거가 있다',
+    fourthClearedReturn.justCleared);
+  expect('FOURTH FIXTURE: 복귀 반응은 실제로 본 밀려남과 버티기만 말한다',
+    /아까는 밀려났/.test(cleared.returnedLine) && /몸을 숙여 버티니/.test(cleared.returnedLine));
 
   expect(
     '인사가 닫을 수 있는 것이라고 말한다',

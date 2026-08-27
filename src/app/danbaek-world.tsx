@@ -11,6 +11,7 @@ import { SubScreen } from '@/components/ui/sub-screen';
 import { WorldCliff, WorldCliffHeight } from '@/components/world/world-cliff';
 import { WorldGate, WorldGateHeight } from '@/components/world/world-gate';
 import { WorldStonePath, WorldStonePathHeight } from '@/components/world/world-stone-path';
+import { WorldWindRidge, WorldWindRidgeHeight } from '@/components/world/world-wind-ridge';
 import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import {
@@ -146,12 +147,16 @@ export default function DanbaekWorldScreen() {
               ? styles.cliffSlot
               : scene.obstacle === 'stones'
                 ? styles.stonesSlot
-                : styles.gateSlot
+                : scene.obstacle === 'wind'
+                  ? styles.windSlot
+                  : styles.gateSlot
           }>
           {scene.obstacle === 'cliff' ? (
             <WorldCliff state={scene.state === 'blocked' ? 'blocked' : 'cleared'} />
           ) : scene.obstacle === 'stones' ? (
             <WorldStonePath state={scene.state === 'blocked' ? 'blocked' : 'cleared'} />
+          ) : scene.obstacle === 'wind' ? (
+            <WorldWindRidge state={scene.state === 'blocked' ? 'blocked' : 'cleared'} />
           ) : (
             <WorldGate state={scene.gate} />
           )}
@@ -322,6 +327,13 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     paddingLeft: 72,
+  },
+  windSlot: {
+    position: 'absolute',
+    top: StageHeight - WorldWindRidgeHeight,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   sceneLine: {
     textAlign: 'center',

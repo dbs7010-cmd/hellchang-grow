@@ -25,7 +25,7 @@ interface DanbaekWorldSceneBase {
   journey: DanbaekWorldJourneyNode[];
   /** 지금 서 있는(또는 방금 지나온) 구간. 방문 기억이 이 값으로 변화를 판단한다. */
   stageId: string;
-  obstacle: 'gate' | 'cliff' | 'stones';
+  obstacle: 'gate' | 'cliff' | 'stones' | 'wind';
   /** 눈앞에서 벌어지는 일 한 줄. */
   sceneLine: string;
   /** 단백이 한마디 (PRIMARY). */
@@ -127,7 +127,9 @@ export function buildDanbaekWorldScene(profile: DanbaekLearningProfile): Danbaek
           ? DanbaekWorldVoiceLines.cliffCleared
           : sceneOf(lastStageId).obstacle === 'stones'
             ? DanbaekWorldVoiceLines.stonesCleared
-            : DanbaekWorldVoiceLines.gateCleared,
+            : sceneOf(lastStageId).obstacle === 'wind'
+              ? DanbaekWorldVoiceLines.ridgeCleared
+              : DanbaekWorldVoiceLines.gateCleared,
       returnedLine: sceneOf(lastStageId).returnedLine,
       statusLine:
         (family && learnedStatusLine(profile, family)) ?? '단백이가 본 동작으로 길을 열었어요',
