@@ -5,7 +5,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
+import { InlineAction } from '@/components/ui/inline-action';
 import { PrimaryButton } from '@/components/ui/primary-button';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { Section } from '@/components/ui/section';
 import { TextField } from '@/components/ui/text-field';
@@ -41,7 +43,6 @@ const CONTINUE_TITLES: Record<ContinueOption['source'], string> = {
  */
 export default function WorkoutStartScreen() {
   const router = useRouter();
-  const theme = useTheme();
   const { activeSession, workoutRecords, routines, startWorkoutSession } = useAppData();
 
   const [showPicker, setShowPicker] = useState(false);
@@ -156,10 +157,11 @@ export default function WorkoutStartScreen() {
   /**
    * 뒤로가기. 알림/딥링크로 이 화면에 바로 들어오면 되돌아갈 스택이 없어서 router.back()이
    * 아무 일도 하지 않는다 — 그때는 홈으로 빠져나갈 안전 경로를 준다.
+   * 목적지는 탭 그룹이다 ('/'로 replace하면 스택 밖이라 아무 일도 일어나지 않는다).
    */
   const handleBack = () => {
     if (router.canGoBack()) router.back();
-    else router.replace('/');
+    else router.replace('/(tabs)');
   };
 
   const continueOption = plan.continueOption;
@@ -167,19 +169,12 @@ export default function WorkoutStartScreen() {
 
   return (
     <ScreenScroll>
-      <View style={styles.headerRow}>
-        <Pressable
-          onPress={handleBack}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="뒤로가기">
-          <ThemedText type="smallBold" themeColor="textSecondary">
-            ‹ 뒤로
-          </ThemedText>
-        </Pressable>
-        <ThemedText type="heading">오늘의 운동</ThemedText>
-        <View style={styles.headerSpacer} />
-      </View>
+      {/*
+        스택으로 열리는 다른 화면들과 같은 헤더를 쓴다. 예전에는 이 화면만 자기 헤더를
+        갖고 있어서 되돌아가는 곳의 이름("‹ 뒤로")도, 타이틀 정렬도, 누를 수 있는 크기도
+        혼자 달랐다. 되돌아갈 스택이 없을 때의 처리(handleBack)만 그대로 넘긴다.
+      */}
+      <ScreenHeader title="오늘의 운동" onBack={handleBack} />
 
       {continueOption && (
         <QuickStartRow
@@ -264,11 +259,10 @@ export default function WorkoutStartScreen() {
               <PrimaryButton label="추가" variant="secondary" onPress={handleAddCustomExercise} />
             </View>
           ) : (
-            <Pressable onPress={() => setShowCustomExerciseField(true)} hitSlop={8}>
-              <ThemedText type="captionBold" style={{ color: theme.gold }}>
-                + 목록에 없는 운동 직접 추가
-              </ThemedText>
-            </Pressable>
+            <InlineAction
+              label="+ 목록에 없는 운동 직접 추가"
+              onPress={() => setShowCustomExerciseField(true)}
+            />
           )}
 
           <PrimaryButton
@@ -339,14 +333,6 @@ function QuickStartRow({
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerSpacer: {
-    width: 44,
-  },
   quickRow: {
     flexDirection: 'row',
     alignItems: 'center',

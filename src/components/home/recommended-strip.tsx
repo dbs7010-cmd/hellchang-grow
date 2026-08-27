@@ -31,7 +31,12 @@ export function RecommendedStrip({ items, onPressItem, onPressMore }: Recommende
     <View style={styles.container}>
       <View style={styles.header}>
         <ThemedText type="sectionTitle" style={styles.title}>오늘 추천 운동</ThemedText>
-        <Pressable onPress={onPressMore} hitSlop={8}>
+        <Pressable
+          onPress={onPressMore}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="추천 운동 더보기"
+          style={styles.moreButton}>
           <ThemedText type="captionBold" style={styles.more}>
             더보기 ›
           </ThemedText>
@@ -69,6 +74,12 @@ const styles = StyleSheet.create({
   container: {
     gap: Spacing.one,
     width: '100%',
+  },
+  /** 글자 높이(16px)만 눌리던 링크에 최소 터치 영역을 준다. */
+  moreButton: {
+    minHeight: Layout.compactRowHeight,
+    justifyContent: 'center',
+    paddingLeft: Spacing.two,
   },
   header: {
     flexDirection: 'row',

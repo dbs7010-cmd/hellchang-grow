@@ -6,6 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { TextField } from '@/components/ui/text-field';
 import { AiQuickActionIds, AiQuickActionLabels } from '@/config/ai-quick-actions';
@@ -151,6 +152,20 @@ export function AiPtPanel({ accessLabel, aiConnected, initialQuickAction, onSend
         contentContainerStyle={styles.conversationContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
+        {/*
+          대화가 시작되기 전의 화면. 예전에는 여기가 그냥 빈 공간이라, 이용권까지 쓰고
+          들어온 사용자가 "열리긴 한 건가?" 싶은 화면을 마주했다.
+        */}
+        {messages.length === 0 && !loading && (
+          <View style={styles.emptyConversation}>
+            <EmptyState
+              icon={StanleyTrainer.portraitPlaceholder}
+              line={`${StanleyTrainer.displayName}에게 물어볼 차례예요.`}
+              hint="위의 빠른 질문을 누르거나, 아래에 직접 적어서 보내요."
+            />
+          </View>
+        )}
+
         {messages.map((message) => (
           <MessageBubble key={message.id} role={message.role} text={message.text} />
         ))}
@@ -235,6 +250,10 @@ const styles = StyleSheet.create({
   },
   conversation: {
     flex: 1,
+  },
+  /** 빈 대화 안내는 화면을 채우는 것이 아니라 위쪽에 조용히 놓인다. */
+  emptyConversation: {
+    paddingTop: Spacing.two,
   },
   conversationContent: {
     gap: Spacing.two,

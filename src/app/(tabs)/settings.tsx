@@ -1,9 +1,11 @@
+import Constants from 'expo-constants';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
+import { InlineAction } from '@/components/ui/inline-action';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
 import { Section } from '@/components/ui/section';
@@ -238,14 +240,21 @@ export default function SettingsScreen() {
               </Pressable>
             </View>
           ) : (
-            <Pressable onPress={() => setConfirmReset(true)} hitSlop={8} style={styles.destructiveLink}>
-              <ThemedText type="captionBold" style={{ color: theme.mutedRed }}>
-                초기화하기
-              </ThemedText>
-            </Pressable>
+            <InlineAction label="초기화하기" tone="danger" onPress={() => setConfirmReset(true)} />
           )}
         </SettingsRow>
       </Section>
+
+      {/*
+        앱 정보. 설정 맨 아래가 그냥 잘려 있으면 화면이 덜 만들어진 것처럼 보이고,
+        문제가 생겼을 때 사용자가 알려줄 수 있는 버전 정보도 앱 어디에도 없었다.
+        지어내지 않고 실제 빌드 값(app.json)만 읽는다.
+      */}
+      <View style={styles.appInfo}>
+        <ThemedText type="caption" themeColor="textSecondary">
+          {Constants.expoConfig?.name ?? '헬창키우기'} v{Constants.expoConfig?.version ?? '-'}
+        </ThemedText>
+      </View>
     </ScreenScroll>
   );
 }
@@ -344,8 +353,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  destructiveLink: {
-    alignSelf: 'flex-start',
-    paddingVertical: Spacing.one,
+  /** 목록의 끝을 알리는 조용한 마지막 줄. */
+  appInfo: {
+    alignItems: 'center',
+    paddingTop: Spacing.two,
   },
 });

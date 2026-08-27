@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Section } from '@/components/ui/section';
 import { SubScreen } from '@/components/ui/sub-screen';
 import { WorkoutCategoryLabels } from '@/config/workout-labels';
@@ -23,6 +24,18 @@ import { buildWorkoutRecordDetail } from '@/utils/workout-record-detail';
  * 여기서 계산하는 것은 없다. 저장된 기록을 순수 함수(`buildWorkoutRecordDetail`)에 넘겨
  * 읽을 모양으로 바꾸고 그리기만 한다 — 없는 값은 지어내지 않는다.
  */
+/**
+ * 종목 한 줄 요약. 세트 목록이 이미 보여주는 것만 남을 때는 아무것도 말하지 않는다.
+ *  - 세트가 여러 개면 개수(그리고 있으면 볼륨)
+ *  - 한 세트뿐이면 볼륨만 (개수는 아래 줄이 이미 말한다)
+ *  - 볼륨도 없으면 요약 없음
+ */
+function summaryLine(totals: { sets: number; volumeKg: number }): string | null {
+  const volume = totals.volumeKg > 0 ? formatVolumeKg(totals.volumeKg) : null;
+  if (totals.sets > 1) return volume ? `${totals.sets}세트 · ${volume}` : `${totals.sets}세트`;
+  return volume;
+}
+
 export default function WorkoutRecordScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -37,9 +50,11 @@ export default function WorkoutRecordScreen() {
   if (!record || !detail) {
     return (
       <SubScreen title="운동 기록">
-        <ThemedText type="small" themeColor="textSecondary">
-          이 기록을 찾을 수 없어요. 삭제됐거나 다른 기기에서 만든 기록일 수 있어요.
-        </ThemedText>
+        <EmptyState
+          icon="🔍"
+          line="이 기록을 찾을 수 없어요."
+          hint="삭제됐거나 다른 기기에서 만든 기록일 수 있어요."
+        />
       </SubScreen>
     );
   }
@@ -59,9 +74,7 @@ export default function WorkoutRecordScreen() {
       </View>
 
       {detail.emptyLine ? (
-        <ThemedText type="small" themeColor="textSecondary">
-          {detail.emptyLine}
-        </ThemedText>
+        <EmptyState icon="📝" line={detail.emptyLine} />
       ) : (
         <Section title="종목별 기록">
           {detail.exercises.map((exercise) => (
@@ -69,7 +82,22 @@ export default function WorkoutRecordScreen() {
               key={exercise.id}
               type="backgroundElement"
               style={[styles.exercise, { borderColor: theme.border }]}>
-              <ThemedText type="smallBold">{exercise.name}</ThemedText>
+              {/*
+                종목 제목 줄에 그 종목만의 합계를 붙인다 — 세트를 눈으로 세지 않아도
+                "이 운동을 얼마나 했는지"가 바로 읽힌다. 값은 저장된 세트를 더한 것뿐이다.
+                아래 세트 목록이 이미 말하는 것은 반복하지 않는다 (1세트짜리 종목에서
+                제목 옆 "1세트"와 첫 줄의 "1세트"가 붙어 나오던 문제).
+              */}
+              <View style={styles.exerciseHeader}>
+                <ThemedText type="smallBold" numberOfLines={1} style={styles.exerciseName}>
+                  {exercise.name}
+                </ThemedText>
+                {summaryLine(exercise.totals) && (
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    {summaryLine(exercise.totals)}
+                  </ThemedText>
+                )}
+              </View>
 
               {exercise.sets.map((set) => (
                 <View key={set.order} style={styles.setRow}>
@@ -112,6 +140,15 @@ export default function WorkoutRecordScreen() {
 const styles = StyleSheet.create({
   header: {
     gap: Spacing.half,
+  },
+  exerciseHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  exerciseName: {
+    flexShrink: 1,
   },
   exercise: {
     borderWidth: 1,

@@ -1,11 +1,12 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { DanbaekVoiceBubble } from '@/components/character/danbaek-voice-bubble';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { ScreenScroll } from '@/components/ui/screen-scroll';
@@ -13,7 +14,7 @@ import { Section } from '@/components/ui/section';
 import { AiQuickActionLabels } from '@/config/ai-quick-actions';
 import { StanleyPortraitImage } from '@/config/character-assets';
 import { StanleyTrainer } from '@/config/trainers';
-import { Layout, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import { getTodayRecords } from '@/data/workout-repository';
 import { useTheme } from '@/hooks/use-theme';
@@ -113,14 +114,10 @@ export default function TrainerScreen() {
         onPress={() => openChat()}
       />
 
+      {/* AI 상담 화면의 빠른 질문과 같은 컨트롤을 쓴다 — 같은 것을 묻는 자리가 화면마다 달라 보이지 않게. */}
       <ChipRow bleed>
         {HERO_QUICK_ACTIONS.map((action) => (
-          <Pressable
-            key={action}
-            onPress={() => openChat(action)}
-            style={[styles.quickAction, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-            <ThemedText type="caption">{AiQuickActionLabels[action]}</ThemedText>
-          </Pressable>
+          <Chip key={action} label={AiQuickActionLabels[action]} onPress={() => openChat(action)} />
         ))}
       </ChipRow>
 
@@ -170,12 +167,5 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     gap: Spacing.one,
   },
-  quickAction: {
-    borderWidth: 1,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    minHeight: Layout.compactRowHeight - 8,
-    justifyContent: 'center',
-  },
+
 });

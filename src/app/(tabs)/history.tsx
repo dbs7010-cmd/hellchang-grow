@@ -8,6 +8,8 @@ import { ThemedText } from '@/components/themed-text';
 import { BarChart } from '@/components/ui/bar-chart';
 import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
+import { EmptyState } from '@/components/ui/empty-state';
+import { InlineAction } from '@/components/ui/inline-action';
 import { MetricGrid, MetricTile } from '@/components/ui/metric-tile';
 import { PhotoSlot } from '@/components/ui/photo-slot';
 import { PrimaryButton } from '@/components/ui/primary-button';
@@ -272,9 +274,11 @@ export default function HistoryScreen() {
         {chartHasData ? (
           <BarChart items={chartData} height={72} />
         ) : (
-          <ThemedText type="caption" themeColor="textSecondary">
-            이 기간에는 볼륨으로 계산할 세트 기록이 없어요.
-          </ThemedText>
+          <EmptyState
+            icon="📊"
+            line="이 기간에는 볼륨으로 계산할 세트 기록이 없어요."
+            hint="세트를 기록한 운동이 쌓이면 여기에 그래프가 그려져요."
+          />
         )}
       </Section>
 
@@ -459,16 +463,16 @@ export default function HistoryScreen() {
       {/* 놓친 기록 채우기와 전체 기록 보기는 History의 보조 기능이다 —
           Primary 버튼처럼 보이지 않게 텍스트 액션으로 둔다. */}
       <View style={styles.secondaryActions}>
-        <Pressable onPress={() => setManualOpen((v) => !v)} hitSlop={8}>
-          <ThemedText type="captionBold" themeColor="textSecondary">
-            {manualOpen ? '놓친 운동 기록 닫기' : '놓친 운동 기록 추가'}
-          </ThemedText>
-        </Pressable>
-        <Pressable onPress={() => setFullListOpen((v) => !v)} hitSlop={8}>
-          <ThemedText type="captionBold" themeColor="textSecondary">
-            {fullListOpen ? '전체 기록 접기 ︿' : '전체 기록 보기 ﹀'}
-          </ThemedText>
-        </Pressable>
+        <InlineAction
+          label={manualOpen ? '놓친 기록 닫기' : '+ 놓친 기록 추가'}
+          tone={manualOpen ? 'quiet' : 'gold'}
+          onPress={() => setManualOpen((v) => !v)}
+        />
+        <InlineAction
+          label={fullListOpen ? '전체 기록 접기 ︿' : '전체 기록 보기 ﹀'}
+          tone="quiet"
+          onPress={() => setFullListOpen((v) => !v)}
+        />
       </View>
 
       {manualOpen && (
@@ -534,9 +538,11 @@ export default function HistoryScreen() {
       {fullListOpen && (
         <Section>
           {historyDays.length === 0 ? (
-            <ThemedText type="small" themeColor="textSecondary">
-              아직 기록이 없어요.
-            </ThemedText>
+            <EmptyState
+              icon="📝"
+              line="아직 기록이 없어요."
+              hint="운동을 마치거나 놓친 기록을 채우면 날짜별로 여기에 쌓여요."
+            />
           ) : (
             historyDays.map((day) => (
               <View key={day.date} style={[styles.dayRow, { backgroundColor: theme.backgroundElement }]}>
@@ -577,11 +583,12 @@ export default function HistoryScreen() {
                         <ThemedText type="caption" style={{ color: theme.gold }}>›</ThemedText>
                       </Pressable>
                       {suspicious && (
-                        <Pressable onPress={() => deleteWorkoutRecord(record.id)} hitSlop={8}>
-                          <ThemedText type="captionBold" style={{ color: theme.mutedRed }}>
-                            ⚠ 비정상 기록 · 삭제
-                          </ThemedText>
-                        </Pressable>
+                        <InlineAction
+                          label="⚠ 비정상 기록 · 삭제"
+                          tone="danger"
+                          accessibilityLabel={`${record.title} 비정상 기록 삭제`}
+                          onPress={() => deleteWorkoutRecord(record.id)}
+                        />
                       )}
                     </View>
                   );
@@ -643,11 +650,12 @@ const styles = StyleSheet.create({
   flexItem: {
     flex: 1,
   },
+  /** 두 보조 액션은 같은 줄에서 나란히 — 양 끝으로 벌리면 서로 다른 층처럼 보인다. */
   secondaryActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    paddingVertical: Spacing.one,
+    gap: Spacing.two,
   },
   recordRow: {
     flexDirection: 'row',

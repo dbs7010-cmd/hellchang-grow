@@ -534,6 +534,9 @@ const NOW_MS = NOW.getTime();
     check('볼륨도 기존 함수가 센 값과 같다', detail.totals.volumeKg, 60 * 10 + 62.5 * 8);
     check('상세가 있으면 옛 요약을 덧붙이지 않는다', detail.exercises[0]?.legacySummary, null);
     check('보여줄 것이 있으면 빈 안내가 없다', detail.emptyLine, null);
+    // 종목 한 줄 요약은 그 종목의 세트를 더한 값이다 — 화면이 다시 세지 않는다.
+    check('종목별 세트 수가 나온다', detail.exercises[0]?.totals.sets, 2);
+    check('종목별 볼륨은 그 종목 세트만 더한다', detail.exercises[0]?.totals.volumeKg, 60 * 10 + 62.5 * 8);
   }
 
   // 옛 기록: 세트 상세가 없다. 없는 세트를 만들어 내지 않는다.
@@ -547,6 +550,7 @@ const NOW_MS = NOW.getTime();
 
     check('없는 세트를 지어내지 않는다', detail.exercises[0]?.sets.length, 0);
     check('남아 있는 요약만 말한다', detail.exercises[0]?.legacySummary, '3세트 · 100kg · 8회');
+    check('세트 상세가 없으면 합계도 만들지 않는다', detail.exercises[0]?.totals, { sets: 0, volumeKg: 0 });
   }
 
   // 담기만 하고 하지 않은 운동은 보여줄 것이 없다.
@@ -556,6 +560,26 @@ const NOW_MS = NOW.getTime();
     );
     check('한 세트도 안 한 종목은 나오지 않는다', detail.exercises.length, 0);
     check('그때는 안내 한 줄이 있다', typeof detail.emptyLine, 'string');
+  }
+
+  // 중량이 없는 종목(맨몸)은 세트만 세고 볼륨은 만들어 내지 않는다.
+  {
+    const detail = buildWorkoutRecordDetail(
+      asRecord({
+        id: 'r4',
+        exercises: [
+          {
+            id: 'e1', exerciseId: 'pull-up', name: '풀업',
+            setDetails: [
+              { id: 's1', reps: 12, completed: true },
+              { id: 's2', reps: 10, completed: true },
+            ],
+          },
+        ],
+      })
+    );
+    check('맨몸 종목도 세트는 센다', detail.exercises[0]?.totals.sets, 2);
+    check('중량이 없으면 볼륨은 0이다 (0kg로 치지 않는다)', detail.exercises[0]?.totals.volumeKg, 0);
   }
 
   // 방금 끝낸 세션이 남긴 기록을 결과 화면이 찾아갈 수 있다 (읽기만 한다).

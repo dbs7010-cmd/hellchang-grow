@@ -28,6 +28,12 @@ export interface WorkoutRecordExerciseDetail {
   /** 세트별 상세가 저장돼 있으면 그 목록. 옛 기록이면 빈 배열이다. */
   sets: WorkoutRecordSetLine[];
   /**
+   * 이 종목 하나의 합계. 위 `sets`를 그대로 더한 값이라 화면이 다시 세지 않는다 —
+   * 중량이나 횟수가 없는 세트는 볼륨에 들어가지 않는다(없는 값을 0으로 치지 않는다).
+   * 세트 상세가 없는 옛 기록은 둘 다 0이고, 그때는 화면이 이 값을 쓰지 않는다.
+   */
+  totals: { sets: number; volumeKg: number };
+  /**
    * 세트 상세가 없는 옛 기록의 요약 한 줄. 상세가 있으면 null —
    * 같은 내용을 두 번 말하지 않는다.
    */
@@ -66,6 +72,14 @@ export function buildWorkoutRecordDetail(record: WorkoutRecord): WorkoutRecordDe
         weightKg: set.weightKg,
         reps: set.reps,
       })),
+      totals: {
+        sets: completed.length,
+        volumeKg: completed.reduce(
+          (sum, set) =>
+            set.weightKg !== undefined && set.reps !== undefined ? sum + set.weightKg * set.reps : sum,
+          0
+        ),
+      },
       legacySummary:
         completed.length > 0
           ? null

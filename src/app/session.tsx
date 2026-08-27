@@ -14,6 +14,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
 import { CircularProgressRing } from '@/components/ui/circular-progress-ring';
+import { InlineAction } from '@/components/ui/inline-action';
 import { ExerciseArtSlot } from '@/components/ui/exercise-art-slot';
 import { MetricGrid, MetricTile } from '@/components/ui/metric-tile';
 import { PRBadge } from '@/components/ui/pr-badge';
@@ -1218,9 +1219,7 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
           )}
           {/* 영구 변화가 없는 날에도 펌핑을 건너뛰고 실제 몸을 바로 볼 수 있다. */}
           {revealPhase !== 'after' && (
-            <Pressable onPress={skipReveal} hitSlop={12} accessibilityRole="button">
-              <ThemedText type="caption" themeColor="textSecondary">바로 보기</ThemedText>
-            </Pressable>
+            <InlineAction label="바로 보기" tone="quiet" onPress={skipReveal} />
           )}
           <ThemedText type="small" themeColor="textSecondary" style={styles.centered}>
             {StanleyTrainer.portraitPlaceholder} {summary.trainerLine}
@@ -1579,11 +1578,12 @@ function SetHero({
   return (
     <View style={styles.hero}>
       {!showWeight && (
-        <Pressable onPress={() => setWeightOpen(true)} hitSlop={8} disabled={disabled}>
-          <ThemedText type="captionBold" themeColor="textSecondary">
-            + 중량 추가
-          </ThemedText>
-        </Pressable>
+        <InlineAction
+          label="+ 중량 추가"
+          tone="quiet"
+          disabled={disabled}
+          onPress={() => setWeightOpen(true)}
+        />
       )}
       {showWeight && (
       <View style={styles.heroRow}>
@@ -1681,10 +1681,15 @@ function CompletedSetRow({
         accessibilityRole="button"
         accessibilityLabel={`${index + 1}번째 세트 ${weight}킬로그램 ${reps}회, 고치기`}
         style={styles.completedSetRow}>
-        <ThemedText type="caption" themeColor="textSecondary">
+        {/*
+          이 줄은 "내가 오늘 뭘 했는지"를 읽는 자리다. 예전에는 화면에서 가장 작은
+          12px caption이라 세트가 쌓일수록 읽히지 않았다. 숫자는 자릿수가 흔들리지
+          않도록 tabular로 둔다.
+        */}
+        <ThemedText type="small" style={styles.completedSetValue}>
           {index + 1}. {set.weightKg ?? '-'}kg × {set.reps ?? '-'}회 ✓
         </ThemedText>
-        <ThemedText type="caption" style={{ color: theme.gold }}>
+        <ThemedText type="captionBold" style={{ color: theme.gold }}>
           고치기
         </ThemedText>
       </Pressable>
@@ -1934,10 +1939,11 @@ const styles = StyleSheet.create({
   timerCompact: {
     fontVariant: ['tabular-nums'],
   },
+  /** 운동 내내 화면에 남아 있는 유일한 상시 컨트롤 — 터치 하한선(44) 아래로 두지 않는다. */
   pauseButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: Layout.compactRowHeight,
+    height: Layout.compactRowHeight,
+    borderRadius: Layout.compactRowHeight / 2,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1980,6 +1986,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Spacing.two,
     minHeight: Layout.compactRowHeight,
+  },
+  completedSetValue: {
+    fontVariant: ['tabular-nums'],
   },
   setEditor: {
     borderWidth: 1,

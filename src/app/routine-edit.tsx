@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Chip } from '@/components/ui/chip';
 import { ChipRow } from '@/components/ui/chip-row';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Section } from '@/components/ui/section';
 import { SubScreen } from '@/components/ui/sub-screen';
@@ -102,9 +103,11 @@ export default function RoutineEditScreen() {
 
       <Section title="운동 순서">
         {exerciseIds.length === 0 ? (
-          <ThemedText type="small" themeColor="textSecondary">
-            아래에서 운동을 검색해 추가하세요.
-          </ThemedText>
+          <EmptyState
+            icon="🏋️"
+            line="아직 담은 운동이 없어요."
+            hint="아래 [운동 추가]에서 검색해 담으면 이 순서대로 세션이 만들어져요."
+          />
         ) : (
           exerciseIds.map((exerciseId, index) => (
             <View key={exerciseId} style={[styles.exerciseRow, { backgroundColor: theme.backgroundElement }]}>

@@ -221,16 +221,35 @@ export default function HomeScreen() {
       <View style={[styles.topBar, { paddingTop: insets.top + Spacing.one }]}>
         <ThemedText type="smallBold" style={styles.brand}>🏋 헬창키우기</ThemedText>
         <View style={styles.topActions}>
-          <Pressable onPress={() => router.push('/trainer')} hitSlop={10}>
+          {/*
+            상단 세 컨트롤은 아이콘/글자 크기만큼만 눌리는 영역이었다(25x24, 58x16).
+            화면 구성과 3-state는 그대로 두고 눌리는 크기만 손 하나로 닿는 하한선에 맞춘다.
+          */}
+          <Pressable
+            onPress={() => router.push('/trainer')}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="스탠리 PT"
+            style={styles.topAction}>
             <ThemedText type="captionBold" style={styles.trainerLink}>
               스탠리 PT ›
             </ThemedText>
           </Pressable>
-          <Pressable onPress={() => router.push('/notifications')} hitSlop={10} style={styles.bellButton}>
+          <Pressable
+            onPress={() => router.push('/notifications')}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="알림"
+            style={[styles.topAction, styles.bellButton]}>
             <ThemedText style={styles.topActionIcon}>🔔</ThemedText>
             {noticeAvailable && <View style={styles.badgeDot} />}
           </Pressable>
-          <Pressable onPress={() => router.push('/settings')} hitSlop={10}>
+          <Pressable
+            onPress={() => router.push('/settings')}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="설정"
+            style={styles.topAction}>
             <ThemedText style={styles.topActionIcon}>⚙️</ThemedText>
           </Pressable>
         </View>
@@ -464,6 +483,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
+  /** 상단 컨트롤의 최소 터치 영역. 아이콘 크기는 그대로고 눌리는 범위만 넓어진다. */
+  topAction: {
+    minHeight: Layout.compactRowHeight,
+    minWidth: Spacing.five,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   topActionIcon: {
     fontSize: 18,
     color: HomeColors.text,
@@ -473,8 +499,8 @@ const styles = StyleSheet.create({
   },
   badgeDot: {
     position: 'absolute',
-    top: -1,
-    right: -1,
+    top: 6,
+    right: 4,
     width: 8,
     height: 8,
     borderRadius: 4,
