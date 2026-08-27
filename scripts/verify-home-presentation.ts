@@ -62,6 +62,40 @@ const valueOf = (metrics: ReturnType<typeof buildHomeBodyMetrics>, label: string
   expect('FIXTURE E: HOME unlocked는 열린 상태를 말한다', unlockedEntry?.subLabel.includes('열려 있어요') === true);
   expect('FIXTURE E: HOME unlocked에 stale locked 문구가 없다',
     unlockedEntry?.subLabel.includes('첫 번째 길이 기다리고 있어요') === false);
+
+  // World가 네 번째 구간까지 플레이어블해진 뒤, HOME 입구가 그 상태를 그대로 옮기는지.
+  // HOME은 여기서 자체 진행도를 갖지 않는다 — 같은 gate 판정 하나를 문장으로만 바꾼다.
+  const strengthRecord = (id: string, name: string, exerciseId: string): WorkoutRecord => ({
+    id, date: '2026-08-27', category: 'strength', title: name,
+    completed: true, createdAt: '2026-08-27T00:00:00.000Z',
+    exercises: [{ id: `e-${exerciseId}`, name, exerciseId, sets: 1, reps: 10, weightKg: 40,
+      setDetails: [{ id: `${exerciseId}-set`, weightKg: 40, reps: 10, completed: true }] }],
+  });
+  const worldProfile = (records: WorkoutRecord[]) =>
+    buildDanbaekLearningProfile({ records, generatedAt: '2026-08-27T00:00:00.000Z' });
+  const throughSquat = [
+    benchRecord,
+    strengthRecord('world-entry-lat', '랫풀다운', 'lat-pulldown'),
+    strengthRecord('world-entry-squat', '스쿼트', 'squat'),
+  ];
+  const ridgeBlocked = resolveDanbaekWorldEntry({ profile: worldProfile(throughSquat) });
+  const ridgeCleared = resolveDanbaekWorldEntry({
+    profile: worldProfile([
+      ...throughSquat,
+      strengthRecord('world-entry-dead', '데드리프트', 'deadlift'),
+    ]),
+  });
+  expect('FIXTURE F: 능선이 막혀 있으면 HOME이 능선과 데드리프트를 말한다',
+    ridgeBlocked?.subLabel.includes('바람 부는 능선') === true &&
+      ridgeBlocked.subLabel.includes('데드리프트'));
+  expect('FIXTURE F: 아직 못 간 능선을 건너뛰고 동굴을 다음이라 하지 않는다',
+    ridgeBlocked?.subLabel.includes('빛나는 동굴 입구') === false);
+  expect('FIXTURE G: 능선을 지나면 HOME이 능선 완료와 동굴 입구를 말한다',
+    ridgeCleared?.subLabel.includes('바람 부는 능선') === true &&
+      ridgeCleared.subLabel.includes('빛나는 동굴 입구'));
+  expect('FIXTURE G: 능선을 지난 뒤 stale 이전 구간 문구가 남지 않는다',
+    ridgeCleared?.subLabel.includes('굽이진 돌길') === false &&
+      ridgeCleared.subLabel.includes('데드리프트') === false);
 }
 
 // ── 1. 기록이 없으면 온보딩 체중만 쓰고 나머지는 만들지 않는다 ─────────────

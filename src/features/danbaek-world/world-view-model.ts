@@ -164,7 +164,14 @@ export function describeNextGoal(): string {
   return `${withTopicParticle(DanbaekWorldNextPath.label)} 아직 잠겨 있어요`;
 }
 
-/** HOME과 World가 같은 실제 gate 판정에서 입구 문구를 얻는다. */
+/**
+ * HOME과 World가 같은 실제 gate 판정에서 입구 문구를 얻는다.
+ *
+ * 구간이 늘어날 때 위험한 건 새로 막힌 구간이 아니라 **맨 끝에 남아 있는 마지막 줄**이다. 능선이
+ * 생기기 전에는 돌길이 마지막이라 "돌길을 건넜어요 · 다음은 빛나는 동굴 입구"가 맞았지만,
+ * 능선이 플레이어블해진 뒤에도 그 줄이 남아 있으면 HOME은 건너뛴 구간을 끝낸 것처럼
+ * 말하게 된다. 그래서 막힌 구간은 구간대로 말하고, 다 지난 경우에만 마지막 줄로 닫는다.
+ */
 export function describeFirstPathEntry(profile: DanbaekLearningProfile): string {
   const scene = buildDanbaekWorldScene(profile);
   if (!scene.clearedStageIds.includes('push-door')) {
@@ -176,5 +183,12 @@ export function describeFirstPathEntry(profile: DanbaekLearningProfile): string 
   if (scene.state === 'blocked' && scene.stageId === 'squat-stones') {
     return '당기는 절벽을 올랐어요 · 다음은 스쿼트로 굽이진 돌길';
   }
-  return `굽이진 돌길을 건넜어요 · 다음은 ${DanbaekWorldNextPath.label}`;
+  if (scene.state === 'blocked' && scene.stageId === 'hinge-ridge') {
+    return `굽이진 돌길을 건넜어요 · 다음은 데드리프트로 ${sceneOf('hinge-ridge').label}`;
+  }
+  if (scene.state === 'blocked') {
+    // 아직 문구를 안 쓴 구간에 막혔다면, 지난 구간 자랑보다 지금 막힌 곳을 말한다.
+    return `${withTopicParticle(sceneOf(scene.stageId).label)} 아직 막혀 있어요`;
+  }
+  return `${sceneOf('hinge-ridge').label}을 건너왔어요 · 다음은 ${DanbaekWorldNextPath.label}`;
 }

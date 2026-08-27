@@ -20,18 +20,20 @@ This file is the compact restart point. Update it only when state materially cha
 - **DANBAEK WORLD SECOND PLAYABLE**: "당기는 길" is a real second segment. A visible blocked situation (Danbaek hangs off the ledge and slips back), a gate that names the real evidence it needs (lat pulldown), a handoff offering the required exercise plus same-family alternates, and a truthful cleared reveal on return. Pre-cleared and seen→return states are told apart honestly, and the HOME World entry reports the actual current segment and the next one.
 - **DANBAEK WORLD THIRD PLAYABLE**: "굽이진 돌길" promoted from teaser to a playable segment — a visible unstable stone-path situation, persisted squat evidence as the gate condition, truthful pre-cleared and seen→return behaviour, a visible cleared payoff, and "바람 부는 능선" left as the next teaser.
 - **RELEASE ENGINEERING PREPARATION**: production web export verified end to end, Expo template boot branding removed from the shipped runtime, Expo SDK 57 dependency alignment (expo-doctor clean, package.json/lock re-synced so a clean install works), production DEV-leakage checked, the stale learning verifier corrected, and the previously observed EmptyState transient not reproduced in a production bundle. **This is build and configuration readiness only — it does not mean the product's visual or product design is release-ready.**
+- **MAIN APP PRODUCT DESIGN 2**: HOME's information architecture substantially redesigned as the product's primary surface. PRE / IN_PROGRESS / POST are visually differentiated rather than one static board, the workout CTA hierarchy is strengthened so the single main action reads first, and the Danbaek / growth / World relationship is made legible — the World entry is promoted from a 12px grey footnote under the stats into its own section that can actually be read. Main App section language improved across the surrounding HOME chrome.
+- **DANBAEK WORLD FOURTH PLAYABLE**: "바람 부는 능선" promoted from teaser to a playable segment — the wind pushes Danbaek back to the stone path, persisted deadlift evidence is the gate condition, pre-clear and seen→return states are told apart truthfully, the clear has a visible payoff, and "빛나는 동굴 입구" is left as the next teaser.
+- **HOME ↔ WORLD STAGE 4 INTEGRATION**: HOME's World entry reports stage 4 truthfully from the same shared gate evaluation the World screen uses — no parallel HOME progression state. Blocked at the ridge, HOME names the wind ridge as the current obstacle and deadlift as the next real action; cleared, it reports the ridge crossed and 빛나는 동굴 입구 as the next destination. The previous last-branch copy skipped the ridge entirely and announced the cave while the ridge was still blocked; the selector now closes on the final line only when every segment is actually behind the player.
 
 ## CURRENT
 - None.
 
 ## NEXT
-- Value Train: **MAIN APP PRODUCT DESIGN 2**. Bring the actual user-facing Main App — above all HOME — to release-quality visual design, information hierarchy and interaction convenience.
-  - The foundation and core semantics are **not** being reopened: Workout Core, accounting, Growth/Muscle SP, BodyState, WorkoutRecord, PR policy, completion/persistence stay as they are.
-  - This is **not** small polish. It is a design train with its own product judgement about what the app should look and feel like.
-  - **HOME is the primary product surface** and sets the language.
-  - Workout / Session / Result / History / Trainer are included where they are needed for one coherent visual and interaction language — not as a screen-by-screen sweep.
+- Value Train: **MAIN APP PRODUCT DESIGN ACCEPTANCE 3**. Evaluate the remaining Main App surfaces as a complete consumer product now that HOME carries Product Design 2, and implement the next coherent visual/UX upgrade wherever release-quality gaps remain.
+  - This is **not** another audit-only train. It must produce implementation if material gaps exist; a report with no change is only an acceptable outcome when the surfaces genuinely hold up.
+  - HOME already sets the language. The question is whether Workout / Session / Result / Record Detail / History / Routine / Trainer / Settings read as the same product, or as screens that predate it.
+  - The foundation and core semantics stay closed: Workout Core, accounting, Growth/Muscle SP, BodyState, WorkoutRecord, PR policy, completion/persistence.
   - Danbaek World continues as a **parallel game-content track** and does not become the primary train.
-  - RC finalization comes **after** this product-design train, not before it.
+  - Release engineering stays DONE, but final RC comes **after** this product-design acceptance, not before it.
 
 ## BLOCKED
 - Do not overwrite a newer local integration candidate from remote tooling. Confirm remote/local SHA before any production edit.

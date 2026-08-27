@@ -152,17 +152,36 @@ const cleared = buildDanbaekWorldScene(
   const firstLockedEntry = describeFirstPathEntry(profileFrom([]));
   const secondBlockedEntry = describeFirstPathEntry(profileFrom([benchRecord]));
   const thirdBlockedEntry = describeFirstPathEntry(profileFrom([benchRecord, latPulldownRecord]));
-  const thirdClearedEntry = describeFirstPathEntry(profileFrom([benchRecord, latPulldownRecord, squatRecord]));
+  const fourthBlockedEntry = describeFirstPathEntry(profileFrom([benchRecord, latPulldownRecord, squatRecord]));
+  const fourthClearedEntry = describeFirstPathEntry(
+    profileFrom([benchRecord, latPulldownRecord, squatRecord, deadliftRecord])
+  );
+  const ridgeLabel = DanbaekWorldStageScenes['hinge-ridge'].label;
   expect('HOME FIRST LOCKED: 벤치프레스라는 실제 다음 행동을 말한다',
     firstLockedEntry.includes('벤치프레스') && firstLockedEntry.includes('열려요'));
   expect('HOME SECOND BLOCKED: 첫 길이 열렸고 랫풀다운이 다음임을 말한다',
     secondBlockedEntry.includes('첫 번째 길이 열려 있어요') && secondBlockedEntry.includes('랫풀다운'));
   expect('HOME THIRD BLOCKED: 두 번째 완료와 스쿼트라는 다음 행동을 말한다',
     thirdBlockedEntry.includes('당기는 절벽을 올랐어요') && thirdBlockedEntry.includes('스쿼트'));
-  expect('HOME THIRD CLEARED: stale blocked 문구 없이 현재 끝과 다음 길을 말한다',
-    thirdClearedEntry.includes('굽이진 돌길을 건넜어요') &&
-      thirdClearedEntry.includes(DanbaekWorldNextPath.label) &&
-      !thirdClearedEntry.includes('벤치프레스'));
+
+  // 능선이 플레이어블해진 뒤의 핵심 seam. 돌길을 건넌 사람에게 남은 실제 구간은 능선이고,
+  // 그 구간을 여는 실제 행동은 데드리프트다. 예전 마지막 줄은 여기서 능선을 통째로 건너뛰고
+  // "다음은 빛나는 동굴 입구"라고 말해서, HOME이 아직 못 간 길을 끝낸 것처럼 보고했다.
+  expect('HOME FOURTH BLOCKED: 지금 막힌 곳이 바람 부는 능선임을 말한다',
+    fourthBlockedEntry.includes(ridgeLabel));
+  expect('HOME FOURTH BLOCKED: 다음 실제 행동이 데드리프트임을 말한다',
+    fourthBlockedEntry.includes('데드리프트'));
+  expect('HOME FOURTH BLOCKED: 아직 못 간 다음 길을 다음 목적지라고 말하지 않는다',
+    !fourthBlockedEntry.includes(DanbaekWorldNextPath.label));
+
+  expect('HOME FOURTH CLEARED: 능선을 지나온 사실을 말한다',
+    fourthClearedEntry.includes(ridgeLabel));
+  expect('HOME FOURTH CLEARED: 다음 World 목적지가 빛나는 동굴 입구다',
+    fourthClearedEntry.includes(DanbaekWorldNextPath.label));
+  expect('HOME FOURTH CLEARED: stale 이전 구간 문구가 남지 않는다',
+    !fourthClearedEntry.includes('벤치프레스') &&
+      !fourthClearedEntry.includes('데드리프트') &&
+      !fourthClearedEntry.includes('굽이진 돌길'));
 }
 
 // ── 막힌 순간이 상황으로 읽힌다 ────────────────────────────────────────────────
