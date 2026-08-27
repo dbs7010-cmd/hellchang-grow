@@ -66,6 +66,7 @@ export const DanbaekGainVoiceLines = {
  * 얼마나 배웠는지는 그 아래 상태 줄이 정확하게 말한다.
  */
 export const DanbaekWorldVoiceLines = {
+  returnReady: '방금 본 운동을 여기서 해볼게. 지켜봐!',
   gateCleared: '운동에서 본 밀기다! 문이 열렸어.',
   cliffCleared: '운동에서 본 당기기다! 위까지 올라왔어.',
   stonesCleared: '운동에서 본 자세다! 흔들려도 중심을 잡았어.',

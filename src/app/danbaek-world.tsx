@@ -12,6 +12,7 @@ import { WorldCliff, WorldCliffHeight } from '@/components/world/world-cliff';
 import { WorldGate, WorldGateHeight } from '@/components/world/world-gate';
 import { WorldStonePath, WorldStonePathHeight } from '@/components/world/world-stone-path';
 import { WorldWindRidge, WorldWindRidgeHeight } from '@/components/world/world-wind-ridge';
+import { DanbaekWorldVoiceLines } from '@/config/danbaek-voice-lines';
 import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
 import {
@@ -78,6 +79,38 @@ export default function DanbaekWorldScreen() {
   const clearedReveal = visit.justClearedStageId
     ? DanbaekWorldStageScenes[visit.justClearedStageId]
     : null;
+  /**
+   * 막힌 장면을 직접 본 뒤 운동하고 돌아온 경우에만, 변화 직전 한 박자를 플레이한다.
+   * 판정은 이미 실제 기록으로 끝났다. 이 state는 저장되지 않고 사용자가 버튼을 눌렀을 때
+   * 막힌 환경 → 열린 환경의 인과를 눈앞에서 보여 주는 연출에만 쓰인다.
+   */
+  const [returnRevealPhase, setReturnRevealPhase] = useState<'pending' | 'revealed' | 'done'>(
+    visit.justCleared ? 'pending' : 'done'
+  );
+  const isReturningToClearedStage = returnRevealPhase !== 'done' && clearedReveal !== null;
+  const visibleObstacle = isReturningToClearedStage ? clearedReveal.obstacle : scene.obstacle;
+  const obstacleState =
+    returnRevealPhase === 'pending'
+      ? 'blocked'
+      : isReturningToClearedStage
+        ? 'cleared'
+        : scene.state;
+  const visibleSceneLine = isReturningToClearedStage
+    ? returnRevealPhase === 'pending'
+      ? clearedReveal.blockedLine
+      : clearedReveal.clearedLine
+    : scene.sceneLine;
+  const visibleJourney = isReturningToClearedStage
+    ? scene.journey.map((node) => ({
+        ...node,
+        state:
+          node.id === visit.justClearedStageId
+            ? ('current' as const)
+            : scene.clearedStageIds.includes(node.id)
+              ? ('done' as const)
+              : ('ahead' as const),
+      }))
+    : scene.journey;
 
   useEffect(() => {
     // 돌아왔으니 결과 화면의 "돌아가기"는 더 이상 필요 없다.
@@ -95,7 +128,21 @@ export default function DanbaekWorldScreen() {
       title="단백세상"
       accent
       footer={
-        scene.state === 'blocked' ? (
+        returnRevealPhase === 'pending' ? (
+          <PrimaryButton
+            label="방금 운동을 단백이에게 보여주기"
+            variant="gold"
+            size="large"
+            onPress={() => setReturnRevealPhase('revealed')}
+          />
+        ) : returnRevealPhase === 'revealed' ? (
+          <PrimaryButton
+            label="다음 길로 나아가기"
+            variant="gold"
+            size="large"
+            onPress={() => setReturnRevealPhase('done')}
+          />
+        ) : scene.state === 'blocked' ? (
           <PrimaryButton
             label={scene.actionLabel}
             variant="gold"
@@ -124,9 +171,9 @@ export default function DanbaekWorldScreen() {
         </ThemedView>
       )}
 
-      <JourneyRail pathTitle={scene.pathTitle} nodes={scene.journey} />
+      <JourneyRail pathTitle={scene.pathTitle} nodes={visibleJourney} />
 
-      {clearedReveal && (
+      {clearedReveal && returnRevealPhase === 'revealed' && (
         <ThemedView
           type="backgroundElement"
           style={[styles.reveal, { borderColor: theme.gold }]}>
@@ -143,22 +190,22 @@ export default function DanbaekWorldScreen() {
       <View style={styles.stage}>
         <View
           style={
-            scene.obstacle === 'cliff'
+            visibleObstacle === 'cliff'
               ? styles.cliffSlot
-              : scene.obstacle === 'stones'
+              : visibleObstacle === 'stones'
                 ? styles.stonesSlot
-                : scene.obstacle === 'wind'
+                : visibleObstacle === 'wind'
                   ? styles.windSlot
                   : styles.gateSlot
           }>
-          {scene.obstacle === 'cliff' ? (
-            <WorldCliff state={scene.state === 'blocked' ? 'blocked' : 'cleared'} />
-          ) : scene.obstacle === 'stones' ? (
-            <WorldStonePath state={scene.state === 'blocked' ? 'blocked' : 'cleared'} />
-          ) : scene.obstacle === 'wind' ? (
-            <WorldWindRidge state={scene.state === 'blocked' ? 'blocked' : 'cleared'} />
+          {visibleObstacle === 'cliff' ? (
+            <WorldCliff state={obstacleState === 'blocked' ? 'blocked' : 'cleared'} />
+          ) : visibleObstacle === 'stones' ? (
+            <WorldStonePath state={obstacleState === 'blocked' ? 'blocked' : 'cleared'} />
+          ) : visibleObstacle === 'wind' ? (
+            <WorldWindRidge state={obstacleState === 'blocked' ? 'blocked' : 'cleared'} />
           ) : (
-            <WorldGate state={scene.gate} />
+            <WorldGate state={obstacleState === 'blocked' ? 'closed' : 'open'} />
           )}
         </View>
         <PlayerCharacter
@@ -170,19 +217,48 @@ export default function DanbaekWorldScreen() {
       </View>
 
       <ThemedText type="small" style={styles.sceneLine}>
-        {scene.sceneLine}
+        {visibleSceneLine}
       </ThemedText>
 
       <DanbaekVoiceBubble
         line={
-          visit.justCleared && scene.state === 'cleared'
-            ? clearedReveal?.returnedLine ?? scene.returnedLine
-            : scene.danbaekLine
+          returnRevealPhase === 'pending'
+            ? DanbaekWorldVoiceLines.returnReady
+            : returnRevealPhase === 'revealed'
+              ? clearedReveal?.returnedLine ?? scene.returnedLine
+              : scene.danbaekLine
         }
-        status={scene.statusLine}
+        status={
+          returnRevealPhase === 'pending'
+            ? '저장된 운동을 단백세상에서 따라 할 차례예요'
+            : returnRevealPhase === 'revealed'
+              ? '방금 한 운동이 이 길을 바꿨어요'
+              : scene.statusLine
+        }
       />
 
-      {scene.state === 'blocked' ? (
+      {returnRevealPhase === 'pending' ? (
+        <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.gold }]}>
+          <ThemedText type="smallBold" style={{ color: theme.gold }}>
+            운동 기록이 단백세상에 도착했어요
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            아래 버튼을 누르면 단백이가 방금 본 동작을 이 상황에서 직접 따라 해요.
+          </ThemedText>
+        </ThemedView>
+      ) : returnRevealPhase === 'revealed' ? (
+        <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.gold }]}>
+          <ThemedText type="smallBold" style={{ color: theme.gold }}>
+            다음 ·{' '}
+            {scene.state === 'cleared'
+              ? scene.nextGoal.label
+              : scene.journey.find((node) => node.state === 'current')?.label}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            변화한 길을 확인했어요. 다음 길로 나아가 새 상황을 직접 만나 보세요.
+          </ThemedText>
+        </ThemedView>
+      ) : scene.state === 'blocked' ? (
         <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
           <ThemedText type="small" themeColor="textSecondary">
             {scene.whyLine}

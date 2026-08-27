@@ -396,6 +396,17 @@ const cleared = buildDanbaekWorldScene(
     world.includes('<WorldStonePath') && read('src/components/world/world-stone-path.tsx').includes('rotations'));
   expect('네 번째 상황은 앞 관문의 복사가 아니라 강풍이 가르는 능선으로 보인다',
     world.includes('<WorldWindRidge') && read('src/components/world/world-wind-ridge.tsx').includes('gust'));
+  expect('직접 본 관문에서 돌아오면 변화 전 장면을 한 번 더 보여 준다',
+    world.includes("returnRevealPhase === 'pending'") && world.includes('clearedReveal.blockedLine'));
+  expect('사용자가 운동→World 변화를 직접 작동시킨다',
+    world.includes('방금 운동을 단백이에게 보여주기') &&
+      world.includes("setReturnRevealPhase('revealed')"));
+  expect('복귀 전에는 열린 제목을 먼저 보여 주지 않는다',
+    world.includes("clearedReveal && returnRevealPhase === 'revealed'"));
+  expect('변화를 확인한 뒤 다음 상황으로 직접 전진할 수 있다',
+    world.includes('다음 길로 나아가기') && world.includes("setReturnRevealPhase('done')"));
+  expect('pre-cleared 진입에는 복귀 연출을 만들지 않는다',
+    world.includes("visit.justCleared ? 'pending' : 'done'"));
   expect('단백이 말풍선은 공용 컴포넌트 하나를 쓴다', world.includes('<DanbaekVoiceBubble'));
   expect(
     '행동 버튼은 스크롤 밖 고정 자리에 있다 (작은 화면에서 잘리지 않게)',
