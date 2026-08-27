@@ -315,17 +315,27 @@ function QuickStartRow({
       accessibilityLabel={title + '. ' + subtitle}
       style={[
         styles.quickRow,
-        { backgroundColor: theme.backgroundElement, borderColor: accent ? theme.gold : theme.border },
+        accent
+          ? // 오늘 여기서 할 행동 하나. 칠해진 금색이라 세 줄 중 무엇을 누를지 고민하지 않는다.
+            { backgroundColor: theme.gold, borderColor: theme.gold, boxShadow: '0 6px 16px rgba(0, 0, 0, 0.28)' }
+          : { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+        accent && styles.quickRowAccent,
       ]}>
       <View style={styles.quickRowText}>
-        <ThemedText type="smallBold" style={accent ? { color: theme.gold } : undefined}>
+        <ThemedText
+          type={accent ? 'sectionTitle' : 'smallBold'}
+          style={accent ? { color: theme.background } : undefined}>
           {title}
         </ThemedText>
-        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={2}>
+        <ThemedText
+          type="caption"
+          themeColor={accent ? undefined : 'textSecondary'}
+          numberOfLines={2}
+          style={accent ? { color: theme.background, opacity: 0.75 } : undefined}>
           {subtitle}
         </ThemedText>
       </View>
-      <ThemedText type="smallBold" style={{ color: accent ? theme.gold : theme.textSecondary }}>
+      <ThemedText type="smallBold" style={{ color: accent ? theme.background : theme.textSecondary }}>
         ›
       </ThemedText>
     </Pressable>
@@ -342,6 +352,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: Spacing.three,
     minHeight: Layout.listRowHeight,
+  },
+  /** 주 경로는 보조 경로보다 실제로 크다 — 금색 글자만으로는 같은 줄로 읽혔다. */
+  quickRowAccent: {
+    borderRadius: Radius.large,
+    minHeight: Layout.ctaHeightLarge,
   },
   quickRowText: {
     flex: 1,

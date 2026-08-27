@@ -968,7 +968,7 @@ export default function SessionScreen() {
           )}
           <PrimaryButton
             label="운동 종료"
-            variant="secondary"
+            variant="quiet"
             style={styles.flexItem}
             onPress={() => setConfirmEnd(true)}
           />
@@ -1398,7 +1398,7 @@ function ResultScreen({ summary, onConfirm }: { summary: SessionSummaryWithLine;
         {savedRecord && (
           <PrimaryButton
             label="기록 자세히 보기"
-            variant="secondary"
+            variant="quiet"
             onPress={() =>
               router.push({ pathname: '/workout-record', params: { id: savedRecord.id } })
             }
@@ -1871,7 +1871,7 @@ function RestScreen({
             여기다. 예전에는 타이머를 기다리거나 [다음 세트 시작]으로 운동 화면에 돌아간
             뒤에야 끝낼 수 있었다. 종료는 여기서도 2단계 확인을 그대로 거친다.
           */}
-          <PrimaryButton label="운동 종료" variant="secondary" onPress={onEnd} />
+          <PrimaryButton label="운동 종료" variant="quiet" onPress={onEnd} />
         </>
       )}
     </SessionShell>
