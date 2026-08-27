@@ -1,7 +1,6 @@
 import { mutateSessionIfActive, runSessionCompletion } from '@/utils/core-loop';
 import {
   resolveSessionConfirm,
-  shouldClearEndConfirm,
   shouldConfirmSessionExit,
 } from '@/utils/session-exit';
 import { detectPRs } from '@/utils/exercise-history';
@@ -294,11 +293,11 @@ async function expectFirstFailure(run: () => Promise<unknown>) {
   check('A3: leaving keeps the session status untouched', session.status, 'active');
 
   // A4: 이탈 경로는 저장/보상 파이프라인과 연결돼 있지 않다 — 순수 판단 함수 하나뿐이다.
-  // 표시 규칙(resolveSessionConfirm/shouldClearEndConfirm)이 늘어도 경계는 그대로다 —
+  // 표시 규칙(resolveSessionConfirm)이 늘어도 경계는 그대로다 —
   // 이 모듈은 여전히 순수 판단만 내보내고 저장소/보상 파이프라인을 모른다.
   check('A4: the exit module exposes only pure decisions (no persistence, no rewards)',
     Object.keys(sessionExitModule).sort(),
-    ['resolveSessionConfirm', 'shouldClearEndConfirm', 'shouldConfirmSessionExit']);
+    ['resolveSessionConfirm', 'shouldConfirmSessionExit']);
   check('A4: the decision never mutates its input session',
     computeCompletedExerciseCount(session), 1);
 
@@ -451,8 +450,9 @@ async function expectFirstFailure(run: () => Promise<unknown>) {
 
   check('G2: ACTIVE에서 종료 확인을 보여 준다',
     confirm({ confirmEnd: true }), 'end');
-  check('G2: 휴식 중에는 종료 확인을 보여 주지 않는다 (진입점이 ACTIVE에만 있다)',
-    confirm({ confirmEnd: true, resting: true }), null);
+  // 마지막 세트 다음이 곧 휴식 화면이다 — 운동을 끝내는 가장 흔한 자리에 진입점이 생겼다.
+  check('G2: 휴식 중에도 종료 확인을 보여 준다 (휴식 화면에 [운동 종료]가 있다)',
+    confirm({ confirmEnd: true, resting: true }), 'end');
 
   check('G3: 둘 다 켜져 있으면 뒤로가기 확인이 먼저다',
     confirm({ confirmExit: true, confirmEnd: true }), 'exit');
@@ -467,32 +467,32 @@ async function expectFirstFailure(run: () => Promise<unknown>) {
     [null, null]);
   check('G4: 아무것도 켜지지 않았으면 확인도 없다', confirm(), null);
 
-  // 상태 자체를 꺼야 하는 시점 — 감추기만 하면 ACTIVE 복귀 시 그대로 다시 뜬다.
-  check('G5: 휴식으로 넘어가면 종료 확인 상태를 실제로 정리한다',
-    shouldClearEndConfirm({ resting: true, confirmEnd: true }), true);
-  check('G5: 정리할 종료 확인이 없으면 아무 일도 하지 않는다 (반복 렌더 방지)',
-    shouldClearEndConfirm({ resting: true, confirmEnd: false }), false);
-  check('G5: ACTIVE에서는 종료 확인을 정리하지 않는다',
-    shouldClearEndConfirm({ resting: false, confirmEnd: true }), false);
-  check('G5: 뒤로가기 확인은 휴식에서도 살아 있어야 하므로 정리 대상이 아니다',
-    confirm({ confirmExit: true, resting: true }), 'exit');
+  /*
+    예전에는 휴식으로 넘어갈 때 종료 확인 상태를 꺼야 했다 — 휴식에서는 보여줄 수
+    없는데 상태만 살아남아, ACTIVE로 돌아온 순간 뒤늦게 떠서 같은 자리의 다음 탭이
+    [종료하고 기록]에 맞는 사고가 났다(실기기 재현).
 
-  // presentation 중 켜진 종료 확인 → 휴식 전환 → ACTIVE 복귀. 재노출되면 안 된다.
-  let confirmEndState = true;
-  const enterRest = () => {
-    if (shouldClearEndConfirm({ resting: true, confirmEnd: confirmEndState })) confirmEndState = false;
-  };
-  check('G6: presentation 중에는 종료 확인이 아직 ACTIVE에 보인다',
-    resolveSessionConfirm({ confirmExit: false, confirmEnd: confirmEndState, resting: false, hasSummary: false, isEnding: false }),
+    지금은 감추지 않는다. 두 화면 모두에서 같은 확인이 보이고 같은 자리에서 답할 수
+    있으므로, 보이지 않는 채 살아 있는 상태 자체가 존재하지 않는다.
+  */
+  const carriedEnd = true;
+  check('G5: 종료 확인은 ACTIVE에서 보인다',
+    resolveSessionConfirm({ confirmExit: false, confirmEnd: carriedEnd, resting: false, hasSummary: false, isEnding: false }),
     'end');
-  enterRest();
-  check('G6: 휴식으로 넘어가면 종료 확인 상태가 꺼진다', confirmEndState, false);
-  check('G6: 휴식 화면에서는 물론 보이지 않는다',
-    resolveSessionConfirm({ confirmExit: false, confirmEnd: confirmEndState, resting: true, hasSummary: false, isEnding: false }),
-    null);
-  check('G6: ACTIVE로 돌아와도 stale 종료 확인이 되살아나지 않는다',
-    resolveSessionConfirm({ confirmExit: false, confirmEnd: confirmEndState, resting: false, hasSummary: false, isEnding: false }),
-    null);
+  check('G5: 휴식으로 넘어가도 같은 확인이 그대로 보인다 (숨은 상태가 없다)',
+    resolveSessionConfirm({ confirmExit: false, confirmEnd: carriedEnd, resting: true, hasSummary: false, isEnding: false }),
+    'end');
+  check('G5: ACTIVE로 돌아와도 같은 확인이고, 뒤늦게 새로 뜨는 것이 아니다',
+    resolveSessionConfirm({ confirmExit: false, confirmEnd: carriedEnd, resting: false, hasSummary: false, isEnding: false }),
+    'end');
+  check('G5: 답을 하고 나면(꺼지면) 어느 화면에도 남지 않는다',
+    [
+      resolveSessionConfirm({ confirmExit: false, confirmEnd: false, resting: false, hasSummary: false, isEnding: false }),
+      resolveSessionConfirm({ confirmExit: false, confirmEnd: false, resting: true, hasSummary: false, isEnding: false }),
+    ],
+    [null, null]);
+  check('G6: 뒤로가기 확인은 종료 확인보다 여전히 먼저다 (휴식에서도)',
+    confirm({ confirmExit: true, confirmEnd: true, resting: true }), 'exit');
 
   // 가로챈 이동 액션의 수명 — 한 번만 쓰이고, 취소하면 버려진다.
   type BlockedAction = { type: string } | null;
@@ -527,7 +527,7 @@ async function expectFirstFailure(run: () => Promise<unknown>) {
   // 뒤로가기는 여전히 운동 종료가 아니다 — 표시 규칙이 생겨도 이 경계는 그대로다.
   check('G8: 확인 규칙은 저장/보상을 건드리지 않는 순수 함수다',
     Object.keys(sessionExitModule).sort(),
-    ['resolveSessionConfirm', 'shouldClearEndConfirm', 'shouldConfirmSessionExit']);
+    ['resolveSessionConfirm', 'shouldConfirmSessionExit']);
 }
 
 console.log(failures === 0 ? '\nAll CORE LOOP checks passed.' : `\n${failures} CORE LOOP check(s) FAILED.`);

@@ -60,7 +60,6 @@ import {
 } from '@/utils/growth-reveal';
 import {
   resolveSessionConfirm,
-  shouldClearEndConfirm,
   shouldConfirmSessionExit,
 } from '@/utils/session-exit';
 import { pickTrainerLine } from '@/utils/trainer-dialogue';
@@ -404,22 +403,6 @@ export default function SessionScreen() {
    */
   const restScreenShowing = isResting && !presentingSetComplete;
 
-  /**
-   * 휴식 화면으로 넘어가면 종료 확인은 갈 곳이 없다 — 상태까지 꺼 둔다.
-   *
-   * 감추기만 하면 ACTIVE로 돌아왔을 때 그대로 다시 떠서, 같은 자리의 다음 탭이
-   * [종료하고 기록]에 맞는 사고가 난다(실기기 재현). 이탈 확인(confirmExit)은 휴식
-   * 화면에서도 보여야 하므로 정리하지 않는다.
-   * setState를 effect 본문에서 동기 호출하지 않도록 콜백으로 감싼다 — 위 휴식 반응과 같은 방식.
-   */
-  useEffect(() => {
-    if (!shouldClearEndConfirm({ resting: restScreenShowing, confirmEnd })) return;
-    const timer = setTimeout(() => {
-      setConfirmEnd(false);
-      setEndError(null);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [restScreenShowing, confirmEnd]);
 
   if (!activeSession) {
     // 종료 직후에는 결과 화면이 이 자리를 차지한다. 그 밖의 "그릴 것이 없는" 상태는
@@ -664,6 +647,37 @@ export default function SessionScreen() {
     </View>
   );
 
+  /**
+   * 운동 종료 확인 바. **정의는 하나뿐이고** ACTIVE와 REST가 같은 것을 그린다 —
+   * 마지막 세트 뒤에는 곧바로 휴식이 시작되므로, 운동을 끝내는 가장 흔한 자리가 휴식 화면이다.
+   */
+  const endConfirmBar = (
+    <View style={styles.confirmBar}>
+      <ThemedText type="small" style={styles.confirmText}>
+        {endError
+          ? endError
+          : sessionCompletedSets === 0
+            ? '완료한 세트가 없어요. 기록 없이 나갈까요?'
+            : '운동을 종료할까요?'}
+      </ThemedText>
+      <View style={styles.inlineRow}>
+        <PrimaryButton
+          label="계속 운동"
+          variant="secondary"
+          style={styles.flexItem}
+          onPress={() => setConfirmEnd(false)}
+        />
+        <PrimaryButton
+          label={endError ? '다시 시도' : sessionCompletedSets === 0 ? '기록 없이 나가기' : '종료하고 기록'}
+          variant="gold"
+          haptic="medium"
+          style={styles.flexItem}
+          onPress={sessionCompletedSets === 0 ? handleDiscard : handleEnd}
+        />
+      </View>
+    </View>
+  );
+
   const reaction = (
     <GoldsunReaction
       visible={reactionVisible}
@@ -691,8 +705,9 @@ export default function SessionScreen() {
         characterState={characterState}
         reactionCopy={activeSetReaction}
         reaction={reaction}
-        // 휴식 중 뒤로가기도 여기서 답할 수 있어야 한다 — 있으면 [다음 세트 시작] 자리를 대신한다.
-        exitConfirm={sessionConfirm === 'exit' ? exitConfirmBar : null}
+        // 휴식 중 뒤로가기/종료도 여기서 답할 수 있어야 한다 — 있으면 [다음 세트 시작] 자리를 대신한다.
+        confirmBar={sessionConfirm === 'exit' ? exitConfirmBar : sessionConfirm === 'end' ? endConfirmBar : null}
+        onEnd={() => setConfirmEnd(true)}
         onPauseToggle={handlePauseToggle}
         onSelectExercise={setCurrentSessionExercise}
         onSkip={skipSessionRest}
@@ -766,6 +781,7 @@ export default function SessionScreen() {
           <PreviousPerformanceLine
             exerciseId={currentExercise.exerciseId}
             records={workoutRecords}
+            sessionSets={completedSets}
           />
 
           {pendingSet ? (
@@ -888,30 +904,7 @@ export default function SessionScreen() {
       {sessionConfirm === 'exit' ? (
         exitConfirmBar
       ) : sessionConfirm === 'end' ? (
-        <View style={styles.confirmBar}>
-          <ThemedText type="small" style={styles.confirmText}>
-            {endError
-              ? endError
-              : sessionCompletedSets === 0
-                ? '완료한 세트가 없어요. 기록 없이 나갈까요?'
-                : '운동을 종료할까요?'}
-          </ThemedText>
-          <View style={styles.inlineRow}>
-            <PrimaryButton
-              label="계속 운동"
-              variant="secondary"
-              style={styles.flexItem}
-              onPress={() => setConfirmEnd(false)}
-            />
-            <PrimaryButton
-              label={endError ? '다시 시도' : sessionCompletedSets === 0 ? '기록 없이 나가기' : '종료하고 기록'}
-              variant="gold"
-              haptic="medium"
-              style={styles.flexItem}
-              onPress={sessionCompletedSets === 0 ? handleDiscard : handleEnd}
-            />
-          </View>
-        </View>
+        endConfirmBar
       ) : (
         <View style={styles.bottomBar}>
           <PrimaryButton
@@ -1415,19 +1408,42 @@ function formatSp(value: number): string {
 const RESULT_CHARACTER_HEIGHT = 150;
 const RESULT_COMPARISON_HEIGHT = 105;
 
+/**
+ * 중량을 정하기 전에 필요한 참고값.
+ *
+ * **이번 세션에서 방금 한 세트가 가장 중요한 참고값이다.** 예전에는 저장된 기록만 봤기
+ * 때문에, 처음 하는 운동이면 세 세트를 하고 나서도 "이 운동 기록은 이번이 처음이에요"가
+ * 그대로 남아 있었다 — 방금 60kg를 세 번 든 사람에게 아직 아무것도 모른다고 말한 셈이다.
+ */
 function PreviousPerformanceLine({
   exerciseId,
   records,
+  sessionSets = [],
 }: {
   exerciseId: string;
   records: WorkoutRecord[];
+  /** 이번 세션에서 이 운동으로 이미 완료한 세트. */
+  sessionSets?: WorkoutSetEntry[];
 }) {
   const previous = findPreviousPerformance(exerciseId, records);
+  const lastSessionSet = sessionSets[sessionSets.length - 1];
+
+  const sessionLine = lastSessionSet ? (
+    <ThemedText type="caption" themeColor="textSecondary">
+      이번 운동: {lastSessionSet.weightKg ?? '-'}kg × {lastSessionSet.reps ?? '-'}회 ·{' '}
+      {sessionSets.length}세트
+    </ThemedText>
+  ) : null;
+
   if (!previous) {
     return (
-      <ThemedText type="caption" themeColor="textSecondary">
-        이 운동 기록은 이번이 처음이에요.
-      </ThemedText>
+      <View style={styles.previousBlock}>
+        {sessionLine ?? (
+          <ThemedText type="caption" themeColor="textSecondary">
+            이 운동 기록은 이번이 처음이에요.
+          </ThemedText>
+        )}
+      </View>
     );
   }
   const lastSet = previous.sets[previous.sets.length - 1];
@@ -1435,6 +1451,7 @@ function PreviousPerformanceLine({
 
   return (
     <View style={styles.previousBlock}>
+      {sessionLine}
       {lastSet && (
         <ThemedText type="caption" themeColor="textSecondary">
           이전: {lastSet.weightKg ?? '-'}kg × {lastSet.reps ?? '-'}회
@@ -1667,10 +1684,11 @@ function RestScreen({
   characterState,
   reactionCopy,
   reaction,
-  exitConfirm,
+  confirmBar,
   onPauseToggle,
   onSelectExercise,
   onSkip,
+  onEnd,
 }: {
   session: WorkoutSession;
   secondsRemaining: number;
@@ -1685,13 +1703,15 @@ function RestScreen({
   reactionCopy?: string | null;
   reaction: React.ReactNode;
   /**
-   * 뒤로가기 확인 바. 세션 화면이 만든 **그 하나**를 그대로 받는다 — 여기서 다시 만들지 않는다.
-   * 있으면 [다음 세트 시작] 자리를 대신한다 (둘을 함께 쌓지 않는다).
+   * 뒤로가기/종료 확인 바. 세션 화면이 만든 **그 하나**를 그대로 받는다 — 여기서 다시
+   * 만들지 않는다. 있으면 아래 조작 줄 자리를 대신한다 (둘을 함께 쌓지 않는다).
    */
-  exitConfirm?: React.ReactNode;
+  confirmBar?: React.ReactNode;
   onPauseToggle: () => void;
   onSelectExercise: (exerciseEntryId: string) => void;
   onSkip: () => void;
+  /** 휴식 중에도 운동을 끝낼 수 있어야 한다 — 마지막 세트 다음이 바로 이 화면이다. */
+  onEnd: () => void;
 }) {
   const theme = useTheme();
   const urgent = secondsRemaining <= AppConfig.restUrgentThresholdSeconds;
@@ -1757,15 +1777,23 @@ function RestScreen({
         onSelect={onSelectExercise}
       />
 
-      {/* 뒤로가기 확인이 열리면 CTA 자리를 대신한다 — 겹치거나 함께 쌓이지 않는다. */}
-      {exitConfirm ?? (
-        <PrimaryButton
-          label="다음 세트 시작"
-          variant="gold"
-          size="large"
-          disabled={session.status === 'paused'}
-          onPress={onSkip}
-        />
+      {/* 확인 바가 열리면 조작 줄 자리를 대신한다 — 겹치거나 함께 쌓이지 않는다. */}
+      {confirmBar ?? (
+        <>
+          <PrimaryButton
+            label="다음 세트 시작"
+            variant="gold"
+            size="large"
+            disabled={session.status === 'paused'}
+            onPress={onSkip}
+          />
+          {/*
+            마지막 세트를 끝내면 곧바로 이 화면이 뜬다 — 운동을 끝내는 가장 흔한 순간이
+            여기다. 예전에는 타이머를 기다리거나 [다음 세트 시작]으로 운동 화면에 돌아간
+            뒤에야 끝낼 수 있었다. 종료는 여기서도 2단계 확인을 그대로 거친다.
+          */}
+          <PrimaryButton label="운동 종료" variant="secondary" onPress={onEnd} />
+        </>
       )}
     </SessionShell>
   );

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { AppConfig } from '@/config/app-config';
 import { MockRewardedAdService } from '@/services/ads/mock-rewarded-ad-service';
 import { selectRewardedAdService } from '@/services/ads/select-rewarded-ad-service';
@@ -146,6 +148,33 @@ const HOUR = 60 * 60 * 1000;
     !grant.granted && grant.rewardUnits === 0 && entitlement.tier === 'free'
   );
   expect('화면이 광고 버튼을 내보내지 않을 근거가 있다', prod.isProviderAvailable === false);
+}
+
+// ── 결제가 붙기 전에는 결제된 것처럼 보이는 버튼을 내보내지 않는다 ─────────
+//
+// 누르면 구독이 되는 것처럼 보이는 버튼은 거짓말이고, 그 경로가 그대로 유료 기능 우회가
+// 된다. AI PT 화면은 이미 이 규칙을 지키고 있었는데 설정 화면에는 실제 구독 버튼이 남아
+// 있어서, 두 화면이 서로 다른 약속을 하고 있었다.
+{
+  const screens = {
+    '설정': 'src/app/(tabs)/settings.tsx',
+    'AI PT': 'src/app/ai-chat.tsx',
+  };
+
+  for (const [label, file] of Object.entries(screens)) {
+    const source = readFileSync(file, 'utf8');
+    // 구독을 실제로 만드는 호출은 남아 있어도 되지만, 그 버튼은 DEV 빌드에서만 보여야 한다.
+    const usesMockSubscribe = source.includes('subscribeMock(');
+    const hasDevGuard = source.includes('__DEV__');
+    expect(
+      `${label} 화면이 mock 구독을 그냥 노출하지 않는다`,
+      !usesMockSubscribe || hasDevGuard
+    );
+    expect(
+      `${label} 화면에 결제 없이 눌리는 [구독하기] 버튼이 없다`,
+      !/label="구독하기"/.test(source)
+    );
+  }
 }
 
 if (failures > 0) {

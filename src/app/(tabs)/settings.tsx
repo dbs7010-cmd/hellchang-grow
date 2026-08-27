@@ -128,20 +128,31 @@ export default function SettingsScreen() {
           value={isSubscribed ? '구독 중' : '구독 안 함'}
           openSection={openSection}
           onToggle={toggleSection}>
+          {/*
+            결제 SDK가 붙기 전까지 출시 빌드에 구독 버튼을 두지 않는다 — 누르면 결제된
+            것처럼 보이는 버튼은 거짓말이고, 그 경로가 그대로 유료 기능 우회가 된다.
+            AI PT 화면(ai-chat)이 이미 같은 규칙을 쓰고 있어서 두 화면이 어긋나 있었다.
+          */}
           {isSubscribed ? (
-            <PrimaryButton label="구독 해지" variant="secondary" onPress={cancelSubscriptionMock} />
-          ) : (
             <>
               <ThemedText type="caption" themeColor="textSecondary">
-                구독하면 광고 없이 AI PT를 이용할 수 있어요.
+                구독 중이라 광고 없이 AI PT를 이용할 수 있어요.
               </ThemedText>
-              <PrimaryButton label="구독하기" variant="secondary" onPress={() => subscribeMock('pro')} />
+              <PrimaryButton label="구독 해지" variant="secondary" onPress={cancelSubscriptionMock} />
             </>
-          )}
-          {__DEV__ && (
+          ) : (
             <ThemedText type="caption" themeColor="textSecondary">
-              DEV: 결제 연동 전이라 mock 구독으로 동작해요.
+              결제를 준비하고 있어요. 준비되면 여기에서 구독할 수 있어요. 지금은 AI PT 화면에서
+              광고를 보고 이용할 수 있어요.
             </ThemedText>
+          )}
+          {__DEV__ && !isSubscribed && (
+            <>
+              <PrimaryButton label="구독하기 (DEV)" variant="secondary" onPress={() => subscribeMock('pro')} />
+              <ThemedText type="caption" themeColor="textSecondary">
+                DEV: 결제 연동 전이라 mock 구독으로 동작해요.
+              </ThemedText>
+            </>
           )}
         </SettingsRow>
 

@@ -14,6 +14,9 @@ This file is the compact restart point. Update it only when state materially cha
 - PR semantics separation: rep PR remains presentation/history evidence; current reward eligibility is explicit rather than prs.length-driven; legacy receipt normalization addressed in the integrated development line.
 - Danbaek World First Playable core runtime loop has been reported working end-to-end on the latest local integration candidate: HOME → blocked World gate → real workout → persisted learning/result → World return → gate cleared → next goal.
 - First Danbaek World segment now reads as a game situation rather than a status board: a visible gate the player watches Danbaek fail against, a situation-derived CTA, a one-time blocked→cleared reveal on return, and a locked next-path teaser. Return path from Result closes the loop in one tap. Verified in a real 412/375/360 web playtest; `verify:world` covers the seam.
+- Workout Record Trust (Train A): a mistyped set can be corrected or deleted inside the session, and every saved workout can be re-read set by set from one record-detail screen reached from HOME, HISTORY and the Workout tab.
+- Performance Truth (Train B): the exercise name on HOME/Stanley now carries that exercise’s own set count, one shared policy picks the representative achievement for both surfaces (real improvement over first record; no cross-exercise weight ranking), and RESULT no longer calls Danbaek/game growth the user’s real body.
+- Release Playability Closure: a workout can be ended from the REST screen, the session stops calling an exercise "first ever" after sets are logged, Danbaek World greets a first-time visitor before showing a locked gate, and no build-visible subscribe button exists while payment is unimplemented.
 
 ## CURRENT
 - None. Pick up the NEXT train.
@@ -24,6 +27,7 @@ This file is the compact restart point. Update it only when state materially cha
 
 ## BLOCKED
 - Do not overwrite a newer local integration candidate from remote tooling. Confirm remote/local SHA before any production edit.
+- Deleting an arbitrary saved WorkoutRecord is BLOCKED. Records are the source of derived facts (PR, volume, learning, World gates) but Growth/Muscle SP, PASS XP and streak are accumulated and persisted with no reverse path. Deleting a record would shrink the derived side while the accumulated side keeps the erased workout, so an honest full delete requires reversing LOCKED Growth/accounting semantics. Deletion therefore stays limited to the existing malformed-record escape hatch until a separately approved growth-reversal design exists.
 
 ## EXPERIMENTAL / LATER
 - Broader World persistence/economy, inventory, multi-stage systems, deep-link World-origin recovery, and other architecture not required by the first playable loop.

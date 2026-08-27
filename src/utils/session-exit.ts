@@ -56,17 +56,16 @@ export function resolveSessionConfirm(input: {
   if (input.hasSummary || input.isEnding) return null;
   // 이탈 확인이 항상 먼저다 — 둘은 다른 결정이고, 나가기는 세션을 남긴 채 화면만 벗어난다.
   if (input.confirmExit) return 'exit';
-  // 종료 확인은 진입점이 있는 ACTIVE에서만 보여 준다.
-  if (input.confirmEnd && !input.resting) return 'end';
-  return null;
-}
+  /*
+    종료 확인은 ACTIVE와 REST **둘 다**에서 보여 준다.
 
-/**
- * 휴식으로 넘어가는 순간 종료 확인을 실제로 꺼야 하는가.
- *
- * 감추기만 하면 상태가 살아남아 ACTIVE로 돌아왔을 때 그대로 다시 뜬다 — 그래서 화면
- * 규칙(resolveSessionConfirm)과 별개로 상태 자체를 정리할 시점을 여기서 판단한다.
- */
-export function shouldClearEndConfirm(input: { resting: boolean; confirmEnd: boolean }): boolean {
-  return input.resting && input.confirmEnd;
+    예전에는 ACTIVE에만 진입점이 있어서, 휴식 중에 운동을 끝내려면 타이머가 끝나거나
+    [다음 세트 시작]을 눌러 운동 화면으로 돌아간 뒤에야 종료할 수 있었다. 마지막 세트를
+    끝내면 곧바로 휴식이 시작되므로, **운동을 끝내는 가장 흔한 순간이 정확히 그 자리**다.
+
+    감춰서 생기던 예전 사고(휴식 중 남은 확인이 ACTIVE 복귀 후 뒤늦게 튀어나오던 문제)는
+    이제 구조적으로 없다 — 두 화면 모두에서 같은 확인이 보이고 같은 자리에서 답할 수 있다.
+  */
+  if (input.confirmEnd) return 'end';
+  return null;
 }

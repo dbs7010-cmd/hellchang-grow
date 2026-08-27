@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 
 import { LearningStageLabels } from '@/config/danbaek-learning-policy';
 import {
+  DanbaekWorldFirstContact,
   DanbaekWorldNextPath,
   DanbaekWorldProofStages,
   DanbaekWorldStageScenes,
@@ -13,6 +14,7 @@ import {
 import { buildDanbaekWorldScene } from '@/features/danbaek-world/world-view-model';
 import {
   clearWorldReturn,
+  takeDanbaekWorldFirstContact,
   getWorldReturn,
   markWorldWorkoutHandoff,
   observeWorldVisit,
@@ -216,7 +218,12 @@ const cleared = buildDanbaekWorldScene(profileFrom([benchRecord]));
     /footer=\{/.test(world) && world.includes('scene.actionLabel')
   );
   expect('화면이 판정을 다시 하지 않는다', !world.includes('evaluateDanbaekWorldStage'));
-  expect('개발자용 상태 문구가 없다', !/준비 중|TODO|proof|debug/i.test(world));
+  // import 경로(proof-stages 등)는 사용자에게 보이지 않는다 — 화면에 그려지는 말만 본다.
+  const worldCopy = world
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith('import') && !line.includes("from '@/"))
+    .join('\n');
+  expect('개발자용 상태 문구가 없다', !/준비 중|TODO|proof|debug/i.test(worldCopy));
 
   const session = read('src/app/session.tsx');
   expect(
@@ -226,6 +233,35 @@ const cleared = buildDanbaekWorldScene(profileFrom([benchRecord]));
   expect(
     '돌아가기는 표시일 뿐 완료 파이프라인을 건드리지 않는다',
     session.includes('clearWorldReturn();') && !/markWorldWorkoutHandoff/.test(session)
+  );
+}
+
+// ── 처음 온 사람에게 먼저 여기가 어디인지 알려준다 ─────────────────────────
+//
+// 처음 들어온 사람에게 "문이 꿈쩍도 안 한다"부터 보여주면, 여기가 어디인지도 모르는 채
+// 실패 화면을 본다. 인사는 한 번이면 충분하고, 진행도가 아니라 연출 타이밍일 뿐이다.
+{
+  resetWorldVisitMemory();
+  expect('처음 들어오면 인사한다', takeDanbaekWorldFirstContact() === true);
+  expect('같은 세션에서 다시 들어오면 인사하지 않는다', takeDanbaekWorldFirstContact() === false);
+  expect('세 번째도 마찬가지다', takeDanbaekWorldFirstContact() === false);
+
+  // 세계관 규칙을 새로 만들지 않는다 — 움직이는 건 단백이, 운동하는 건 나.
+  const intro = DanbaekWorldFirstContact.lines.join(' ');
+  expect('인사가 이곳이 어디인지 말한다', DanbaekWorldFirstContact.title.includes('단백세상'));
+  expect('인사가 내가 무엇을 하는지 말한다', intro.includes('운동'));
+  expect('움직이는 것은 단백이다', intro.includes('단백이'));
+  expect(
+    '인사가 닫을 수 있는 것이라고 말한다',
+    DanbaekWorldFirstContact.dismissLabel.length > 0
+  );
+
+  const world = read('src/app/danbaek-world.tsx');
+  expect('화면이 첫 인사를 그린다', world.includes('DanbaekWorldFirstContact'));
+  expect('첫 인사는 닫을 수 있다', world.includes('setFirstContact(false)'));
+  expect(
+    '첫 인사가 실제 운동 경로를 막지 않는다 (CTA는 그대로 고정 자리에 있다)',
+    /footer={/.test(world) && world.includes('scene.actionLabel')
   );
 }
 

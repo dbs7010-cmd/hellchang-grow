@@ -34,6 +34,7 @@ export interface WorldReturn {
   movementFamily: MovementFamily;
 }
 
+let hasMetWorld = false;
 let lastVisit: WorldVisitSnapshot | null = null;
 let pendingReturn: WorldReturn | null = null;
 const listeners = new Set<() => void>();
@@ -64,7 +65,23 @@ export function observeWorldVisit(current: WorldVisitSnapshot): { justCleared: b
 export function resetWorldVisitMemory(): void {
   lastVisit = null;
   pendingReturn = null;
+  hasMetWorld = false;
   notify();
+}
+
+/**
+ * 단백세상에 처음 들어왔는가.
+ *
+ * 처음 온 사람에게는 "문이 안 열린다"보다 **여기가 어디이고 내가 무엇을 하는 곳인지**가
+ * 먼저다. 그 인사는 한 번이면 충분하므로, 봤다는 사실만 기억한다.
+ *
+ * 진행도가 아니다 — 저장하지 않고, 앱을 끄면 다시 인사한다. 잘못돼도 인사 한 번을 다시
+ * 볼 뿐이고 무엇이 열렸는지에는 영향이 없다.
+ */
+export function takeDanbaekWorldFirstContact(): boolean {
+  if (hasMetWorld) return false;
+  hasMetWorld = true;
+  return true;
 }
 
 /**

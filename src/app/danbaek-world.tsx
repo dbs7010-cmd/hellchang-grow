@@ -11,6 +11,7 @@ import { SubScreen } from '@/components/ui/sub-screen';
 import { WorldGate, WorldGateHeight } from '@/components/world/world-gate';
 import { Layout, Radius, Spacing } from '@/constants/theme';
 import { useAppData } from '@/context/app-data-context';
+import { DanbaekWorldFirstContact } from '@/features/danbaek-world/proof-stages';
 import {
   buildDanbaekWorldScene,
   describeNextGoal,
@@ -18,7 +19,11 @@ import {
 } from '@/features/danbaek-world/world-view-model';
 import { useTheme } from '@/hooks/use-theme';
 import { handOffDanbaekBlock } from '@/services/world/block-handoff';
-import { clearWorldReturn, observeWorldVisit } from '@/services/world/world-visit';
+import {
+  clearWorldReturn,
+  observeWorldVisit,
+  takeDanbaekWorldFirstContact,
+} from '@/services/world/world-visit';
 
 const CharacterHeight = 196;
 const StageHeight = 236;
@@ -55,6 +60,12 @@ export default function DanbaekWorldScreen() {
       }).justCleared
   );
 
+  /*
+    처음 들어온 사람에게는 "문이 안 열린다"보다 여기가 어디인지가 먼저다. 인사는 한 번만
+    하고, 닫으면 그 자리에서 바로 원래 화면이다 — 흐름을 막지 않는다.
+  */
+  const [firstContact, setFirstContact] = useState(() => takeDanbaekWorldFirstContact());
+
   useEffect(() => {
     // 돌아왔으니 결과 화면의 "돌아가기"는 더 이상 필요 없다.
     clearWorldReturn();
@@ -80,6 +91,26 @@ export default function DanbaekWorldScreen() {
           />
         ) : null
       }>
+      {firstContact && (
+        <ThemedView
+          type="backgroundElement"
+          style={[styles.firstContact, { borderColor: theme.gold }]}>
+          <ThemedText type="smallBold" style={{ color: theme.gold }}>
+            {DanbaekWorldFirstContact.title}
+          </ThemedText>
+          {DanbaekWorldFirstContact.lines.map((line) => (
+            <ThemedText key={line} type="small" themeColor="textSecondary">
+              {line}
+            </ThemedText>
+          ))}
+          <PrimaryButton
+            label={DanbaekWorldFirstContact.dismissLabel}
+            variant="secondary"
+            onPress={() => setFirstContact(false)}
+          />
+        </ThemedView>
+      )}
+
       <JourneyRail pathTitle={scene.pathTitle} nodes={scene.journey} />
 
       {justCleared && scene.state === 'cleared' && (
@@ -213,6 +244,13 @@ const styles = StyleSheet.create({
   },
   railNodeText: {
     flexShrink: 1,
+  },
+  /** 첫 인사. 한 번만 보이고, 닫으면 바로 원래 화면이다. */
+  firstContact: {
+    borderWidth: 1,
+    borderRadius: Radius.large,
+    padding: Layout.cardPadding,
+    gap: Spacing.two,
   },
   reveal: {
     borderWidth: 1,
